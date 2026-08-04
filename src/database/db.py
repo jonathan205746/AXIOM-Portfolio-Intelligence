@@ -9,17 +9,20 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-# Use env var (set by Render) or fallback to local path
-DB_PATH = os.getenv("DATABASE_URL", "sqlite:///./data/portfolio_optimizer.db")
-# Strip sqlite:/// prefix if present
-DB_FILE = DB_PATH.replace("sqlite:///", "")
-
-# Ensure directory exists (critical for Render /tmp paths)
-Path(DB_FILE).parent.mkdir(parents=True, exist_ok=True)
+# ── Docker-safe database path ───────────────────────────────────
+# Railway/Render: use /tmp/data (always writable)
+# Local dev: use ../../data (repo root)
+DB_DIR = os.environ.get(
+    "DB_DIR",
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))
+)
+DB_PATH = os.path.join(DB_DIR, "portfolio_optimizer.db")
+os.makedirs(DB_DIR, exist_ok=True)
 
 
 def _connect() -> sqlite3.Connection:
     """Create a SQLite connection with row factory enabled."""
+    os.makedirs(DB_DIR, exist_ok=True)  # ensure dir exists before connecting
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
