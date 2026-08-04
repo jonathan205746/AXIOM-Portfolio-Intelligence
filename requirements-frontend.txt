@@ -14,15 +14,12 @@ numpy==1.26.4
 # ---Visualization Libraries---
 plotly>=5.19.0
 matplotlib==3.8.2
-seaborn==0.13.2          # FIXED: 0.12.3 doesn't exist; use 0.13.2
-<<<<<<< HEAD
-=======
+seaborn==0.13.2          
 Pillow>=10.0.0
->>>>>>> 895db29 (fix: add missing __init__.py for package imports)
 
 # ---Optimization---
 scipy==1.12.0
-scikit-learn==1.4.0      # FIXED: was "sciket-learn" (typo)
+scikit-learn==1.4.0     
 
 # ---AI & NLP---
 torch==2.2.0
