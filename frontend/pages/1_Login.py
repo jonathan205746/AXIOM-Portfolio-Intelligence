@@ -7,7 +7,9 @@ import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import streamlit as st
-from src.database.db import create_user, get_user, create_portfolio, reset_password
+from src.database.db import create_user, get_user, create_portfolio, reset_password, init_db
+
+init_db()
 
 st.set_page_config(page_title="AUTH | AI Portfolio Optimizer", page_icon="🔐", layout="wide")
 
