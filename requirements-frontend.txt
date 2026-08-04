@@ -7,7 +7,7 @@
 streamlit>=1.32.0
 
 # ---Data & Financial Libraries---
-yfinance==0.2.38
+yfinance==0.2.55
 pandas==2.2.3
 numpy==1.26.4
 
@@ -29,6 +29,7 @@ faiss-cpu==1.7.4
 
 # ---LLM & RAG---
 langchain==0.1.9
+langchain-groq==0.0.1
 groq==0.37.1             # FIXED: was 0.1.0; updated to match backend
 
 # ---Database---
