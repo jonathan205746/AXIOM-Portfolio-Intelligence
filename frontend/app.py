@@ -116,18 +116,23 @@ user = st.session_state.get("user", None)
 
 @st.cache_data(ttl=300)
 def _market_snapshot():
+    fallback = {"SPX": {"price": 4500.0, "change": 0.45}, "NIFTY": {"price": 22500.0, "change": -0.12}, "NDX": {"price": 14000.0, "change": 0.78}, "BTC": {"price": 67500.0, "change": 1.23}}
+    out = {}
     try:
         import yfinance as yf
-        out = {}
         for t, n in [("^GSPC", "SPX"), ("^NSEI", "NIFTY"), ("^IXIC", "NDX"), ("BTC-USD", "BTC")]:
-            h = yf.Ticker(t).history(period="2d")
-            if len(h) >= 2:
-                c, p = h["Close"].iloc[-1], h["Close"].iloc[-2]
-                out[n] = {"price": c, "change": (c - p) / p * 100}
-        return out
+            try:
+                h = yf.Ticker(t).history(period="2d")
+                if len(h) >= 2:
+                    c, p = h["Close"].iloc[-1], h["Close"].iloc[-2]
+                    out[n] = {"price": c, "change": (c - p) / p * 100}
+                else:
+                    out[n] = fallback[n]
+            except Exception:
+                out[n] = fallback[n]
     except Exception:
-        return {"SPX": {"price": 4500.0, "change": 0.45}, "NIFTY": {"price": 22500.0, "change": -0.12}, "NDX": {"price": 14000.0, "change": 0.78}, "BTC": {"price": 67500.0, "change": 1.23}}
-
+        return fallback
+    return out
 market_data = _market_snapshot()
 
 # ── SIDEBAR ────────────────────────────────────────────────
