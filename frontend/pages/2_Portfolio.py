@@ -108,6 +108,8 @@ BLOCKED_TICKERS = {
     "SILVER", "OIL", "CRUDE", "NATGAS", "NG", "GC", "SI", "CL"
 }
 
+US_INDICES = {"SPX": "^GSPC", "NDX": "^IXIC", "DJI": "^DJI"}
+
 def validate_ticker(ticker: str) -> tuple[bool, str]:
     t = ticker.strip().upper()
     if t in BLOCKED_TICKERS:
