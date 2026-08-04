@@ -1,6 +1,5 @@
 # ── Dockerfile.api ────────────────────────────────────────────────────────────
-# Builds the FastAPI backend from the repo root.
-# Works for: docker-compose, Render, Railway
+# FastAPI backend for Render / Railway / docker-compose
 # ─────────────────────────────────────────────────────────────────────────────
 
 FROM python:3.10-slim-bookworm
@@ -10,7 +9,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential gcc g++ curl \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Working directory ──
 WORKDIR /app
 
 # ── Install Python dependencies ──
@@ -20,28 +18,23 @@ RUN pip install --no-cache-dir torch==2.2.0+cpu \
     && pip install --no-cache-dir -r requirements-backend.txt
 
 # ── Copy application code ──
-# backend/  → your JWT auth API (backend/app/main.py)
-# src/      → shared modules (database, fetchers, optimizers, sentiment)
-# data/     → SQLite DB path, FAISS index, plots
 COPY backend/ ./backend/
 COPY src/ ./src/
 COPY data/ ./data/
 
-# ── Ensure Python sees 'backend' as a package ──
-RUN touch ./backend/__init__.py
+# ── Ensure packages are importable ──
+RUN touch ./backend/__init__.py ./backend/app/__init__.py
 
-# ── Runtime directories ──
-RUN mkdir -p /tmp/faiss_index /tmp/plots
-
-# ── Environment ──
+# ── Runtime env ──
 ENV PYTHONPATH=/app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV DB_DIR=/tmp/data
+ENV DATABASE_URL=sqlite:////tmp/data/portfolio_optimizer.db
 
 # ── Health check ──
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
 # ── Start ──
-# $PORT is injected by Railway/Render; defaults to 8000 locally
 CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2"]
