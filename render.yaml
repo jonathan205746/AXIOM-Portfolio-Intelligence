@@ -1,0 +1,81 @@
+# Render Blueprint for AI-Powered Portfolio Optimizer
+# Deploy both API and Dashboard services automatically
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  # ═══════════════════════════════════════════════════════════
+  # SERVICE 1: FastAPI Backend
+  # ═══════════════════════════════════════════════════════════
+  - type: web
+    name: portfolio-api
+    runtime: python
+    plan: standard  # Use 'starter' for free tier (512MB RAM)
+    region: singapore  # Change to: oregon, frankfurt, singapore, etc.
+    buildCommand: |
+      pip install -r requirements-backend.txt
+    startCommand: |
+      uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0
+      - key: NEWS_API_KEY
+        sync: false  # Set manually in Render dashboard
+      - key: GROQ_API_KEY
+        sync: false
+      - key: FAISS_INDEX_PATH
+        value: /tmp/faiss_index
+      - key: DEMO_MODE
+        value: "false"
+      - key: DATABASE_URL
+        value: sqlite:////tmp/portfolio_optimizer.db
+      # Production settings
+      - key: UVICORN_WORKERS
+        value: 2
+      - key: LOG_LEVEL
+        value: info
+    healthCheckPath: /health
+    autoDeploy: true
+
+  # ═══════════════════════════════════════════════════════════
+  # SERVICE 2: Streamlit Dashboard
+  # ═══════════════════════════════════════════════════════════
+  - type: web
+    name: portfolio-dashboard
+    runtime: python
+    plan: standard  # Use 'starter' for free tier
+    region: singapore
+    buildCommand: |
+      pip install -r requirements-frontend.txt
+    startCommand: |
+      streamlit run frontend/app.py --server.port $PORT --server.address 0.0.0.0
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0
+      - key: API_BASE_URL
+        fromService:
+          name: portfolio-api
+          type: web
+          property: host  # Auto-injects: https://portfolio-api-xxxxx.onrender.com
+      # Optional: If dashboard needs its own keys
+      - key: NEWS_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+    autoDeploy: true
+
+  # ═══════════════════════════════════════════════════════════
+  # SERVICE 3: Background Worker (Optional — for heavy tasks)
+  # ═══════════════════════════════════════════════════════════
+  # Uncomment if you want async sentiment analysis via Celery/Redis
+  # - type: worker
+  #   name: portfolio-worker
+  #   runtime: python
+  #   plan: starter
+  #   buildCommand: pip install -r requirements-backend.txt
+  #   startCommand: celery -A src.api.celery_app worker --loglevel=info
+  #   envVars:
+  #     - key: REDIS_URL
+  #       fromService:
+  #         name: portfolio-redis
+  #         type: redis
+  #         property: connectionString

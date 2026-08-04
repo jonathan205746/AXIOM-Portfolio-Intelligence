@@ -1,0 +1,74 @@
+# ============================================================
+# Backend-only Requirements (FastAPI + Core)
+# For Docker/container deployments
+# Install: pip install -r requirements-backend.txt
+# ============================================================
+
+# ── API Framework ─────────────────────────────────────────
+fastapi
+uvicorn[standard]==0.27.1
+pydantic==2.6.1
+pydantic-settings==2.2.1
+python-multipart==0.0.9
+httpx==0.26.0
+starlette==0.36.3
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# ── Data & ML ─────────────────────────────────────────────
+pandas==2.2.3
+numpy==1.26.4
+scipy==1.12.0
+scikit-learn==1.4.0
+python-dateutil==2.9.0
+
+# ── Data Fetching ─────────────────────────────────────────
+yfinance==0.2.38
+requests==2.31.0
+newsapi-python==0.2.7
+beautifulsoup4==4.12.3
+
+# ── NLP & Transformers ──────────────────────────────────
+torch==2.2.0
+transformers==4.38.0
+sentence-transformers==2.5.1
+tokenizers==0.15.2
+huggingface-hub==0.21.3
+accelerate==0.27.2
+
+# ── Vector Store ──────────────────────────────────────────
+faiss-cpu==1.7.4
+
+# ── LLM & RAG ─────────────────────────────────────────────
+langchain==0.1.9
+langchain-openai==0.0.8
+langchain-google-genai==0.0.11
+langchain-community==0.0.24
+openai==1.12.0
+google-generativeai==0.4.1
+tiktoken==0.6.0
+
+# ── Optimization ──────────────────────────────────────────
+cvxpy==1.4.2
+statsmodels==0.14.1
+
+# ── Financial ───────────────────────────────────────────────
+ta==0.11.0
+
+# ── Database ──────────────────────────────────────────────
+sqlalchemy==2.0.29
+bcrypt==4.1.2
+
+# ── Config & Utils ────────────────────────────────────────
+python-dotenv==1.0.1
+pyyaml==6.0.1
+tenacity==8.2.3
+cachetools==5.3.3
+pytz==2024.1
+loguru==0.7.2
+
+# ── Production ──
+gunicorn==22.0.0
+
+# ---Email Validation---
+email-validator==2.0.0

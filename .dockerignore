@@ -1,0 +1,56 @@
+# ── .dockerignore ─────────────────────────────────────────────────────────────
+# Files NOT copied into the Docker image.
+# Keeps image size small and avoids exposing secrets.
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Environment secrets — NEVER in Docker image
+.env
+.env.*
+!.env.example
+
+# Git
+.git/
+.gitignore
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# Local data (FAISS index is built at runtime, not baked into image)
+data/faiss_index/
+data/plots/
+
+# Model cache (too large — downloaded at runtime by transformers)
+# If you want to bake models in, remove these lines and add a RUN step
+.cache/
+huggingface/
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test artifacts
+.coverage
+htmlcov/

@@ -1,0 +1,67 @@
+# ── docker-compose.yml ────────────────────────────────────────────────────────
+# Runs both services locally:
+#   - frontend: Streamlit dashboard on http://localhost:8501
+#   - api:      FastAPI backend  on http://localhost:9000
+#
+# Usage:
+#   docker-compose up --build          → build + run both
+#   docker-compose up frontend         → run only Streamlit
+#   docker-compose up api              → run only FastAPI
+#   docker-compose down                → stop everything
+#   docker-compose logs -f frontend    → tail frontend logs
+
+version: "3.9"
+
+services:
+
+  # ── Streamlit Frontend ──────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: portfolio-frontend
+    ports:
+      - "8501:7860"       # localhost:8501 → container:7860
+    env_file:
+      - .env              # loads GROQ_API_KEY, NEWS_API_KEY, etc.
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data:/app/data  # persist FAISS index and plots between runs
+    depends_on:
+      - api
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ── FastAPI Backend ─────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: portfolio-api
+    ports:
+      - "9000:9000"       # localhost:9000 → container:9000
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+# ── Shared volume for data persistence ────────────────────────────────────────
+volumes:
+  app_data:
