@@ -402,15 +402,32 @@ def benchmark_spy(portfolio_id: int, user: dict = Depends(get_current_user)):
         prices = fetch_stock_data(tickers + ["SPY"], period="1y")
         if isinstance(prices.columns, pd.MultiIndex):
             prices = prices["Close"]
+
         returns = prices.pct_change().dropna()
+        if isinstance(returns, pd.Series):
+            returns = returns.to_frame(name=prices.columns[0] if hasattr(prices, "columns") else "price")
 
         spy_returns = returns["SPY"] if "SPY" in returns.columns else None
         if spy_returns is None:
             raise HTTPException(status_code=500, detail="SPY data not available")
 
-        portfolio_returns = returns[tickers].mean(axis=1)  # equal weight fallback
-        cum_portfolio = (1 + portfolio_returns).cumprod()
-        cum_spy = (1 + spy_returns).cumprod()
+        available_tickers = [ticker for ticker in tickers if ticker in returns.columns]
+        if not available_tickers:
+            raise HTTPException(status_code=500, detail="No portfolio data available")
+
+        portfolio_returns = returns.loc[:, available_tickers].mean(axis=1).astype(float)
+        spy_returns = pd.Series(spy_returns, index=returns.index, dtype=float)
+
+        cum_portfolio = pd.Series(
+            np.cumprod(1 + portfolio_returns.to_numpy()),
+            index=portfolio_returns.index,
+            dtype=float,
+        )
+        cum_spy = pd.Series(
+            np.cumprod(1 + spy_returns.to_numpy()),
+            index=spy_returns.index,
+            dtype=float,
+        )
 
         return {
             "dates": [d.strftime("%Y-%m-%d") for d in cum_portfolio.index],
@@ -419,7 +436,10 @@ def benchmark_spy(portfolio_id: int, user: dict = Depends(get_current_user)):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Benchmark failed: {str(e)}")
-
+    
+@app.get("/")
+def root():
+    return {"message": "AI Portfolio Optimizer API", "docs": "/docs", "health": "/health"}
 # ═══════════════════════════════════════════════════════════════════════════════
 # HEALTH CHECK
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -32,6 +32,9 @@ def _connect() -> sqlite3.Connection:
 def _hash_password(password: str) -> str:
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Check a plain password against a stored SHA-256 hash."""
+    return _hash_password(plain_password) == hashed_password
 
 def _normalize_date(value: Any) -> str:
     if isinstance(value, datetime):
