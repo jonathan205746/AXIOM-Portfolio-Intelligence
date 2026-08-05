@@ -3,7 +3,7 @@
 # ============================================================
 
 # ── API Framework ─────────────────────────────────────────
-fastapi==0.111.0          # pinned for stability
+fastapi==0.111.0
 uvicorn[standard]==0.27.1
 pydantic==2.6.1
 pydantic-settings==2.2.1

@@ -153,7 +153,7 @@ def login(req: LoginRequest):
     if not SRC_AVAILABLE:
         raise HTTPException(status_code=503, detail="Backend modules not loaded")
     
-    # get_user() checks username + password_hash internally and returns the user without the hash
+    # FIXED: use get_user_by_username + verify_password
     user = get_user_by_username(req.username)
     if not user or not verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid username or password")
