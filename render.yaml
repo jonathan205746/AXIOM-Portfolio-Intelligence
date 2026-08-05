@@ -10,7 +10,7 @@ services:
     runtime: docker
     plan: free
     region: virginia
-    dockerfilePath: ./Dockerfile.api   # Change to ./backend/Dockerfile if using that
+    dockerfilePath: ./backend/Dockerfile 
     envVars:
       - key: PORT
         value: 10000
