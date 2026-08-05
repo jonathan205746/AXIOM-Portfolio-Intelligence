@@ -15,13 +15,10 @@ WORKDIR /app
 # ── Copy requirements first (for layer caching) ──
 COPY requirements-frontend.txt .
 
-# ── Install Python dependencies ──
-# Use CPU-only PyTorch to save ~2GB image size
-# FIXED: torch==2.2.0 matches requirements-frontend.txt
 RUN pip install --no-cache-dir torch==2.2.0+cpu \
     --extra-index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements-frontend.txt \
-    && pip install --upgrade streamlit
+    && pip install --no-cache-dir --upgrade streamlit
 
 # ── Copy application code ──
 COPY frontend/ ./frontend/

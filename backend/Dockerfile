@@ -3,18 +3,24 @@
 
 FROM python:3.10-slim-bookworm
 
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential gcc g++ curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential gcc g++ curl \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # FIXED: requirements-backend.txt is at PROJECT ROOT
 COPY requirements-backend.txt .
 
-RUN pip install --no-cache-dir torch==2.2.0+cpu --extra-index-url https://download.pytorch.org/whl/cpu && pip install --no-cache-dir -r requirements-backend.txt
+RUN pip install --no-cache-dir torch==2.2.0+cpu \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir -r requirements-backend.txt
 
 COPY backend/ ./backend/
 COPY src/ ./src/
 COPY data/ ./data/
+
+RUN touch ./backend/__init__.py
 
 RUN mkdir -p /tmp/faiss_index /tmp/plots
 

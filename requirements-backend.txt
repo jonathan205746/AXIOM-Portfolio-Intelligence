@@ -1,17 +1,14 @@
 # ============================================================
 # Backend-only Requirements (FastAPI + Core)
-# For Docker/container deployments
-# Install: pip install -r requirements-backend.txt
 # ============================================================
 
 # ── API Framework ─────────────────────────────────────────
-fastapi
+fastapi==0.111.0          # pinned for stability
 uvicorn[standard]==0.27.1
 pydantic==2.6.1
 pydantic-settings==2.2.1
 python-multipart==0.0.9
 httpx==0.26.0
-starlette==0.36.3
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 
@@ -28,7 +25,7 @@ requests==2.31.0
 newsapi-python==0.2.7
 beautifulsoup4==4.12.3
 
-# ── NLP & Transformers ──────────────────────────────────
+# ── NLP & Transformers ────────────────────────────────────
 torch==2.2.0
 transformers==4.38.0
 sentence-transformers==2.5.1
@@ -53,14 +50,14 @@ tiktoken==0.6.0
 cvxpy==1.4.2
 statsmodels==0.14.1
 
-# ── Financial ───────────────────────────────────────────────
+# ── Financial ───────────────────────────────────────────
 ta==0.11.0
 
 # ── Database ──────────────────────────────────────────────
 sqlalchemy==2.0.29
 bcrypt==4.1.2
 
-# ── Config & Utils ────────────────────────────────────────
+# ── Config & Utils ──────────────────────────────────────
 python-dotenv==1.0.1
 pyyaml==6.0.1
 tenacity==8.2.3
@@ -68,8 +65,5 @@ cachetools==5.3.3
 pytz==2024.1
 loguru==0.7.2
 
-# ── Production ──
-gunicorn==22.0.0
-
-# ---Email Validation---
+# ── Email Validation ────────────────────────────────────
 email-validator==2.0.0

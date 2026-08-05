@@ -154,8 +154,8 @@ def login(req: LoginRequest):
         raise HTTPException(status_code=503, detail="Backend modules not loaded")
     
     # get_user() checks username + password_hash internally and returns the user without the hash
-    user = get_user(req.username, req.password)
-    if not user:
+    user = get_user_by_username(req.username)
+    if not user or not verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid username or password")
     
     token = create_access_token({"sub": str(user["id"]), "username": user["username"]})
