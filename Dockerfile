@@ -20,7 +20,8 @@ COPY requirements-frontend.txt .
 # FIXED: torch==2.2.0 matches requirements-frontend.txt
 RUN pip install --no-cache-dir torch==2.2.0+cpu \
     --extra-index-url https://download.pytorch.org/whl/cpu \
-    && pip install --no-cache-dir -r requirements-frontend.txt
+    && pip install --no-cache-dir -r requirements-frontend.txt \
+    && pip install --upgrade streamlit
 
 # ── Copy application code ──
 COPY frontend/ ./frontend/
