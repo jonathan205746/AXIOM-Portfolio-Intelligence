@@ -268,6 +268,15 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
     import pandas as pd
     import numpy as np
 
+    # ── LAZY IMPORT: only load heavy ML libs when this endpoint is hit ──
+    from src.data.stock_fetcher import fetch_stock_data
+    from src.models.sentiment import aggregate_sentiment
+    from src.optimization.portfolio import PortfolioOptimizer
+    from src.optimization.risk import RiskAnalyzer
+    from src.optimization.combined_signal import CombinedSignal
+    from src.models.rag_pipeline import RAGPipeline
+    
+
     holdings = get_portfolio_holdings(req.portfolio_id)
     if len(holdings) < 2:
         raise HTTPException(status_code=400, detail="Need at least 2 holdings")
