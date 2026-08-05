@@ -152,11 +152,21 @@ def normalize_ticker(ticker: str) -> tuple:
 def login(req: LoginRequest):
     if not SRC_AVAILABLE:
         raise HTTPException(status_code=503, detail="Backend modules not loaded")
+    
+    # get_user_by_username() fetches the user, then verify_password checks the password
     user = get_user_by_username(req.username)
-    if not user or not verify_password(req.password, user["password_hash"]):
+    if not user or not verify_password(req.password, user.get("password_hash", "")):
         raise HTTPException(status_code=401, detail="Invalid username or password")
+    
     token = create_access_token({"sub": str(user["id"]), "username": user["username"]})
-    return {"access_token": token, "user": {"id": user["id"], "username": user["username"], "email": user.get("email", "")}}
+    return {
+        "access_token": token,
+        "user": {
+            "id": user["id"],
+            "username": user["username"],
+            "email": user.get("email", "")
+        }
+    }
 
 @app.post("/auth/register", response_model=TokenResponse)
 def register(req: RegisterRequest):
