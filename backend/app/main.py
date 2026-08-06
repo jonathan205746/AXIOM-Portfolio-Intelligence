@@ -275,7 +275,10 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
     from src.optimization.risk import RiskAnalyzer
     from src.optimization.combined_signal import CombinedSignal
     from src.models.rag_pipeline import RAGPipeline
-    
+    from src.utils.analysis_cache import get_cached_analysis, save_analysis_cache
+    cached = get_cached_analysis(req.portfolio_id, req.alpha)
+    if cached:
+        return cached 
 
     holdings = get_portfolio_holdings(req.portfolio_id)
     if len(holdings) < 2:
@@ -368,8 +371,8 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
         recommendations=recommendations,
         risk_report=risk_report
     )
-
-    return {
+    # At the very end, before return, save to cache:
+    result_dict = {
         "tickers": available,
         "display_names": display_names,
         "opt_result": {
@@ -394,6 +397,8 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
             "sharpe": frontier_df["sharpe"].tolist(),
         }
     }
+    save_analysis_cache(req.portfolio_id, req.alpha, result_dict)
+    return result_dict
 
 @app.get("/portfolios/{portfolio_id}/history")
 def get_history(portfolio_id: int, limit: int = 30, user: dict = Depends(get_current_user)):
