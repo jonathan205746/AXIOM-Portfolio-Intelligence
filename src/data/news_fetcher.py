@@ -15,18 +15,14 @@ from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
-# Import the key rotator
-from src.utils.api_key_manager import APIKeyManager
-
-
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# ── Multi-key manager ─────────────────────────────────────────────────────────
-news_key_manager = APIKeyManager("NEWS_API_KEY")
+NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 BASE_URL = "https://newsapi.org/v2/everything"
+
 
 # ── Ticker → Company Name Mapping ────────────────────────────────────────────
 # Critical for Indian (.NS) tickers where the ticker symbol is not a natural
@@ -132,8 +128,7 @@ def fetch_news(
         articles = fetch_news("ASIANPAINT.NS", days_back=7)
         print(articles[0]["title"])
     """
-    api_key = news_key_manager.get_key()
-    if not api_key:
+    if not NEWS_API_KEY:
         raise ValueError(
             "NEWS_API_KEY not found. "
             "Add it to your .env file: NEWS_API_KEY=your_key_here"
@@ -158,21 +153,12 @@ def fetch_news(
         "sortBy": "relevancy",
         "language": "en",
         "pageSize": max_articles,
-        "apiKey": api_key,
+        "apiKey": NEWS_API_KEY,
     }
 
     try:
         logger.info(f"Fetching news for {ticker} (query: '{query} stock')")
         response = requests.get(BASE_URL, params=params, timeout=10)
-        
-        # ── KEY ROTATION ON RATE LIMIT ──
-        if response.status_code == 429:
-            logger.warning("NewsAPI rate limit hit. Rotating key...")
-            news_key_manager.rotate_on_error(api_key)
-            # Retry once with next key
-            params["apiKey"] = news_key_manager.get_key()
-            response = requests.get(BASE_URL, params=params, timeout=10)
-        
         response.raise_for_status()
         data = response.json()
 
@@ -294,15 +280,14 @@ def check_api_status() -> Dict:
     Returns:
         Dict with status, requests_remaining, requests_limit
     """
-    api_key = news_key_manager.get_key()
-    if not api_key:
+    if not NEWS_API_KEY:
         return {"status": "error", "message": "NEWS_API_KEY not set in .env"}
 
     try:
-        # Make a minimal request to check quota using the key manager
+        # Make a minimal request to check quota
         response = requests.get(
             BASE_URL,
-            params={"q": "test", "pageSize": 1, "apiKey": api_key},
+            params={"q": "test", "pageSize": 1, "apiKey": NEWS_API_KEY},
             timeout=5
         )
         data = response.json()
