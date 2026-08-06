@@ -18,7 +18,7 @@ COPY requirements-frontend.txt .
 RUN pip install --no-cache-dir torch==2.2.0+cpu \
     --extra-index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements-frontend.txt \
-    && pip install --no-cache-dir --upgrade streamlit
+    && pip install --no-cache-dir --upgrade "streamlit>=1.36.0"
 
 # ── Copy application code ──
 COPY frontend/ ./frontend/
@@ -33,13 +33,13 @@ ENV PYTHONPATH=/app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8501
-ENV DB_DIR=/tmp/data
+
 # ── Expose port ──
 EXPOSE 8501
 
 # ── Health check ──
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8501/_stcore/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8501}/_stcore/health || exit 1
 
 # ── Start Streamlit (Render injects $PORT) ──
-CMD ["sh", "-c", "streamlit run frontend/app.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true --server.enableCORS=false"]
+CMD ["sh", "-c", "streamlit run frontend/app.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true --server.enableCORS=false --server.enableXsrfProtection=false"]

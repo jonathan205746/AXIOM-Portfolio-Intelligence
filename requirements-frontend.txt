@@ -50,3 +50,9 @@ httpx==0.26.0
 pydantic==2.6.1
 pydantic-settings==2.2.1
 requests==2.31.0
+
+# ---Caching---
+requests-cache==1.2.0
+
+# ── Email Validation ────────────────────────────────────
+email-validator==2.0.0

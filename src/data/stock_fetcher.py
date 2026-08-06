@@ -16,11 +16,26 @@ import logging
 import os
 import warnings
 from pathlib import Path
+from requests_cache import CachedSession
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+# ── Cached session to avoid YFinance rate limits ──────────────────────────────
+# Cache responses for 1 hour. On Railway /tmp is writable.
+_cache_dir = os.getenv("YFINANCE_CACHE_DIR", "/tmp/yfinance_cache")
+os.makedirs(_cache_dir, exist_ok=True)
+
+_session = CachedSession(
+    cache_name=os.path.join(_cache_dir, "yfinance"),
+    expire_after=3600,  # 1 hour
+    backend="sqlite",
+)
+_session.headers["User-agent"] = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
 
 # ── Main Functions ─────────────────────────────────────────────────────────────
 
@@ -50,8 +65,9 @@ def fetch_stock_data(tickers: List[str], period: str = "1y") -> pd.DataFrame:
             tickers=tickers,
             period=period,
             auto_adjust=True,
-            progress=False,   # Disable progress bar
-            threads=False       # Parallel download for multiple tickers
+            progress=False,
+            threads=False,
+            session=_session,  # ← uses cache
         )
 
         if data is None or data.empty:
@@ -149,7 +165,7 @@ def fetch_stock_info(ticker: str) -> Dict:
     logger.info(f"Fetching company info for {ticker}")
 
     try:
-        stock = yf.Ticker(ticker)
+        stock = yf.Ticker(ticker, session=_session)
         info = stock.info
 
         return {

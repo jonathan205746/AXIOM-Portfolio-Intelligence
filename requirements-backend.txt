@@ -67,3 +67,6 @@ loguru==0.7.2
 
 # ── Email Validation ────────────────────────────────────
 email-validator==2.0.0
+
+# ── Caching ─────────────────────────────────────────────
+requests-cache==1.2.0
