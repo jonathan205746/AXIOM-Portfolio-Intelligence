@@ -15,6 +15,8 @@ import json
 from typing import Any, cast
 from src.database.db import get_portfolio_holdings, save_optimization_run
 from pages.report_generator import generate_bloomberg_report
+from src.optimization.health_score import HealthScoreEngine
+from src.optimization.adaptive_optimizer import AdaptiveHealthOptimizer
 
 st.set_page_config(page_title="ANALYSIS | AI Portfolio Optimizer", page_icon="🤖", layout="wide")
 
@@ -117,6 +119,21 @@ def _get_action(ticker: str, final_weights: dict, weight_changes: dict) -> str:
     if change < -0.001:
         return "SELL"
     return "HOLD"
+
+
+def _safe_float(value: Any, digits: int | None = None) -> float | None:
+    if value is None or pd.isna(value):
+        return None
+    result = float(value)
+    if digits is not None:
+        result = round(result, digits)
+    return result
+
+
+def _safe_pct(value: Any, digits: int = 1) -> str:
+    if value is None or pd.isna(value):
+        return "N/A"
+    return f"{float(value) * 100:.{digits}f}%"
 
 @st.cache_data(ttl=300)
 def _market_snapshot():
@@ -234,15 +251,14 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
         st.error(f"PRICE FETCH FAILED: {exc}")
         return None
 
-    _set("OPTIMIZING PORTFOLIO...", 25)
+    _set("PREPARING OPTIMIZER...", 25)
     try:
         optimizer = PortfolioOptimizer(prices)
-        opt_result = optimizer.optimize()
         baseline = optimizer.equal_weight_baseline()
         frontier_df = optimizer.efficient_frontier(n_points=800)
-        results.update({"opt_result": opt_result, "baseline": baseline, "frontier_df": frontier_df})
+        results.update({"baseline": baseline, "frontier_df": frontier_df})
     except Exception as exc:
-        st.error(f"OPTIMIZATION FAILED: {exc}")
+        st.error(f"OPTIMIZATION SETUP FAILED: {exc}")
         return None
 
     _set("FETCHING NEWS...", 40)
@@ -256,7 +272,6 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
             all_news[ticker] = articles
         except Exception:
             all_news[ticker] = []
-
     results["all_news"] = all_news
 
     _set("RUNNING FINBERT...", 55)
@@ -269,36 +284,29 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
             sentiment_scores[ticker] = 0.0
     results["sentiment_scores"] = sentiment_scores
 
-    _set("COMBINING SIGNALS...", 70)
-    try:
-        combiner = CombinedSignal(opt_result, sentiment_scores)
-        combined = combiner.combine(alpha=alpha, max_weight=0.40)
-        results["combined"] = combined
-        results["final_weights"] = combined["final_weights"]
-
-        # Recompute return/volatility/Sharpe from the FINAL blended weights,
-        # not the pre-sentiment optimizer output. opt_result never changes
-        # with alpha — this does.
-        final_weights_arr = np.array(
-            [combined["final_weights"].get(t, 0.0) for t in optimizer.tickers]
-        )
-        results["final_stats"] = {
-            "expected_return": optimizer.portfolio_return(final_weights_arr),
-            "volatility": optimizer.portfolio_volatility(final_weights_arr),
-            "sharpe_ratio": optimizer.sharpe_ratio(final_weights_arr),
-        }
-    except Exception as exc:
-        st.error(f"SIGNAL COMBINATION FAILED: {exc}")
-        return None
-
-    _set("COMPUTING RISK...", 82)
+    _set("SEARCHING HEALTH-AWARE PORTFOLIOS...", 72)
     try:
         risk_analyzer = RiskAnalyzer(prices)
-        risk_report = risk_analyzer.full_risk_report(combined["final_weights"], portfolio_value)
-        results["risk_report"] = risk_report
-        results["tickers"] = available
+        news_counts = {t: len(all_news.get(t, [])) for t in available}
+        adaptive = AdaptiveHealthOptimizer(optimizer, risk_analyzer, sentiment_scores, news_counts)
+        selected = adaptive.search(alpha=alpha, portfolio_value=portfolio_value)
+
+        opt_result = selected["opt_result"]
+        combined = selected["combined"]
+        risk_report = selected["risk_report"]
+        results.update({
+            "opt_result": opt_result,
+            "combined": combined,
+            "final_weights": selected["final_weights"],
+            "final_stats": selected["final_stats"],
+            "risk_report": risk_report,
+            "health_score": selected["health_score"],
+            "adaptive_candidates": selected["candidates"],
+            "selected_cap": selected["selected_cap"],
+            "tickers": available,
+        })
     except Exception as exc:
-        st.error(f"RISK ANALYSIS FAILED: {exc}")
+        st.error(f"ADAPTIVE OPTIMIZATION FAILED: {exc}")
         return None
 
     _set("GENERATING LLM...", 92)
@@ -364,17 +372,20 @@ prices = results["prices"]
 returns_df = results["returns"]
 
 sharpe = opt_result.get("sharpe_ratio", 0)
-var95_val = abs(risk_report.get("value_at_risk", {}).get("historical_95", {}).get("var_pct", 0))
 vol = risk_report.get("volatility", {}).get("portfolio_annualized", 0)
-avg_sent = sum(sentiment_scores.values()) / len(sentiment_scores) if sentiment_scores else 0
-div = sum(1 for w in final_weights.values() if w > 0.01) / len(final_weights) if final_weights else 0
-ss = min(max(sharpe * 25, 0), 100)
-vs = max(0, 100 - var95_val * 1000)
-vos = max(0, 100 - vol * 100)
-sns = (avg_sent + 1) * 50
-ds = div * 100
-ai_score = min(100, max(0, ss * 0.35 + vs * 0.2 + vos * 0.2 + sns * 0.15 + ds * 0.1))
-score_label = "EXCELLENT" if ai_score >= 80 else "GOOD" if ai_score >= 60 else "FAIR" if ai_score >= 40 else "POOR"
+health = results.get("health_score") or HealthScoreEngine.calculate(
+    sharpe=sharpe,
+    volatility=vol,
+    var95=risk_report.get("value_at_risk", {}).get("historical_95", {}).get("var_pct", 0.0),
+    max_drawdown_pct=risk_report.get("drawdown", {}).get("portfolio", {}).get("max_drawdown_pct", 0.0),
+    sentiment_scores=sentiment_scores,
+    final_weights=final_weights,
+    risk_report=risk_report,
+    baseline_sharpe=baseline.get("sharpe_ratio"),
+    news_counts={t: len(results.get("all_news", {}).get(t, [])) for t in available},
+)
+ai_score = health["score"]
+score_label = f'{health["label"]} · {health["grade"]}'
 
 st.markdown('<div class="bb-panel bb-panel-accent"><div class="bb-panel-header"><span class="bb-panel-title">◈ Key Performance Indicators</span></div><div class="bb-panel-body">', unsafe_allow_html=True)
 c1, c2, c3, c4, c5 = st.columns(5)
@@ -391,6 +402,42 @@ var95 = risk_report["value_at_risk"]["historical_95"]
 with c5:
     st.metric("95% VaR", f"${var95['var_usd']:,.0f}", delta=f"{var95['var_pct']*100:.2f}%", delta_color="inverse")
 st.markdown('</div></div>', unsafe_allow_html=True)
+
+with st.expander("◈ AI HEALTH SCORE v3 — EXPLAIN SCORE", expanded=False):
+    score_rows = []
+    for key, value in health.get("components", {}).items():
+        score_rows.append({
+            "Component": key.replace("_", " ").title(),
+            "Score": round(value, 1),
+            "Weight": f'{health.get("component_weights", {}).get(key, 0) * 100:.0f}%',
+        })
+    st.dataframe(pd.DataFrame(score_rows), hide_index=True, width='stretch')
+    d = health.get("diagnostics", {})
+    st.caption(
+        f'MAX POSITION {d.get("max_weight", 0)*100:.1f}%  |  '
+        f'TOP-2 {d.get("top_two_weight", 0)*100:.1f}%  |  '
+        f'HHI {d.get("hhi", 0):.3f}  |  PENALTY {health.get("penalty_total", 0):.1f} pts'
+    )
+    for tip in health.get("improvements", []):
+        st.markdown(f"• {tip}")
+    if results.get("adaptive_candidates"):
+        st.markdown("**ADAPTIVE CAP SEARCH**")
+        cand_df = pd.DataFrame(results["adaptive_candidates"])
+        if not cand_df.empty:
+            cand_df["max_weight_cap"] = cand_df["max_weight_cap"].map(
+                lambda x: f"{float(x) * 100:.1f}%" if pd.notna(x) else "N/A"
+            )
+            cand_df["health_score"] = cand_df["health_score"].map(
+                lambda x: round(float(x) * 100, 1) if pd.notna(x) else None
+            )
+            cand_df["sharpe_ratio"] = cand_df["sharpe_ratio"].map(
+                lambda x: round(float(x) * 100, 3) if pd.notna(x) else None
+            )
+            cand_df["volatility"] = cand_df["volatility"].map(
+                lambda x: f"{float(x) * 100:.1f}%" if pd.notna(x) else "N/A"
+            )
+            st.dataframe(cand_df, hide_index=True, width='stretch')
+        st.caption(f'SELECTED MAX WEIGHT CAP: {results.get("selected_cap", 0)*100:.1f}%  |  POTENTIAL SCORE: {health.get("potential_score", ai_score):.1f}/100')
 
 weights_csv = pd.DataFrame([{"Ticker": display_names.get(t, t),"Weight": f"{final_weights[t] * 100:.2f}%","Action": _get_action(t, final_weights, combined["weight_changes"])} for t in available]).to_csv(index=False).encode("utf-8")
 risk_csv = pd.DataFrame([{"Metric": "Volatility", "Value": f"{risk_report['volatility']['portfolio_annualized']*100:.2f}%"}, {"Metric": "95% VaR", "Value": f"${var95['var_usd']:,.0f}"}, {"Metric": "99% VaR", "Value": f"${risk_report['value_at_risk']['historical_99']['var_usd']:,.0f}"}]).to_csv(index=False).encode("utf-8")

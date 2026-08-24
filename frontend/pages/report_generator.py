@@ -5,6 +5,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
+from src.optimization.health_score import HealthScoreEngine
 
 
 def generate_bloomberg_report(portfolio, results, display_names):
@@ -33,15 +34,20 @@ def generate_bloomberg_report(portfolio, results, display_names):
     mdd = risk_report.get("drawdown", {}).get("portfolio", {})
     avg_sent = sum(sentiment_scores.values()) / len(sentiment_scores) if sentiment_scores else 0
 
-    var95_val = abs(var95.get("var_pct", 0))
-    div = sum(1 for w in final_weights.values() if w > 0.01) / len(final_weights) if final_weights else 0
-    ss = min(max(sharpe * 25, 0), 100)
-    vs = max(0, 100 - var95_val * 1000)
-    vos = max(0, 100 - vol * 100)
-    sns = (avg_sent + 1) * 50
-    ds = div * 100
-    ai_score = min(100, max(0, ss * 0.35 + vs * 0.2 + vos * 0.2 + sns * 0.15 + ds * 0.1))
-    score_label = "EXCELLENT" if ai_score >= 80 else "GOOD" if ai_score >= 60 else "FAIR" if ai_score >= 40 else "POOR"
+    news_counts = {t: len(all_news.get(t, [])) for t in available}
+    health = results.get("health_score") or HealthScoreEngine.calculate(
+        sharpe=sharpe,
+        volatility=vol,
+        var95=var95.get("var_pct", 0.0),
+        max_drawdown_pct=mdd.get("max_drawdown_pct", 0.0),
+        sentiment_scores=sentiment_scores,
+        final_weights=final_weights,
+        risk_report=risk_report,
+        baseline_sharpe=baseline.get("sharpe_ratio"),
+        news_counts=news_counts,
+    )
+    ai_score = health["score"]
+    score_label = f'{health["label"]} · {health["grade"]}'
 
     # Currency symbol
     pf_curr = portfolio.get("currency", "USD")
@@ -236,6 +242,32 @@ def generate_bloomberg_report(portfolio, results, display_names):
     exp_ret_cls = "pos" if exp_ret > 0 else "neg"
     avg_sent_cls = "pos" if avg_sent > 0.05 else ("neg" if avg_sent < -0.05 else "accent")
 
+    score_breakdown_rows = "".join(
+        f'<tr><td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;">{k.replace("_", " ").title()}</td>'
+        f'<td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;text-align:right;color:#ff6600;font-weight:700;">{v:.1f}/100</td>'
+        f'<td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;text-align:right;color:#888;">{health.get("component_weights", {}).get(k, 0)*100:.0f}%</td></tr>'
+        for k, v in health.get("components", {}).items()
+    )
+    score_improvements_html = "".join(
+        f'<div style="padding:3px 0;color:#888;">• {tip}</div>' for tip in health.get("improvements", [])
+    )
+    adaptive_candidates = results.get("adaptive_candidates", []) or []
+    selected_cap = results.get("selected_cap")
+    adaptive_rows = "".join(
+        f'<tr><td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;">{c.get("max_weight_cap", 0)*100:.1f}%</td>'
+        f'<td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;text-align:right;color:#ff6600;">{c.get("health_score", 0):.1f}</td>'
+        f'<td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;text-align:right;">{c.get("sharpe_ratio", 0):.3f}</td>'
+        f'<td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;text-align:right;">{c.get("volatility", 0)*100:.1f}%</td></tr>'
+        for c in adaptive_candidates
+    )
+    adaptive_html = (
+        '<div style="margin-top:14px;"><div style="color:#ff6600;font-weight:700;margin-bottom:6px;">ADAPTIVE CAP SEARCH</div>'
+        '<table><thead><tr><th>MAX WEIGHT</th><th style="text-align:right">HEALTH</th><th style="text-align:right">SHARPE</th><th style="text-align:right">VOL</th></tr></thead>'
+        f'<tbody>{adaptive_rows}</tbody></table>'
+        f'<div style="margin-top:8px;color:#888;">SELECTED CAP: <strong style="color:#e5e5e5;">{(selected_cap or 0)*100:.1f}%</strong> | POTENTIAL SCORE: <strong style="color:#e5e5e5;">{health.get("potential_score", ai_score):.1f}/100</strong></div></div>'
+        if adaptive_candidates else ''
+    )
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -309,6 +341,16 @@ def generate_bloomberg_report(portfolio, results, display_names):
     </div>
   </div>
   
+  <div class="section">
+    <div class="section-header"><span class="section-title">◈ AI Health Score v3 Breakdown</span><span class="section-sub">EXPLAINABLE 0-100 MODEL</span></div>
+    <div class="section-body">
+      <table><thead><tr><th>COMPONENT</th><th style="text-align:right">SCORE</th><th style="text-align:right">WEIGHT</th></tr></thead><tbody>{score_breakdown_rows}</tbody></table>
+      <div style="margin-top:12px;padding:8px;background:#0d0d0d;font-size:0.7rem;color:#888;">BASE: {health.get("base_score", 0):.1f} | PENALTIES: -{health.get("penalty_total", 0):.1f} | FINAL: <strong style="color:#ff6600;">{ai_score:.1f}/100</strong></div>
+      <div style="margin-top:10px;font-size:0.7rem;">{score_improvements_html}</div>
+      {adaptive_html}
+    </div>
+  </div>
+
   <div class="section">
     <div class="section-header"><span class="section-title">◈ High-Level Snapshot</span><span class="section-sub">FINAL vs EQUAL WEIGHT</span></div>
     <div class="section-body">

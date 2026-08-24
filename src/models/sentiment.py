@@ -10,8 +10,8 @@ Run this file directly to test:
 import torch
 import logging
 import time
-from typing import List, Dict, Optional
-from transformers import BertTokenizer, BertForSequenceClassification
+from typing import Any, Dict, List, Optional, TypedDict
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from torch.nn.functional import softmax
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -19,6 +19,13 @@ logger = logging.getLogger(__name__)
 
 MODEL_NAME = "ProsusAI/finbert"
 LABELS = ["positive", "negative", "neutral"]
+
+
+class SentimentResult(TypedDict):
+    positive: float
+    negative: float
+    neutral: float
+    label: str
 
 
 class SentimentAnalyzer:
@@ -37,12 +44,12 @@ class SentimentAnalyzer:
     def __init__(self):
         logger.info(f"Loading FinBERT model: {MODEL_NAME}")
         logger.info("First run downloads ~500MB — please wait...")
-        self.tokenizer = BertTokenizer.from_pretrained(MODEL_NAME)
-        self.model = BertForSequenceClassification.from_pretrained(MODEL_NAME)
+        self.tokenizer: Any = AutoTokenizer.from_pretrained(MODEL_NAME)
+        self.model: Any = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
         self.model.eval()  # Set to evaluation mode (no gradient computation)
         logger.info("FinBERT loaded successfully")
 
-    def analyze(self, text: str) -> Dict:
+    def analyze(self, text: str) -> SentimentResult:
         """
         Analyze sentiment of a single text string.
 
@@ -72,21 +79,25 @@ class SentimentAnalyzer:
             padding=True
         )
 
-        # Run through FinBERT — no gradient needed for inference
+        # Run through FinBERT — no gradient needed for inference.  The explicit
+        # Any/Tensor annotations are intentional: recent Transformers versions
+        # expose broad overloads that strict Pylance can otherwise mis-infer.
         with torch.no_grad():
-            outputs = self.model(**inputs)
+            outputs: Any = self.model(**inputs)
 
-        # Convert logits to probabilities using softmax
-        scores = softmax(outputs.logits, dim=1).squeeze()
+        scores: torch.Tensor = softmax(outputs.logits, dim=-1).squeeze(0)
+        probabilities = [float(v) for v in scores.detach().cpu().tolist()]
+        label_index = int(torch.argmax(scores).item())
 
-        result = {
-            label: round(scores[i].item(), 4)
-            for i, label in enumerate(LABELS)
+        result: SentimentResult = {
+            "positive": round(probabilities[0], 4),
+            "negative": round(probabilities[1], 4),
+            "neutral": round(probabilities[2], 4),
+            "label": LABELS[label_index],
         }
-        result["label"] = LABELS[scores.argmax().item()]
         return result
 
-    def analyze_batch(self, texts: List[str]) -> List[Dict]:
+    def analyze_batch(self, texts: List[str]) -> List[SentimentResult]:
         """
         Analyze sentiment for multiple texts.
 

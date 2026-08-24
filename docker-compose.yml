@@ -1,67 +1,56 @@
-# ── docker-compose.yml ────────────────────────────────────────────────────────
-# Runs both services locally:
-#   - frontend: Streamlit dashboard on http://localhost:8501
-#   - api:      FastAPI backend  on http://localhost:9000
-#
-# Usage:
-#   docker-compose up --build          → build + run both
-#   docker-compose up frontend         → run only Streamlit
-#   docker-compose up api              → run only FastAPI
-#   docker-compose down                → stop everything
-#   docker-compose logs -f frontend    → tail frontend logs
-
+# docker-compose.aws.yml
 version: "3.9"
 
 services:
-
-  # ── Streamlit Frontend ──────────────────────────────────────────────────────
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: portfolio-frontend
-    ports:
-      - "8501:7860"       # localhost:8501 → container:7860
-    env_file:
-      - .env              # loads GROQ_API_KEY, NEWS_API_KEY, etc.
-    environment:
-      - PYTHONPATH=/app
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./data:/app/data  # persist FAISS index and plots between runs
-    depends_on:
-      - api
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7860/_stcore/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  # ── FastAPI Backend ─────────────────────────────────────────────────────────
   api:
     build:
       context: .
       dockerfile: Dockerfile.api
     container_name: portfolio-api
     ports:
-      - "9000:9000"       # localhost:9000 → container:9000
-    env_file:
-      - .env
+      - "8080:8080"
     environment:
+      - PORT=8080
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
+      - DATABASE_URL=sqlite:////tmp/data/portfolio_optimizer.db
+      - DB_DIR=/tmp/data
+      - FAISS_INDEX_PATH=/tmp/faiss_index
+      - NEWS_API_KEY_1=${NEWS_API_KEY_1}
+      - NEWS_API_KEY_2=${NEWS_API_KEY_2}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     volumes:
-      - ./data:/app/data
+      - app-data:/tmp/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 60s
 
-# ── Shared volume for data persistence ────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: portfolio-dashboard
+    ports:
+      - "8501:8501"
+    environment:
+      - PORT=8501
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - API_BASE_URL=http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):8080
+    depends_on:
+      - api
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
 volumes:
-  app_data:
+  app-data:

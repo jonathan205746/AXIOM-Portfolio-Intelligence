@@ -32,7 +32,7 @@ from typing import cast
 TRADING_DAYS = 252         # Annualization factor
 RISK_FREE_RATE = 0.05      # 5% annual risk-free rate (approx US T-bill 2024)
 MIN_WEIGHT = 0.02         # e.g., 2% floor — forces diversification across all held assets
-MAX_WEIGHT = 0.40         # Max 100% in one stock
+MAX_WEIGHT = 0.25         # Target cap per stock; optimize() adapts for portfolios with <4 assets
 
 
 # ── Portfolio Optimizer ───────────────────────────────────────────────────────
@@ -93,7 +93,9 @@ class PortfolioOptimizer:
 
     # ── Optimization ──────────────────────────────────────────────────────────
 
-    def optimize(self, risk_free_rate: float = RISK_FREE_RATE) -> dict:
+    def optimize(self, risk_free_rate: float = RISK_FREE_RATE,
+                 min_weight: float = MIN_WEIGHT,
+                 max_weight: float = MAX_WEIGHT) -> dict:
         """
         Run Sharpe ratio maximization.
 
@@ -116,8 +118,13 @@ class PortfolioOptimizer:
             {"type": "eq", "fun": lambda w: np.sum(w) - 1.0}
         ]
 
-        # Bounds: each weight between MIN_WEIGHT and MAX_WEIGHT
-        bounds = [(MIN_WEIGHT, MAX_WEIGHT)] * self.n
+        # Bounds are candidate-specific in Health Score v3.
+        # Keep the selected cap feasible for small portfolios.
+        effective_max_weight = max(float(max_weight), 1.0 / self.n)
+        effective_min_weight = max(0.0, float(min_weight))
+        if self.n * effective_min_weight > 1.0 + 1e-9:
+            raise ValueError(f"min_weight={effective_min_weight:.4f} is infeasible for {self.n} assets")
+        bounds = [(effective_min_weight, effective_max_weight)] * self.n
 
         # Run optimizer
         result = minimize(
@@ -164,6 +171,9 @@ class PortfolioOptimizer:
             "volatility": round(vol, 6),
             "sharpe_ratio": round(sharpe, 6),
             "risk_free_rate": risk_free_rate,
+            "min_weight": effective_min_weight,
+            "max_weight": effective_max_weight,
+            "max_weight_constraint": round(effective_max_weight, 6),
             "tickers": self.tickers,
             "success": result.success or True  # We always return best result
         }

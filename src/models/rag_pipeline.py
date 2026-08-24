@@ -68,8 +68,13 @@ class RAGPipeline:
     Uses prompt | llm chain syntax (replaces deprecated LLMChain)
     """
 
-    def __init__(self, model_name: str = "llama-3.3-70b-versatile", temperature: float = 0.3):
+    def __init__(
+        self,
+        model_name: str | None = None,
+        temperature: float = 0.3
+    ):
         api_key = os.getenv("GROQ_API_KEY")
+
         if not api_key:
             raise ValueError(
                 "GROQ_API_KEY not found in .env\n"
@@ -77,8 +82,15 @@ class RAGPipeline:
                 "Get free key: console.groq.com"
             )
 
+        model_name = model_name or os.getenv(
+            "GROQ_MODEL",
+            "openai/gpt-oss-120b"
+        )
+
+        self.model_name = model_name
+
         self.llm = ChatGroq(
-            model=model_name,
+            model=self.model_name,
             temperature=temperature,
             api_key=SecretStr(api_key),
             max_retries=2
@@ -87,7 +99,7 @@ class RAGPipeline:
         # Modern LangChain 1.x syntax: prompt | llm (no LLMChain needed)
         self.chain = RECOMMENDATION_PROMPT | self.llm
 
-        print(f"[RAGPipeline] Initialized — model: {model_name} via Groq")
+        print(f"[RAGPipeline] Initialized — model: {self.model_name} via Groq")
 
     def generate_recommendation(
         self,

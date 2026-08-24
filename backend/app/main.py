@@ -40,6 +40,8 @@ try:
     from src.optimization.portfolio import PortfolioOptimizer
     from src.optimization.risk import RiskAnalyzer
     from src.optimization.combined_signal import CombinedSignal
+    from src.optimization.health_score import HealthScoreEngine
+    from src.optimization.adaptive_optimizer import AdaptiveHealthOptimizer
     from src.models.rag_pipeline import RAGPipeline
     SRC_AVAILABLE = True
 except Exception as e:
@@ -274,6 +276,8 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
     from src.optimization.portfolio import PortfolioOptimizer
     from src.optimization.risk import RiskAnalyzer
     from src.optimization.combined_signal import CombinedSignal
+    from src.optimization.health_score import HealthScoreEngine
+    from src.optimization.adaptive_optimizer import AdaptiveHealthOptimizer
     from src.models.rag_pipeline import RAGPipeline
     
 
@@ -302,14 +306,13 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Price fetch failed: {str(e)}")
 
-    # Optimize
+    # Prepare optimizer / baseline / frontier
     try:
         optimizer = PortfolioOptimizer(prices)
-        opt_result = optimizer.optimize()
         baseline = optimizer.equal_weight_baseline()
         frontier_df = optimizer.efficient_frontier(n_points=200)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Optimization failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Optimization setup failed: {str(e)}")
 
     # Sentiment
     sentiment_scores = {}
@@ -325,20 +328,22 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
             sentiment_scores[ticker] = 0.0
             all_news[ticker] = []
 
-    # Combine
-    try:
-        combiner = CombinedSignal(opt_result, sentiment_scores)
-        combined = combiner.combine(alpha=req.alpha)
-        final_weights = combined["final_weights"]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Signal combination failed: {str(e)}")
-
-    # Risk
+    # Adaptive health-aware optimization (25-35% caps, feasibility-adjusted)
     try:
         risk_analyzer = RiskAnalyzer(prices)
-        risk_report = risk_analyzer.full_risk_report(final_weights, req.portfolio_value)
+        news_counts = {t: len(all_news.get(t, [])) for t in available}
+        adaptive = AdaptiveHealthOptimizer(optimizer, risk_analyzer, sentiment_scores, news_counts)
+        selected = adaptive.search(alpha=req.alpha, portfolio_value=req.portfolio_value)
+        opt_result = selected["opt_result"]
+        combined = selected["combined"]
+        final_weights = selected["final_weights"]
+        final_stats = selected["final_stats"]
+        risk_report = selected["risk_report"]
+        health_score = selected["health_score"]
+        adaptive_candidates = selected["candidates"]
+        selected_cap = selected["selected_cap"]
     except Exception as e:
-        risk_report = {}
+        raise HTTPException(status_code=500, detail=f"Adaptive optimization failed: {str(e)}")
 
     # LLM
     recommendations = []
@@ -360,6 +365,8 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
     # Save to history
     safe_opt = {k: (v.tolist() if isinstance(v, np.ndarray) else v) for k, v in opt_result.items()}
     safe_opt["baseline_sharpe"] = baseline["sharpe_ratio"]
+    safe_opt["final_sharpe_ratio"] = final_stats["sharpe_ratio"]
+    safe_opt["health_score"] = health_score["score"]
     save_optimization_run(
         portfolio_id=req.portfolio_id,
         alpha=req.alpha,
@@ -373,9 +380,9 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
         "tickers": available,
         "display_names": display_names,
         "opt_result": {
-            "sharpe_ratio": float(opt_result["sharpe_ratio"]),
-            "expected_return": float(opt_result["expected_return"]),
-            "volatility": float(opt_result["volatility"]),
+            "sharpe_ratio": float(final_stats["sharpe_ratio"]),
+            "expected_return": float(final_stats["expected_return"]),
+            "volatility": float(final_stats["volatility"]),
             "weights": {k: float(v) for k, v in opt_result["weights"].items()},
         },
         "baseline": {
@@ -387,6 +394,9 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
         "weight_changes": {k: {"change": float(v["change"])} for k, v in combined["weight_changes"].items()},
         "sentiment_scores": sentiment_scores,
         "risk_report": risk_report,
+        "health_score": health_score,
+        "selected_cap": float(selected_cap),
+        "adaptive_candidates": adaptive_candidates,
         "recommendations": recommendations,
         "frontier": {
             "volatility": frontier_df["volatility"].tolist(),

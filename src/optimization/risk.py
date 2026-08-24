@@ -264,6 +264,46 @@ class RiskAnalyzer:
 
         return betas
 
+
+    # ── Downside / Tail Risk v3 ───────────────────────────────────────────────
+
+    def sortino_ratio(self, weights: dict, target_return: float = 0.0) -> float:
+        """Annualized Sortino ratio using downside deviation only."""
+        w = np.array([weights.get(t, 0.0) for t in self.tickers], dtype=float)
+        port = self.returns.values @ w
+        if len(port) == 0:
+            return 0.0
+        daily_target = target_return / TRADING_DAYS
+        downside = np.minimum(port - daily_target, 0.0)
+        downside_dev = float(np.sqrt(np.mean(downside ** 2)) * np.sqrt(TRADING_DAYS))
+        annual_return = float(np.mean(port) * TRADING_DAYS)
+        if downside_dev <= 1e-12:
+            return 0.0
+        return round((annual_return - target_return) / downside_dev, 6)
+
+    def expected_shortfall(self, weights: dict, confidence: float = 0.95,
+                           portfolio_value: float = 100_000) -> dict:
+        """Historical Expected Shortfall / CVaR beyond the VaR threshold."""
+        w = np.array([weights.get(t, 0.0) for t in self.tickers], dtype=float)
+        port = self.returns.values @ w
+        if len(port) == 0:
+            es_pct = 0.0
+        else:
+            cutoff = float(np.percentile(port, (1.0 - confidence) * 100.0))
+            tail = port[port <= cutoff]
+            es_pct = float(np.mean(tail)) if len(tail) else cutoff
+        amount = abs(es_pct) * portfolio_value
+        return {
+            "method": "historical_expected_shortfall",
+            "confidence": confidence,
+            "es_pct": round(es_pct, 6),
+            "es_amount": round(amount, 2),
+            "interpretation": (
+                f"Average loss in the worst {(1-confidence)*100:.0f}% of days = "
+                f"{self.currency_symbol}{amount:,.0f} ({abs(es_pct)*100:.2f}%)"
+            ),
+        }
+
     # ── Concentration Risk ────────────────────────────────────────────────────
 
     def concentration_risk(self, weights: dict) -> dict:
@@ -322,6 +362,8 @@ class RiskAnalyzer:
         corr = self.correlation_matrix()
         high_corr = self.high_correlation_pairs(threshold=0.8)
         concentration = self.concentration_risk(weights)
+        sortino = self.sortino_ratio(weights)
+        es95 = self.expected_shortfall(weights, 0.95, portfolio_value)
 
         report = {
             "volatility": {
@@ -341,7 +383,9 @@ class RiskAnalyzer:
                 "matrix": corr.to_dict(),
                 "high_correlation_pairs": high_corr
             },
-            "concentration": concentration
+            "concentration": concentration,
+            "downside": {"sortino_ratio": sortino},
+            "tail_risk": {"expected_shortfall_95": es95}
         }
 
         # Print summary
@@ -350,6 +394,8 @@ class RiskAnalyzer:
         print(f"  Historical 99% VaR   : {hist_var_99['interpretation']}")
         print(f"  Max Drawdown         : {mdd_portfolio['max_drawdown_pct']:.2f}%")
         print(f"  Concentration (HHI)  : {concentration['interpretation']}")
+        print(f"  Sortino Ratio        : {sortino:.4f}")
+        print(f"  Expected Shortfall   : {es95['interpretation']}")
         if high_corr:
             print(f"  High Corr Pairs      : {high_corr}")
         else:

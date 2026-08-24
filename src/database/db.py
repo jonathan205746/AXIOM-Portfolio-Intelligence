@@ -186,13 +186,13 @@ def get_user(username: str, password: str) -> Optional[Dict[str, Any]]:
 def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
     """Fetch a user by username only (no password check). Used for auth flows."""
     username = (username or "").strip()
-    if not username:
+    if not username:    
         return None
 
     with _connect() as conn:
         row = conn.execute(
             "SELECT id, username, email, created_at FROM users WHERE username = ?",
-            (username,),
+            (username,)
         ).fetchone()
         return _row_to_dict(row)
 
@@ -561,5 +561,3 @@ def get_sharpe_trend(portfolio_id: int) -> List[Dict[str, Any]]:
             }
         )
     return list(reversed(trend))
-
-

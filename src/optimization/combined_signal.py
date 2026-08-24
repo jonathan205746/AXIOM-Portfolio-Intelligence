@@ -17,7 +17,7 @@ Sentiment → Weight conversion:
 Usage:
     from src.optimization.combined_signal import CombinedSignal
     signal = CombinedSignal(optimized_result, sentiment_scores)
-    final = signal.combine(alpha=0.6, max_weight=0.40)
+    final = signal.combine(alpha=0.6, max_weight=0.25)
     print(final)
 """
 
@@ -28,14 +28,16 @@ from typing import Optional
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 DEFAULT_ALPHA = 0.6         # 60% weight on quant, 40% on sentiment
-MAX_SENTIMENT_SHIFT = 0.10  # Sentiment can shift a weight by max ±10%
-DEFAULT_MAX_WEIGHT = 0.40   # Hard cap per ticker to enforce diversification
+MAX_SENTIMENT_SHIFT = 0.04  # v3: sentiment is a supporting signal, max ±4%
+DEFAULT_MAX_WEIGHT = 0.25   # Target cap per ticker; caller should adapt for portfolios with <4 assets
 
 
 # ── Helper Functions ──────────────────────────────────────────────────────────
 
 def sentiment_to_weight_adjustment(sentiment_score: float,
-                                    max_shift: float = MAX_SENTIMENT_SHIFT) -> float:
+                                    max_shift: float = MAX_SENTIMENT_SHIFT,
+                                    confidence: float | None = None,
+                                    relevance: float = 1.0) -> float:
     """
     Convert a FinBERT sentiment score to a weight adjustment.
 
@@ -47,7 +49,12 @@ def sentiment_to_weight_adjustment(sentiment_score: float,
         sentiment = -0.5 → adjustment = -0.05 (decrease weight by 5%)
         sentiment =  0.0 → adjustment = 0.00 (no change)
     """
-    return sentiment_score * max_shift
+    # Confidence-aware damping: weak/neutral FinBERT signals should barely move weights.
+    if confidence is None:
+        confidence = 0.50 + 0.50 * min(abs(float(sentiment_score)) / 0.50, 1.0)
+    confidence = max(0.0, min(1.0, float(confidence)))
+    relevance = max(0.0, min(1.0, float(relevance)))
+    return float(sentiment_score) * max_shift * confidence * relevance
 
 
 def normalize_weights(weights: dict) -> dict:
