@@ -204,7 +204,7 @@ if len(history) >= 2:
             padding: 12px 14px;
             margin-bottom: 8px;
             transition: all 0.15s ease;
-        " onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'">
+        ">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                 <strong style="color:#f0f0f5;font-size:0.85rem;font-family:'Inter',sans-serif;">{ticker}</strong>
                 {badge_html}

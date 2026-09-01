@@ -93,7 +93,7 @@ with st.sidebar:
             border-bottom: 1px solid rgba(255,255,255,0.03);
             font-family: 'JetBrains Mono', monospace;
             transition: all 0.15s ease;
-        " onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+        ">
             <span style="color: #f0f0f5; font-weight: 600;">{name}</span>
             <div>
                 <span style="color: #8b8b9e;">{data['price']:,.2f}</span>
@@ -260,8 +260,7 @@ if logged_in and user and DB_AVAILABLE:
                     padding: 16px;
                     transition: all 0.2s ease;
                     box-shadow: 0 4px 24px rgba(0,0,0,0.2);
-                " onmouseover="this.style.transform='translateY(-2px)';this.style.borderColor='rgba(255,255,255,0.10)';this.style.boxShadow='0 8px 32px rgba(0,0,0,0.3)'"
-                onmouseout="this.style.transform='translateY(0)';this.style.borderColor='rgba(255,255,255,0.06)';this.style.boxShadow='0 4px 24px rgba(0,0,0,0.2)'">
+                ">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
                         <strong style="color:#f0f0f5;font-size:0.85rem;font-weight:700;font-family:'Inter',sans-serif;">{pf['name'].upper()}</strong>
                         <span style="background:rgba(255,107,53,0.12);color:#FF6B35;padding:2px 8px;border-radius:6px;font-size:0.6rem;font-weight:700;letter-spacing:0.04em;">{pf['currency']}</span>
@@ -309,8 +308,7 @@ else:
                 text-align: center;
                 transition: all 0.2s ease;
                 height: 100%;
-            " onmouseover="this.style.transform='translateY(-2px)';this.style.borderColor='{color}40';"
-            onmouseout="this.style.transform='translateY(0)';this.style.borderColor='rgba(255,255,255,0.06)';">
+            ">
                 <div style="font-size:1.6rem;color:{color};margin-bottom:8px;text-shadow:0 0 20px {color}40;">{icon}</div>
                 <div style="font-size:0.8rem;font-weight:700;color:#f0f0f5;margin-bottom:4px;font-family:'Inter',sans-serif;">{title}</div>
                 <div style="font-size:0.7rem;color:#4a4a5e;line-height:1.4;">{desc}</div>
@@ -338,8 +336,7 @@ else:
                 border: 1px solid rgba(255,255,255,0.04);
                 border-radius: 10px;
                 transition: all 0.2s ease;
-            " onmouseover="this.style.borderColor='rgba(255,107,53,0.2)';this.style.background='rgba(18,18,26,0.8)'"
-            onmouseout="this.style.borderColor='rgba(255,255,255,0.04)';this.style.background='rgba(18,18,26,0.5)'">
+            ">
                 <span style="
                     background: linear-gradient(135deg, #FF6B35, #CC4F25);
                     color: #020202;

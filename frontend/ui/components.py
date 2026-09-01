@@ -175,8 +175,7 @@ def sidebar_nav_item(label: str, icon: str, active: bool = False, href: str = ""
             letter-spacing: 0.02em;
             text-decoration: none;
             transition: all 0.15s ease;
-        " onmouseover="this.style.background='rgba(255,255,255,0.03)';this.style.color='#f0f0f5';" 
-        onmouseout="this.style.background='transparent';this.style.color='#8b8b9e';">
+        ">
             {icon}&nbsp;&nbsp;{html.escape(label)}
         </a>
         '''
@@ -207,7 +206,7 @@ def page_sidebar(current_page: str, user: Optional[dict] = None, market_data: Op
                     border-bottom: 1px solid rgba(255,255,255,0.03);
                     font-family: 'JetBrains Mono', monospace;
                     transition: all 0.15s ease;
-                " onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+                ">
                     <span style="color: #f0f0f5; font-weight: 600;">{name}</span>
                     <div>
                         <span style="color: #8b8b9e;">{data['price']:,.2f}</span>
@@ -432,8 +431,7 @@ def info_card(title: str, body: str, badge_html: str = "", accent: str = "primar
         padding: 14px 16px;
         margin-bottom: 10px;
         transition: all 0.2s ease;
-    " onmouseover="this.style.borderColor='rgba(255,255,255,0.10)';this.style.transform='translateX(2px)';"
-    onmouseout="this.style.borderColor='rgba(255,255,255,0.06)';this.style.transform='translateX(0)';">
+    ">
         <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;">
             <div>
                 <div style="font-size:0.82rem;font-weight:600;color:#f0f0f5;margin-bottom:4px;font-family:'Inter',sans-serif;">{html.escape(title)}</div>
@@ -461,7 +459,7 @@ def data_table_row(cells: List[str], flexes: Optional[List[int]] = None, highlig
     html_cells = ""
     for cell, flex in zip(cells, flexes):
         html_cells += f'''<div style="flex:{flex};color:#8b8b9e;font-size:0.78rem;font-family:'JetBrains Mono',monospace;padding:2px 0;">{cell}</div>'''
-    return f'''<div style="display:flex;padding:8px 12px;background:{bg};border-bottom:1px solid rgba(255,255,255,0.03);transition:all 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='{bg}'">{html_cells}</div>'''
+    return f'''<div style="display:flex;padding:8px 12px;background:{bg};border-bottom:1px solid rgba(255,255,255,0.03);transition:all 0.15s;">{html_cells}</div>'''
 
 
 # ── Status & Loading ────────────────────────────────────────
@@ -712,7 +710,7 @@ def command_palette_modal():
                     transition: all 0.15s ease;
                     font-size: 0.8rem;
                     color: #f0f0f5;
-                " onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">
+                ">
                     <span style="color: {color}; font-weight: 700;">{icon}</span>
                     <span style="font-family: 'Inter', sans-serif;">{label}</span>
                     <span style="margin-left: auto; font-size: 0.65rem; color: #4a4a5e; font-family: 'JetBrains Mono', monospace;">{atype.upper()}</span>

@@ -183,8 +183,6 @@ def generate_axiom_report(portfolio, results, display_names):
             glow = "rgba(16,185,129,0.08)" if score >= 0.05 else ("rgba(244,63,94,0.08)" if score <= -0.05 else "rgba(255,255,255,0.02)")
             rec_parts.append(f"""
             <div style="margin-bottom:12px;padding:14px;background:{glow};border:1px solid {C['border_subtle']};border-left:3px solid {color};border-radius:0 12px 12px 0;transition:all 0.2s ease;"
-                 onmouseover="this.style.transform='translateX(4px)';this.style.borderColor='{C['border_active']}';"
-                 onmouseout="this.style.transform='translateX(0)';this.style.borderColor='{C['border_subtle']}';"
             >
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                     <span style="font-size:0.85rem;font-weight:700;color:{C['text_primary']};font-family:'Inter',sans-serif;">{display_names.get(t, t)}</span>
