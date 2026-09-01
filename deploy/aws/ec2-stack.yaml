@@ -24,11 +24,12 @@ Parameters:
     AllowedPattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}/(3[0-2]|[12]?[0-9])$
   InstanceType:
     Type: String
-    Default: t3.large
+    Default: t3.micro
     AllowedValues:
       - t3.medium
-      - t3.large
-    Description: Use t3.large for the most reliable FinBERT inference experience.
+      - t3.micro
+      - t3.small
+    Description: EC2 instance type. Use t3.micro for minimal testing or t3.small for additional memory.
   RootVolumeGiB:
     Type: Number
     Default: 40
