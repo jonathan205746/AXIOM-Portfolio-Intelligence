@@ -160,16 +160,30 @@ def run_strategy(
             else:
                 raise ValueError(f"Unsupported mode: {mode}")
             target = target / target.sum()
-            turnover = float(np.abs(target - weights).sum())
-            cost = nav * turnover * config.transaction_cost
+            # Total fraction traded across purchases and sales.
+            traded_notional = float(
+               np.abs(target - weights).sum()
+        )
+
+            # Standard one-way portfolio turnover used for reporting.
+            reported_turnover = 0.5 * traded_notional
+
+            # Transaction costs apply to the complete traded notional.
+            cost = (
+                nav
+                * traded_notional
+                * config.transaction_cost
+            )
+
             nav -= cost
-            total_turnover += turnover
+            total_turnover += reported_turnover
             total_cost += cost
             weights = target
             weight_log.append({
                 "date": date.strftime("%Y-%m-%d"),
                 "strategy": mode,
-                "turnover": turnover,
+                "reported_turnover": reported_turnover,
+                "traded_notional": traded_notional,
                 **{ticker: float(weight) for ticker, weight in zip(config.tickers, weights)},
             })
         daily = returns.loc[date, config.tickers]

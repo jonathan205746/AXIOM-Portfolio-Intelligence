@@ -56,7 +56,11 @@ class PortfolioOptimizer:
         self.n = len(self.tickers)
 
         # Compute daily returns
-        self.returns = price_data.pct_change().dropna()
+        self.returns = (
+            price_data
+            .pct_change(fill_method=None)
+            .dropna()
+       )
 
         # Annualized expected returns (mean daily return × 252)
         self.expected_returns = self.returns.mean() * TRADING_DAYS
@@ -87,9 +91,13 @@ class PortfolioOptimizer:
             return 0.0
         return (ret - risk_free_rate) / vol
 
-    def _negative_sharpe(self, weights: np.ndarray) -> float:
-        """Objective function for scipy.minimize (minimizes negative Sharpe)."""
-        return -self.sharpe_ratio(weights)
+    def _negative_sharpe(self, weights: np.ndarray, risk_free_rate: float = RISK_FREE_RATE) -> float:
+        """Objective for scipy minimize: minimize negative Sharpe ratio."""
+        if np.any(weights < -1e-8):
+            return np.inf
+        if np.isclose(np.sum(weights), 0.0):
+            return np.inf
+        return -self.sharpe_ratio(weights, risk_free_rate)
 
     # ── Optimization ──────────────────────────────────────────────────────────
 
@@ -128,13 +136,19 @@ class PortfolioOptimizer:
 
         # Run optimizer
         result = minimize(
-            fun=self._negative_sharpe,
-            x0=initial_weights,
-            method="SLSQP",
-            bounds=bounds,
-            constraints=constraints,
-            options={"maxiter": 1000, "ftol": 1e-9}
-        )
+            fun=lambda weights: self._negative_sharpe(
+            weights,
+            risk_free_rate,
+        ),
+           x0=initial_weights,
+           method="SLSQP",
+           bounds=bounds,
+           constraints=constraints,
+           options={
+                "maxiter": 1000,
+                "ftol": 1e-9,
+            },
+     )
 
         if not result.success:
             print(f"  [WARNING] Optimizer did not fully converge: {result.message}")
@@ -175,7 +189,8 @@ class PortfolioOptimizer:
             "max_weight": effective_max_weight,
             "max_weight_constraint": round(effective_max_weight, 6),
             "tickers": self.tickers,
-            "success": result.success or True  # We always return best result
+            "success": bool(result.success),
+            "optimizer_message": str(result.message),# We always return best result
         }
 
     def equal_weight_baseline(self) -> dict:
