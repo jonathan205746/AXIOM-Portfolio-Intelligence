@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/awslabs/goformation/master/schema/cloudformation.schema.json
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
   Single-host AWS deployment for AI-Powered Portfolio Optimizer. Runs the
@@ -47,37 +48,46 @@ Resources:
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow SSH and Streamlit only from the operator's address.
-      VpcId: !Ref VpcId
+      GroupDescription: Allow SSH and Streamlit only from the operator address.
+      VpcId:
+        Ref: VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: !Ref AllowedCidr
+          CidrIp:
+            Ref: AllowedCidr
           Description: SSH administration
         - IpProtocol: tcp
           FromPort: 8501
           ToPort: 8501
-          CidrIp: !Ref AllowedCidr
+          CidrIp:
+            Ref: AllowedCidr
           Description: Streamlit dashboard
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-sg'
+          Value:
+            Fn::Sub: '${AWS::StackName}-sg'
 
   PortfolioInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref LatestAmiId
-      InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyName
-      SubnetId: !Ref SubnetId
+      ImageId:
+        Ref: LatestAmiId
+      InstanceType:
+        Ref: InstanceType
+      KeyName:
+        Ref: KeyName
+      SubnetId:
+        Ref: SubnetId
       SecurityGroupIds:
-        - !GetAtt AppSecurityGroup.GroupId
+        - Fn::GetAtt: AppSecurityGroup.GroupId
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
             VolumeType: gp3
-            VolumeSize: !Ref RootVolumeGiB
+            VolumeSize:
+              Ref: RootVolumeGiB
             Encrypted: true
             DeleteOnTermination: false
       MetadataOptions:
@@ -85,41 +95,46 @@ Resources:
         HttpEndpoint: enabled
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-portfolio-optimizer'
+          Value:
+            Fn::Sub: "${AWS::StackName}-portfolio-optimizer"
       UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          set -euxo pipefail
-          exec > >(tee /var/log/portfolio-bootstrap.log | logger -t portfolio-bootstrap -s 2>/dev/console) 2>&1
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash
+            set -euxo pipefail
+            exec > >(tee /var/log/portfolio-bootstrap.log | logger -t portfolio-bootstrap -s 2>/dev/console) 2>&1
 
-          dnf update -y
-          dnf install -y docker git
-          systemctl enable --now docker
-          usermod -aG docker ec2-user
+            dnf update -y
+            dnf install -y docker git
+            systemctl enable --now docker
+            usermod -aG docker ec2-user
 
-          mkdir -p /usr/local/lib/docker/cli-plugins
-          curl -fsSL https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 \
-            -o /usr/local/lib/docker/cli-plugins/docker-compose
-          chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+            mkdir -p /usr/local/lib/docker/cli-plugins
+            curl -fsSL https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 \
+              -o /usr/local/lib/docker/cli-plugins/docker-compose
+            chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
-          mkdir -p /opt/portfolio
-          git clone --depth 1 --branch '${RepositoryBranch}' '${RepositoryUrl}' /opt/portfolio
-          touch /opt/portfolio/.env
-          chown -R ec2-user:ec2-user /opt/portfolio
+            mkdir -p /opt/portfolio
+            git clone --depth 1 --branch '${RepositoryBranch}' '${RepositoryUrl}' /opt/portfolio
+            touch /opt/portfolio/.env
+            chown -R ec2-user:ec2-user /opt/portfolio
 
-          cd /opt/portfolio
-          docker compose up --build -d
+            cd /opt/portfolio
+            docker compose up --build -d
 
 Outputs:
   DashboardUrl:
     Description: Open this URL after stack creation completes. It is restricted to AllowedCidr.
-    Value: !Sub 'http://${PortfolioInstance.PublicDnsName}:8501'
+    Value:
+      Fn::Sub: 'http://${PortfolioInstance.PublicDnsName}:8501'
   PublicIp:
     Description: Public IPv4 address of the instance.
-    Value: !GetAtt PortfolioInstance.PublicIp
+    Value:
+      Fn::GetAtt: PortfolioInstance.PublicIp
   InstanceId:
     Description: EC2 instance ID.
-    Value: !Ref PortfolioInstance
+    Value:
+      Ref: PortfolioInstance
   BootstrapLogCommand:
     Description: SSH command to inspect bootstrap output if deployment fails.
-    Value: !Sub 'sudo tail -n 200 /var/log/portfolio-bootstrap.log'
+    Value: 'sudo tail -n 200 /var/log/portfolio-bootstrap.log'
