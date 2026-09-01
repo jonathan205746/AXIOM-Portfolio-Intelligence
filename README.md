@@ -1,121 +1,327 @@
-# AI-Powered Portfolio Optimizer
+# AXIOM Portfolio Intelligence
+
+### AI-Powered Portfolio Optimization and Research Platform
 
 <div align="center">
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![FinBERT](https://img.shields.io/badge/NLP-FinBERT-F59E0B)](https://huggingface.co/ProsusAI/finbert)
+[![FAISS](https://img.shields.io/badge/Vector_Search-FAISS-0467DF)](https://github.com/facebookresearch/faiss)
+[![Groq](https://img.shields.io/badge/LLM-Groq-F55036)](https://groq.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
+[![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazonaws&logoColor=white)](deploy/aws/ec2-stack.yaml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 </div>
 
-An AI-powered investment research and portfolio optimization platform that combines market data, Modern Portfolio Theory, financial-news sentiment, and LLM-generated recommendations to help users analyze and rebalance equity portfolios.
+> **Product name:** AXIOM Portfolio Intelligence  
+> **Repository:** AI-Powered-Portfolio-Optimizer  
+> **Deployment:** Docker on AWS EC2, provisioned with CloudFormation
 
-This project supports major US equities and a curated set of Indian NSE stocks, with a Streamlit dashboard, FastAPI APIs, and a backend for authenticated portfolio workflows.
+**AXIOM Portfolio Intelligence** is an AI-powered portfolio research and optimization platform that combines adaptive Modern Portfolio Theory, market data, financial-news sentiment, risk analytics, and retrieval-augmented generation to produce explainable portfolio allocations and evidence-grounded recommendations.
 
-> Disclaimer: This project is intended for educational and research use only. It does not provide financial advice or guarantee investment performance.
+The platform uses FinBERT for financial sentiment analysis, FAISS for semantic retrieval, LangChain and Groq for recommendation generation, and Streamlit for the interactive dashboard. It is containerized with Docker and deployed on AWS EC2 using CloudFormation.
 
-## Table of Contents
+> [!IMPORTANT]
+> AXIOM Portfolio Intelligence is intended for educational, research, and portfolio-demonstration purposes. It does not provide financial advice or guarantee investment performance.
 
-- [What this project does](#what-this-project-does)
-- [Key features](#key-features)
-- [System architecture](#system-architecture)
-- [Tech stack](#tech-stack)
-- [Project structure](#project-structure)
-- [Quick start](#quick-start)
-- [Configuration](#configuration)
-- [Running with Docker](#running-with-docker)
-- [Deployment options](#deployment-options)
-- [API overview](#api-overview)
-- [Testing](#testing)
-- [Documentation](#documentation)
-- [Contributing](#contributing)
-- [License](#license)
+## Project links
 
-## What this project does
+- **Live demo:** [Open AXIOM Portfolio Intelligence](http://13.207.84.157:8501)
+- **Portfolio case study:** [View the case study](https://parmodk2310.vercel.app/projects/portfolio)
+- **Source code:** [GitHub repository](https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer)
 
-The application helps users:
+> The live demo currently uses an EC2 public IPv4 address. The address may change if the instance is stopped and started unless an Elastic IP is assigned.
 
-- retrieve and analyze historical stock prices
-- build optimized portfolios based on risk-adjusted return
-- blend quantitative signals with sentiment signals from financial news
-- inspect volatility, drawdowns, VaR, correlations, and benchmark comparisons
-- review AI-generated narrative explanations and portfolio recommendations
-- save portfolios and historical analysis in a local database
-- run the workflow through a dashboard, API, and optional backend service
+## Table of contents
 
-In short, it is a practical prototype for AI-assisted portfolio analysis and decision support.
+- [AXIOM Portfolio Intelligence](#axiom-portfolio-intelligence)
+    - [AI-Powered Portfolio Optimization and Research Platform](#ai-powered-portfolio-optimization-and-research-platform)
+  - [Project links](#project-links)
+  - [Table of contents](#table-of-contents)
+  - [Problem statement](#problem-statement)
+  - [Why this project](#why-this-project)
+  - [What AXIOM does](#what-axiom-does)
+  - [Key features](#key-features)
+  - [System architecture](#system-architecture)
+  - [Analysis pipeline](#analysis-pipeline)
+    - [Quantitative analysis](#quantitative-analysis)
+    - [Sentiment analysis](#sentiment-analysis)
+    - [Retrieval-augmented generation](#retrieval-augmented-generation)
+  - [Technology stack](#technology-stack)
+    - [Application](#application)
+    - [Quantitative analysis](#quantitative-analysis-1)
+    - [AI and NLP](#ai-and-nlp)
+    - [Data sources](#data-sources)
+    - [Deployment](#deployment)
+    - [Optional services](#optional-services)
+  - [Project structure](#project-structure)
+  - [Quick start](#quick-start)
+    - [Prerequisites](#prerequisites)
+    - [1. Clone the repository](#1-clone-the-repository)
+    - [2. Create a virtual environment](#2-create-a-virtual-environment)
+    - [3. Install dependencies](#3-install-dependencies)
+    - [4. Create the environment file](#4-create-the-environment-file)
+    - [5. Run the Streamlit application](#5-run-the-streamlit-application)
+  - [Configuration](#configuration)
+  - [Running with Docker](#running-with-docker)
+  - [AWS deployment](#aws-deployment)
+    - [Current deployment design](#current-deployment-design)
+    - [Validate the CloudFormation template](#validate-the-cloudformation-template)
+    - [Deploy the stack](#deploy-the-stack)
+    - [Get stack outputs](#get-stack-outputs)
+    - [Connect to the EC2 instance](#connect-to-the-ec2-instance)
+  - [Optional API service](#optional-api-service)
+  - [Database and persistence](#database-and-persistence)
+  - [Testing](#testing)
+  - [Security notes](#security-notes)
+  - [Known limitations](#known-limitations)
+  - [Roadmap](#roadmap)
+  - [Documentation](#documentation)
+  - [Contributing](#contributing)
+  - [License](#license)
+  - [Acknowledgments](#acknowledgments)
+
+## Problem statement
+
+Retail investors and portfolio learners commonly use separate tools for holdings, market prices, risk calculations, financial news, and AI-generated commentary. This fragmentation makes it difficult to evaluate a portfolio through one repeatable and explainable workflow.
+
+Common problems include:
+
+- portfolio allocation and risk are evaluated separately from financial news
+- raw charts do not explain concentration or downside exposure
+- portfolio optimizers can appear precise despite noisy historical estimates
+- generic LLM responses may contain unsupported financial claims
+- analysis results are often not stored for later comparison or auditing
+- research workflows are difficult to reproduce across users and environments
+
+AXIOM addresses these problems by combining quantitative optimization, risk diagnostics, financial sentiment, retrieved evidence, AI-generated explanations, persistent history, and downloadable reporting in one application.
+
+## Why this project
+
+This project was created to demonstrate an end-to-end AI and data-science system rather than an isolated notebook or model.
+
+It brings together:
+
+- quantitative finance and statistical optimization
+- transformer-based financial sentiment analysis
+- vector retrieval and retrieval-augmented generation
+- application development and interactive visualization
+- database design and persistent user workflows
+- Docker containerization
+- AWS infrastructure and deployment automation
+- testing, debugging, monitoring, and security considerations
+
+The project is especially useful for demonstrating the combined responsibilities of a Data Scientist, ML Engineer, AI Engineer, and Software Engineer.
+
+## What AXIOM does
+
+AXIOM allows a user to:
+
+1. register or sign in
+2. create and manage portfolios
+3. add stock holdings and purchase information
+4. retrieve historical market prices
+5. calculate asset and portfolio returns
+6. generate candidate portfolio allocations
+7. analyze volatility, drawdown, Value at Risk, and correlations
+8. fetch recent financial-news articles
+9. score news sentiment using FinBERT
+10. retrieve relevant context using FAISS
+11. generate evidence-grounded recommendations using LangChain and Groq
+12. save optimization results in SQLite
+13. review historical analysis runs
+14. compare portfolio performance and benchmarks
+15. download a self-contained HTML analysis report
 
 ## Key features
 
 - Historical market-data acquisition using Yahoo Finance
-- Sharpe-ratio portfolio optimization with a no-short-selling constraint
-- Risk analysis including volatility, drawdown, correlation, and Value at Risk
-- Sentiment analysis using financial-news data and FinBERT-style scoring
-- FAISS-based retrieval for relevant financial articles and context
-- Optional LLM-powered explanations and recommendation generation via Groq or compatible providers
-- Interactive dashboard for login, portfolio management, analysis, benchmarking, and history
-- SQLite-backed persistence for users, holdings, portfolios, and analysis results
-- Docker support for simple local deployment
-- AWS EC2 deployment assets for low-cost demo hosting
+- Adaptive Modern Portfolio Theory portfolio optimization
+- Sharpe-oriented allocation with configurable concentration constraints
+- Equal-weight baseline and efficient-frontier comparison
+- Risk analysis covering volatility, Value at Risk, maximum drawdown, and correlation
+- FinBERT financial-news sentiment analysis
+- FAISS-backed retrieval of relevant financial context
+- LangChain and Groq-powered recommendation generation
+- Graceful fallback when news or LLM services are unavailable
+- Portfolio and holdings management
+- SQLite persistence for users, portfolios, holdings, and optimization history
+- Interactive Streamlit dashboard with Plotly visualizations
+- Correlation matrix and per-asset volatility analysis
+- Recent-news and sentiment views
+- Downloadable self-contained HTML reports
+- Docker Compose containerization
+- AWS EC2 deployment using CloudFormation
+- Persistent SQLite and FAISS data through a Docker volume
 
 ## System architecture
 
 ```text
 User
   │
-  ├── Streamlit dashboard
-  │      │
-  │      └── FastAPI analysis layer
-  │               │
-  │               ├── Market data (yfinance)
-  │               ├── Financial news (NewsAPI)
-  │               ├── FAISS vector retrieval
-  │               ├── Sentiment models
-  │               └── Portfolio optimization + risk engine
+  ▼
+AXIOM Streamlit Dashboard
   │
-  └── Authenticated backend app
-        └── SQLite database + saved portfolios
+  ├── Portfolio and authentication workflows
+  │
+  ├── Market Data Pipeline
+  │     └── Yahoo Finance
+  │
+  ├── Financial News Pipeline
+  │     └── NewsAPI
+  │
+  ├── Intelligence Layer
+  │     ├── FinBERT sentiment analysis
+  │     ├── FAISS semantic retrieval
+  │     └── LangChain + Groq recommendations
+  │
+  ├── Portfolio Engine
+  │     ├── Adaptive MPT optimization
+  │     ├── Efficient frontier
+  │     └── Risk analytics
+  │
+  └── Persistence
+        ├── SQLite database
+        └── FAISS index
+
+AWS Deployment
+  │
+  ├── AWS CloudFormation
+  ├── Amazon EC2
+  ├── Amazon Linux 2023
+  ├── Docker Compose
+  └── Persistent Docker volume mounted at /data
 ```
 
-The system is organized around three main layers:
+The system is organized into four logical layers:
 
-1. Data layer: stock prices, news, stored portfolio data, and vector search
-2. Intelligence layer: sentiment models, optimization logic, and risk calculations
-3. Experience layer: dashboard, REST endpoints, and backend portfolio flows
+1. **Experience layer:** Streamlit pages, user session state, charts, forms, history, and reports.
+2. **Application layer:** orchestration of market data, news, models, optimization, and persistence.
+3. **Intelligence layer:** FinBERT, FAISS, LangChain, Groq, Modern Portfolio Theory, and risk analytics.
+4. **Infrastructure layer:** Docker, persistent storage, EC2, and CloudFormation.
 
-## Tech stack
+## Analysis pipeline
+
+The main analysis workflow follows these steps:
+
+```text
+Portfolio holdings
+        │
+        ├───────────────┐
+        ▼               ▼
+Historical prices   Financial news
+        │               │
+        ▼               ▼
+Returns and risk    FinBERT sentiment
+        │               │
+        └───────┬───────┘
+                ▼
+        Adaptive MPT optimizer
+                │
+                ├── Final allocation
+                ├── Efficient frontier
+                ├── Risk report
+                └── Health score
+                │
+                ▼
+        FAISS retrieval + Groq RAG
+                │
+                ▼
+      Recommendation and HTML report
+                │
+                ▼
+          SQLite run history
+```
+
+### Quantitative analysis
+
+For portfolio weights `w`, expected returns `μ`, and covariance matrix `Σ`:
+
+```text
+Expected portfolio return = wᵀμ
+Portfolio variance        = wᵀΣw
+Sharpe ratio              = (portfolio return - risk-free rate) / volatility
+```
+
+The optimizer evaluates allocations under constraints such as weights summing to one and concentration limits. Historical results are decision-support signals and are not forecasts or guarantees.
+
+### Sentiment analysis
+
+FinBERT classifies financial headlines as positive, negative, or neutral. Article-level outputs are aggregated into a per-ticker sentiment signal. News coverage and model confidence should be considered when interpreting this score.
+
+### Retrieval-augmented generation
+
+FAISS retrieves relevant financial context. LangChain combines that context with portfolio weight, sentiment, and risk information before sending the prompt to Groq.
+
+RAG reduces unsupported generation by grounding the model in retrieved evidence, but it does not guarantee correctness. Generated recommendations should always be reviewed alongside the underlying data.
+
+## Technology stack
+
+### Application
 
 - Python 3.10+
-- FastAPI for API services
-- Streamlit for the dashboard UI
-- SQLite for local persistence
-- Yahoo Finance for market history
-- FAISS for article relevance retrieval
-- News APIs for financial-news ingestion
-- Sentiment and LLM components for AI-generated analysis
-- Docker and Docker Compose for containerized deployment
-- AWS CloudFormation for simple EC2 hosting templates
+- Streamlit
+- Plotly
+- pandas
+- NumPy
+- SQLite
+
+### Quantitative analysis
+
+- Modern Portfolio Theory
+- Adaptive signal blending
+- Efficient-frontier analysis
+- Sharpe ratio
+- Value at Risk
+- Maximum drawdown
+- Correlation and volatility analysis
+
+### AI and NLP
+
+- FinBERT
+- Hugging Face Transformers
+- FAISS
+- LangChain
+- Groq
+- `openai/gpt-oss-120b` through Groq by default
+
+### Data sources
+
+- Yahoo Finance through `yfinance`
+- NewsAPI
+
+### Deployment
+
+- Docker
+- Docker Compose
+- AWS EC2
+- AWS CloudFormation
+- Amazon Linux 2023
+- Persistent Docker volume
+
+### Optional services
+
+- FastAPI API service, when enabled with the API profile
 
 ## Project structure
 
 ```text
 AI-Powered-Portfolio-Optimizer/
-├── .env.example                 # Sample environment variables
+├── .env.example
 ├── .gitignore
 ├── .dockerignore
-├── Dockerfile                   # Frontend/dashboard container
-├── Dockerfile.api               # API container
+├── Dockerfile
+├── Dockerfile.api
+├── docker-compose.yml
 ├── LICENSE
-├── Makefile                     # Local dev and automation commands
-├── README.md                    # GitHub-facing project documentation
-├── docker-compose.yml           # Local multi-service orchestration
-├── requirements.txt             # Full Python dependency set
-├── requirements-backend.txt     # Backend dependencies
-├── requirements-frontend.txt    # Frontend dependencies
-├── requirements-dev.txt         # Dev/test dependencies
-├── backtesting.md               # Backtesting notes and methodology
+├── Makefile
+├── README.md
+├── requirements.txt
+├── requirements-backend.txt
+├── requirements-frontend.txt
+├── requirements-dev.txt
 ├── deploy/
 │   ├── aws/
 │   │   ├── README.md
@@ -129,13 +335,9 @@ AI-Powered-Portfolio-Optimizer/
 ├── frontend/
 │   ├── app.py
 │   ├── pages/
-│   ├── ui/
-│   └── logo.png
+│   └── ui/
 ├── backend/
-│   ├── app/
-│   ├── config.py
-│   ├── Dockerfile
-│   └── requirements.txt
+│   └── app/
 ├── src/
 │   ├── data/
 │   ├── database/
@@ -147,12 +349,7 @@ AI-Powered-Portfolio-Optimizer/
 │   ├── plots/
 │   └── portfolio_optimizer.db
 ├── notebooks/
-│   ├── 01_data_exploration.ipynb
-│   ├── 02_sentiment_analysis.ipynb
-│   └── 03_optimization_experiments.ipynb
-├── tests/
-│   └── test_data.py
-└── JPM_2025_AI_Portfolio_Optimizer_v2.pptx
+└── tests/
 ```
 
 ## Quick start
@@ -160,9 +357,10 @@ AI-Powered-Portfolio-Optimizer/
 ### Prerequisites
 
 - Python 3.10 or later
+- Git
 - pip
-- virtual environment support
-- Docker and Docker Compose (optional but recommended for local container deployment)
+- Python virtual-environment support
+- Docker and Docker Compose for container deployment
 
 ### 1. Clone the repository
 
@@ -171,19 +369,19 @@ git clone https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer.git
 cd AI-Powered-Portfolio-Optimizer
 ```
 
-### 2. Create and activate a virtual environment
+### 2. Create a virtual environment
 
 ```bash
 python -m venv .venv
 ```
 
-On Windows PowerShell:
+Windows PowerShell:
 
 ```powershell
 .venv\Scripts\Activate.ps1
 ```
 
-On macOS/Linux:
+macOS or Linux:
 
 ```bash
 source .venv/bin/activate
@@ -191,185 +389,351 @@ source .venv/bin/activate
 
 ### 3. Install dependencies
 
+For the complete development environment:
+
 ```bash
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-If you want the backend-only dependencies separately, you can also install:
+For the Streamlit application only:
 
 ```bash
-pip install -r requirements-backend.txt
 pip install -r requirements-frontend.txt
 ```
 
-### 4. Configure environment variables
+### 4. Create the environment file
 
-Copy the example environment file and fill in the settings you need:
+Windows PowerShell:
 
-```bash
-copy .env.example .env
+```powershell
+Copy-Item .env.example .env
 ```
 
-or:
+macOS or Linux:
 
 ```bash
 cp .env.example .env
 ```
 
-Example configuration:
+Add the required API keys and configuration values to `.env`.
 
-```env
-NEWS_API_KEY=your_newsapi_key
-GEMINI_API_KEY=your_gemini_key
-GROQ_API_KEY=your_groq_key
-GROQ_MODEL=openai/gpt-oss-120b
-SECRET_KEY=your-secret-key
-```
-
-Notes:
-
-- You can run basic price analysis without external API keys.
-- News retrieval and sentiment enrichment require a News API key.
-- LLM explanations require a provider key such as Groq or Gemini.
-- `SECRET_KEY` is used for backend auth and JWT signing.
-
-### 5. Run the application locally
-
-Start the API in one terminal:
-
-```bash
-uvicorn backend.app.main:app --reload --port 8000
-```
-
-Start the dashboard in another terminal:
+### 5. Run the Streamlit application
 
 ```bash
 streamlit run frontend/app.py
 ```
 
-Then open:
+Open:
 
-- Streamlit dashboard: http://localhost:8501
-- API docs: http://localhost:8000/docs
+```text
+http://localhost:8501
+```
 
 ## Configuration
 
-The repository uses environment variables to control external integrations and secure application behavior. The main values are defined in `.env.example` and should be copied into `.env` before running the project.
+The application uses environment variables for external integrations and runtime configuration.
 
-| Variable | Purpose |
-| --- | --- |
-| `NEWS_API_KEY` | Financial-news retrieval and relevant article context |
-| `GROQ_API_KEY` | LLM-powered recommendation generation |
-| `GEMINI_API_KEY` | Optional alternative provider integration |
-| `GROQ_MODEL` | LLM model selection for recommendation pipelines |
-| `SECRET_KEY` | Secret used for JWT/token creation and session security |
-| `FAISS_INDEX_PATH` | Optional location for persisted semantic index storage |
-| `DEMO_MODE` | Optional demo-style behavior for simplified flows |
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `NEWS_API_KEY` | For news features | Retrieves recent financial-news articles |
+| `GROQ_API_KEY` | For LLM features | Generates AI-powered portfolio recommendations |
+| `GROQ_MODEL` | Optional | Selects the Groq-hosted model |
+| `SECRET_KEY` | Recommended | Supports authentication/session security where used |
+| `DB_DIR` | Optional | Directory containing the SQLite database |
+| `FAISS_INDEX_PATH` | Optional | Location of the persisted FAISS index |
+| `DEMO_MODE` | Optional | Enables simplified demonstration behavior where supported |
+
+Example `.env` file:
+
+```env
+NEWS_API_KEY=replace_with_your_newsapi_key
+GROQ_API_KEY=replace_with_your_groq_key
+GROQ_MODEL=openai/gpt-oss-120b
+SECRET_KEY=replace_with_a_long_random_value
+DB_DIR=/data
+FAISS_INDEX_PATH=/data/faiss_index
+```
+
+Never commit `.env`, AWS credentials, API keys, or private-key files to Git.
 
 ## Running with Docker
 
-With the environment file configured, start the app using Docker Compose:
+Make sure `.env` exists, then run:
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
-This starts the dashboard on:
-
-- http://localhost:8501
-
-If you also want the API container running:
+Check the service:
 
 ```bash
-docker compose --profile api up --build
+docker compose ps
 ```
 
-The API should then be available at:
+View logs:
 
-- http://localhost:8000
+```bash
+docker compose logs --tail=200 frontend
+```
 
-## Deployment options
+Verify the Streamlit health endpoint:
 
-### Local deployment
+```bash
+curl -f http://localhost:8501/_stcore/health
+```
 
-Use the project directly with Python virtual environments for development and experimentation.
+The expected response is:
 
-### Docker deployment
+```text
+ok
+```
 
-This project includes Docker assets for a simple container-based deployment and is suitable for demos and lightweight hosting.
+Stop the containers:
 
-### AWS EC2 deployment
+```bash
+docker compose down
+```
 
-The repository includes a CloudFormation template for a single-host AWS EC2 deployment.
+The named Docker volume is intentionally retained so application data survives container recreation.
 
-- CloudFormation stack: [deploy/aws/ec2-stack.yaml](deploy/aws/ec2-stack.yaml)
-- AWS deployment guide: [deploy/aws/README.md](deploy/aws/README.md)
-- Single-host EC2 reference: [deploy/ec2/README.md](deploy/ec2/README.md)
+## AWS deployment
 
-These deployment files are useful for cost-conscious demo hosting and quick validation of the application on a public VM.
+The public AXIOM demo runs as a Docker container on an Amazon Linux 2023 EC2 instance. The infrastructure is provisioned using the CloudFormation template included in the repository.
 
-## API overview
+### Current deployment design
 
-The FastAPI services expose analysis endpoints for portfolio optimization, benchmarking, search, and sentiment queries.
-
-| Endpoint | Purpose |
+| Component | Value |
 | --- | --- |
-| `GET /health` | Service health and configuration status |
-| `POST /optimize` | Full quant + sentiment + risk workflow |
-| `GET /portfolio/report` | Portfolio performance summary |
-| `POST /portfolio/backtest` | Compare optimized vs baseline strategies |
-| `GET /sentiment/{ticker}` | Sentiment score for a symbol |
-| `GET /news/{ticker}` | News articles associated with a ticker |
-| `GET /tickers/search` | Search or resolve stock symbols |
-| `POST /combine` | Combine quantitative and sentiment signals |
-| `POST /auth/login` | Log in an existing user |
-| `POST /auth/register` | Register a new user |
-| `POST /auth/forgot-password` | Reset password flow |
+| Product | AXIOM Portfolio Intelligence |
+| Repository | AI-Powered-Portfolio-Optimizer |
+| CloudFormation stack | `portfolio-optimizer` |
+| AWS Region | `ap-south-1` |
+| Docker service | `frontend` |
+| Container | `portfolio-dashboard` |
+| Application port | `8501` |
+| Persistent directory | `/data` |
+| SQLite database | `/data/portfolio_optimizer.db` |
+| FAISS index | `/data/faiss_index` |
 
-Example optimization call:
+The product, repository, CloudFormation stack, and Docker service do not need to have identical names. They serve different purposes.
 
-```bash
-curl -X POST http://localhost:8000/optimize \
-  -H "Content-Type: application/json" \
-  -d '{"tickers":["AAPL","MSFT","GOOGL"],"alpha":0.6,"period":"1y","use_llm":false}'
+Deployment resources:
+
+- [CloudFormation template](deploy/aws/ec2-stack.yaml)
+- [AWS deployment guide](deploy/aws/README.md)
+- [EC2 operations guide](deploy/ec2/README.md)
+
+### Validate the CloudFormation template
+
+```powershell
+$Region = "ap-south-1"
+
+aws cloudformation validate-template `
+  --region $Region `
+  --template-body file://deploy/aws/ec2-stack.yaml
 ```
 
-The `alpha` parameter controls the blending between quantitative optimization and sentiment influence. An `alpha` of `1.0` emphasizes the quantitative signal, while `0.0` shifts fully toward sentiment.
+### Deploy the stack
+
+Replace the example networking and key-pair values:
+
+```powershell
+$Region = "ap-south-1"
+$VpcId = "vpc-xxxxxxxxxxxxxxxxx"
+$SubnetId = "subnet-xxxxxxxxxxxxxxxxx"
+$MyIp = (Invoke-RestMethod "https://checkip.amazonaws.com").Trim()
+
+$DeployArgs = @(
+  "cloudformation", "deploy"
+  "--region", $Region
+  "--stack-name", "portfolio-optimizer"
+  "--template-file", "deploy/aws/ec2-stack.yaml"
+  "--parameter-overrides"
+  "VpcId=$VpcId"
+  "SubnetId=$SubnetId"
+  "KeyName=portfolio-optimizer-key"
+  "AllowedCidr=$MyIp/32"
+  "InstanceType=t3.small"
+  "--capabilities", "CAPABILITY_NAMED_IAM"
+)
+
+aws @DeployArgs
+```
+
+### Get stack outputs
+
+```powershell
+aws cloudformation describe-stacks `
+  --region $Region `
+  --stack-name portfolio-optimizer `
+  --query "Stacks[0].Outputs" `
+  --output table
+```
+
+### Connect to the EC2 instance
+
+```powershell
+$PemPath = "$env:USERPROFILE\.ssh\portfolio-optimizer-key.pem"
+$PublicIp = "YOUR_EC2_PUBLIC_IP"
+
+ssh -i $PemPath "ec2-user@$PublicIp"
+```
+
+After entering the EC2 server:
+
+```bash
+cd /opt/portfolio
+sudo docker compose ps
+sudo docker compose logs --tail=200 frontend
+curl -f http://localhost:8501/_stcore/health
+```
+
+Commands under `/opt/portfolio` must run inside the EC2 SSH session, not in Windows PowerShell.
+
+## Optional API service
+
+The repository may also run a FastAPI service when the API profile and corresponding backend files are enabled.
+
+Start it with Docker Compose:
+
+```bash
+docker compose --profile api up --build -d
+```
+
+When configured, the API is normally available at:
+
+```text
+http://localhost:8000
+```
+
+API documentation is normally available at:
+
+```text
+http://localhost:8000/docs
+```
+
+The current public AWS demo uses the Streamlit single-host deployment. Verify the backend routes in `backend/app/` and `docs/api_reference.md` before publishing endpoint-specific guarantees.
+
+## Database and persistence
+
+The Streamlit container uses:
+
+```env
+DB_DIR=/data
+FAISS_INDEX_PATH=/data/faiss_index
+```
+
+Docker Compose mounts a named volume at `/data`. This allows the SQLite database and FAISS index to survive container rebuilds and recreation.
+
+Primary entities include:
+
+- users
+- portfolios
+- holdings
+- optimization runs
+- sentiment results
+- AI recommendations
+- risk reports
+
+SQLite is suitable for the current single-host demonstration. PostgreSQL is recommended for higher concurrency, managed backups, and multi-instance deployment.
 
 ## Testing
 
-Run the project test suite with:
+Run the test suite:
 
 ```bash
 pytest tests -v
 ```
 
-The project also includes a Makefile with development automation for formatting, linting, and packaging tasks:
+Compile-check the Python application:
 
 ```bash
-make help
+python -m compileall -q frontend src
 ```
+
+Useful deployment smoke tests:
+
+```bash
+docker compose ps
+curl -f http://localhost:8501/_stcore/health
+docker compose logs --tail=200 frontend
+```
+
+Recommended test coverage includes:
+
+- return calculations and weight normalization
+- optimizer constraints
+- Value at Risk and drawdown calculations
+- sentiment-score aggregation
+- API-client failure handling
+- database transactions and persistence
+- RAG initialization and fallback behavior
+- report generation and HTML escaping
+- Docker health checks
+
+## Security notes
+
+- Never commit `.env`, `.pem`, access keys, or API keys.
+- Rotate any credential that has been exposed in logs, screenshots, or commit history.
+- Use AWS Secrets Manager or Systems Manager Parameter Store for production secrets.
+- Use an IAM role instead of long-lived AWS access keys on EC2.
+- Restrict ports `22` and `8501` to trusted CIDR ranges during development.
+- Use HTTPS and a stable domain before treating the dashboard as a public service.
+- Use Argon2id or bcrypt for password hashing rather than general-purpose hashing.
+- Treat retrieved news as untrusted input and escape article content in HTML reports.
+- RAG reduces unsupported output but does not eliminate hallucination.
+
+## Known limitations
+
+- Historical return and covariance estimates may not represent future market behavior.
+- Optimized weights can be sensitive to estimation error and the selected time window.
+- News availability depends on the external provider and API plan.
+- FinBERT sentiment may misinterpret ambiguous headlines or unusual market language.
+- LLM recommendations may be incomplete or incorrect even when context is retrieved.
+- The current AWS deployment uses a single EC2 instance and is not highly available.
+- SQLite is not designed for high-concurrency, horizontally scaled deployment.
+- A public EC2 IP is not a stable production URL unless an Elastic IP or domain is configured.
+- The current live URL uses HTTP rather than HTTPS.
+- Small EC2 instances may experience slow FinBERT loading or analysis latency.
+
+## Roadmap
+
+- [ ] Add a stable domain and HTTPS
+- [ ] Store secrets in AWS Secrets Manager or SSM Parameter Store
+- [ ] Add CloudWatch logs, metrics, dashboards, and alarms
+- [ ] Pin and continuously test dependency versions
+- [ ] Add walk-forward backtesting with transaction costs
+- [ ] Add covariance shrinkage and robust allocation objectives
+- [ ] Add PostgreSQL migrations and managed backups
+- [ ] Add RAG retrieval and groundedness evaluation
+- [ ] Add source citations to generated recommendations
+- [ ] Add immutable run metadata, model versions, and container image identifiers
+- [ ] Add CI/CD deployment with health-gated rollback
+- [ ] Replace the single-host design with managed services if usage grows
 
 ## Documentation
 
-Detailed documentation is available in the `docs/` folder:
+Additional documentation is available in:
 
 - [Setup guide](docs/setup.md)
 - [Architecture overview](docs/architecture.md)
 - [API reference](docs/api_reference.md)
+- [AWS deployment guide](deploy/aws/README.md)
+- [EC2 operations guide](deploy/ec2/README.md)
 
 ## Contributing
 
 Contributions are welcome.
 
-If you want to improve this project:
+1. Fork the repository.
+2. Create a feature branch.
+3. Make focused changes.
+4. Add or update tests.
+5. Run the test suite locally.
+6. Open a pull request with a clear description.
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes and test them locally
-4. Open a pull request with a clear description
-
-Please keep changes focused, document new behavior, and validate with the existing test workflow when possible.
+Please avoid committing credentials, private portfolio data, generated databases, large model artifacts, or private keys.
 
 ## License
 
@@ -377,6 +741,12 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## Acknowledgments
 
-This project builds on open-source libraries and research tools for portfolio optimization, financial analytics, and machine learning workflows.
+AXIOM Portfolio Intelligence builds on open-source tools and research from the Python, Streamlit, Hugging Face, FAISS, LangChain, Groq, Docker, and quantitative-finance communities.
 
-If you are using this project for research, learning, or experimentation, we encourage you to cite or reference the repository and its associated documentation.
+If you use this project for learning or research, please reference the repository:
+
+```text
+Parmod K. — AXIOM Portfolio Intelligence
+AI-Powered Portfolio Optimization and Research Platform
+https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer
+```
