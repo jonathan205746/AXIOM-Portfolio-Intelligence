@@ -33,6 +33,7 @@ def generate_axiom_report(portfolio, results, display_names):
     combined = results.get("combined", {})
     frontier_df = results.get("frontier_df", pd.DataFrame())
     returns_df = results.get("returns", pd.DataFrame())
+    correlation_matrix = results.get("correlation_matrix")
     available = results.get("tickers", [])
     all_news = results.get("all_news", {}) or results.get("news", {}) or results.get("articles", {})
 
@@ -284,9 +285,11 @@ def generate_axiom_report(portfolio, results, display_names):
 
     corr_div = ""
     corr_fig = None
-    if not returns_df.empty:
+    if correlation_matrix is None and isinstance(returns_df, pd.DataFrame) and not returns_df.empty:
+        correlation_matrix = returns_df.corr()
+    if isinstance(correlation_matrix, pd.DataFrame) and not correlation_matrix.empty:
         try:
-            corr = returns_df.corr()
+            corr = correlation_matrix.copy()
             corr.columns = [display_names.get(t, t) for t in corr.columns]
             corr.index = corr.columns
             fig_c = go.Figure(go.Heatmap(
@@ -299,14 +302,16 @@ def generate_axiom_report(portfolio, results, display_names):
                 text=corr.round(2).values,
                 texttemplate="%{text}",
                 textfont=dict(size=8, color=C["text_primary"]),
-                colorbar=dict(title="Correlation"),
+                colorbar=dict(
+                    title=dict(text="Correlation", font=dict(color=C["text_secondary"])),
+                    tickfont=dict(color=C["text_secondary"]),
+                ),
             ))
             fig_c.update_layout(
                 title="CORRELATION MATRIX", height=350,
                 paper_bgcolor=C["bg_elevated"], plot_bgcolor=C["bg_elevated"],
                 font=dict(family="JetBrains Mono, monospace", color=C["text_primary"], size=10),
                 margin=dict(l=50, r=20, t=50, b=40),
-                coloraxis_colorbar=dict(tickfont=dict(color=C["text_secondary"]), titlefont=dict(color=C["text_secondary"]))
             )
             corr_fig = fig_c
             corr_div = fig_c.to_html(full_html=False, include_plotlyjs=False)

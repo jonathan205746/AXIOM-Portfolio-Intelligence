@@ -223,7 +223,13 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
         if isinstance(prices, pd.Series):
             prices = prices.to_frame()
         results["prices"] = prices
-        results["returns"] = prices.pct_change(fill_method=None).dropna()
+        returns_df = prices.pct_change(fill_method=None).dropna()
+        if returns_df.empty:
+            raise ValueError("Return series is empty; correlation cannot be calculated")
+        results["returns"] = returns_df
+        # Report generation receives an explicit matrix so it does not need to
+        # reconstruct correlation data from Streamlit session objects.
+        results["correlation_matrix"] = returns_df.corr()
     except Exception as exc:
         st.error(f"Price fetch failed: {exc}")
         return None
@@ -247,8 +253,9 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
                 company = display_names.get(ticker, ticker).replace(".NS", "")
                 articles = fetch_news(ticker, company_name=company)
             all_news[ticker] = articles
-        except Exception:
+        except Exception as exc:
             all_news[ticker] = []
+            st.warning(f"News fetch failed for {ticker}: {type(exc).__name__}: {exc}")
     results["all_news"] = all_news
 
     _set("Running FinBERT...", 55, "sentiment")
@@ -257,8 +264,12 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
         try:
             headlines = [a.get("title", "") for a in all_news.get(ticker, []) if a.get("title")]
             sentiment_scores[ticker] = aggregate_sentiment(headlines) if headlines else 0.0
-        except Exception:
+        except Exception as exc:
             sentiment_scores[ticker] = 0.0
+            st.warning(
+                f"Sentiment analysis failed for {ticker}: "
+                f"{type(exc).__name__}: {exc}"
+            )
     results["sentiment_scores"] = sentiment_scores
 
     _set("Searching health-aware portfolios...", 72, "adaptive")
