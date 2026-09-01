@@ -1,8 +1,9 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/awslabs/goformation/master/schema/cloudformation.schema.json
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
-  Single-host AWS deployment for AI-Powered Portfolio Optimizer. Runs the
-  Streamlit dashboard in Docker and persists SQLite/FAISS data on EBS.
+  Single-host AWS deployment for AXIOM Portfolio Intelligence.
+  Runs the Streamlit dashboard in Docker and persists SQLite
+  and FAISS data on encrypted EBS storage.
 
 Parameters:
   LatestAmiId:
