@@ -10,7 +10,7 @@ LLM: llama-3.3-70b-versatile via Groq (free, no daily quota)
 import os
 import time
 from dotenv import load_dotenv
-from pydantic import SecretStr
+from typing import Any
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -73,7 +73,7 @@ class RAGPipeline:
         model_name: str | None = None,
         temperature: float = 0.3
     ):
-        api_key = os.getenv("GROQ_API_KEY")
+        api_key = os.getenv("GROQ_API_KEY", "").strip()
 
         if not api_key:
             raise ValueError(
@@ -89,14 +89,15 @@ class RAGPipeline:
 
         self.model_name = model_name
 
-        self.llm = ChatGroq(
-            model=self.model_name,
-            temperature=temperature,
-            api_key=SecretStr(api_key),
-            max_retries=2
-        )
+        chatgroq_options: dict[str, Any] = {
+            "model_name": self.model_name,
+            "temperature": temperature,
+            "groq_api_key": api_key,  # pyright: ignore[reportCallIssue]
+            "max_retries": 2,
+        }
 
         # Modern LangChain 1.x syntax: prompt | llm (no LLMChain needed)
+        self.llm = ChatGroq(**chatgroq_options)
         self.chain = RECOMMENDATION_PROMPT | self.llm
 
         print(f"[RAGPipeline] Initialized — model: {self.model_name} via Groq")
