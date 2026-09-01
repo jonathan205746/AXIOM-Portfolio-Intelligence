@@ -1,7 +1,6 @@
 """
-frontend/pages/5_Compare.py  (Bloomberg Terminal Edition)
-----------------------------------------------------------
-Benchmark comparison with terminal aesthetic.
+Axiom Benchmark Comparison v2.1
+Portfolio vs SPY & equal-weight with glassmorphic terminal aesthetic.
 """
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
@@ -14,84 +13,49 @@ from typing import Any
 from src.database.db import get_portfolio_holdings
 from src.data.stock_fetcher import fetch_stock_data
 
-st.set_page_config(page_title="COMPARE | AI Portfolio Optimizer", page_icon="⚖", layout="wide")
+# ── Design System ───────────────────────────────────────────
+from frontend.ui.theme import inject_theme, apply_plotly_theme
+from frontend.ui.components import (
+    page_sidebar, command_bar, section_header, metric_grid,
+    glass_container, info_card, badge
+)
+
+st.set_page_config(page_title="Compare | Axiom", page_icon="⚖", layout="wide")
+inject_theme()
 
 if not st.session_state.get("logged_in"):
-    st.warning("AUTHENTICATION REQUIRED")
-    st.page_link("pages/1_Login.py", label="▶ GO TO LOGIN")
+    st.warning("Authentication required")
+    st.page_link("pages/1_Login.py", label="▶ Go to Login")
     st.stop()
 
 user = st.session_state["user"]
 portfolio = st.session_state.get("current_portfolio")
 if not portfolio:
-    st.warning("SELECT PORTFOLIO FIRST")
-    st.page_link("pages/2_Portfolio.py", label="◫ GO TO PORTFOLIO")
+    st.warning("Select a portfolio first")
+    st.page_link("pages/2_Portfolio.py", label="◫ Go to Portfolio")
     st.stop()
 
 results = st.session_state.get("results")
 if not results:
-    st.warning("RUN ANALYSIS FIRST")
-    if st.button("▣ GO TO ANALYSIS", type="primary"):
+    info_card(
+        "Analysis Required",
+        "Run portfolio optimization first to generate benchmark comparison data.",
+        badge("RUN ANALYSIS", "accent"),
+        accent="cyan"
+    )
+    if st.button("▣ Go to Analysis →", type="primary", use_container_width=True):
         st.switch_page("pages/3_Analysis.py")
     st.stop()
 
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap');
-:root {
-  --bg: #050505; --bg-panel: #0a0a0a; --bg-hover: #141414; --bg-active: #1a1a1a; --bg-input: #0d0d0d;
-  --text: #e5e5e5; --text-dim: #888888; --text-faded: #555555; --text-inverse: #050505;
-  --accent: #ff6600; --accent-dim: #cc5200; --accent-glow: rgba(255,102,0,0.25); --accent-soft: rgba(255,102,0,0.1);
-  --positive: #00d084; --positive-dim: #00a868; --positive-bg: rgba(0,208,132,0.08);
-  --negative: #ff3333; --negative-dim: #cc0000; --negative-bg: rgba(255,51,51,0.08);
-  --border: #2a2a2a; --border-bright: #3a3a3a; --grid: #111111;
-  --font: 'JetBrains Mono','Courier New',monospace; --radius: 0px; --radius-sm: 2px;
-}<link href="https://fonts.googleapis.com/icon?family=Material+Icons"
-      rel="stylesheet">
-* { font-family: var(--font) !important; }
-.block-container { padding: 0.5rem 1rem 1rem !important; max-width: 100% !important; }
-[data-testid="stAppViewContainer"] { background: var(--bg) !important; }
-[data-testid="stSidebarNav"] { display: none !important; }
-[data-testid="stSidebar"] { background: var(--bg-panel) !important; border-right: 1px solid var(--border) !important; min-width: 280px !important; }
-[data-testid="stSidebar"] > div:first-child { padding: 0 !important; }
-.bb-sidebar-header { background: linear-gradient(90deg, var(--accent), var(--accent-dim)); padding: 12px 16px; border-bottom: 1px solid var(--border); }
-.bb-sidebar-header h1 { color: var(--text-inverse) !important; font-size: 0.85rem !important; font-weight: 800 !important; letter-spacing: 1px; margin: 0; }
-.bb-section { padding: 8px 16px; border-bottom: 1px solid var(--border); }
-.bb-section-title { font-size: 0.6rem; font-weight: 700; color: var(--accent) !important; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
-.bb-ticker-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 0.75rem; border-bottom: 1px dotted var(--border); }
-.bb-ticker-row:last-child { border-bottom: none; }
-.bb-ticker-symbol { color: var(--text); font-weight: 600; }
-.bb-ticker-price { color: var(--text-dim); }
-.bb-ticker-change-pos { color: var(--positive); font-weight: 700; }
-.bb-ticker-change-neg { color: var(--negative); font-weight: 700; }
-.bb-nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; margin: 2px 0; border-left: 3px solid transparent; color: var(--text-dim) !important; font-size: 0.8rem; font-weight: 500; text-decoration: none !important; transition: all 0.15s; cursor: pointer; }
-.bb-nav-item:hover { background: var(--bg-hover); border-left-color: var(--accent-dim); color: var(--text) !important; }
-.bb-nav-item.active { background: var(--accent-soft); border-left-color: var(--accent); color: var(--accent) !important; font-weight: 700; }
-.bb-user-block { background: var(--bg-hover); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; align-items: center; gap: 10px; }
-.bb-user-avatar { width: 28px; height: 28px; background: var(--accent); color: var(--text-inverse); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 800; }
-.bb-user-name { font-size: 0.8rem; font-weight: 600; color: var(--text); }
-.bb-user-role { font-size: 0.65rem; color: var(--text-dim); }
-.bb-sidebar-footer { padding: 10px 16px; font-size: 0.6rem; color: var(--text-faded); border-top: 1px solid var(--border); text-align: center; }
-.bb-cmd-bar { background: var(--bg-panel); border-bottom: 1px solid var(--border); padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 0.8rem; margin-bottom: 1px; }
-.bb-cmd-prompt { color: var(--accent); font-weight: 700; }
-.bb-panel { background: var(--bg-panel); border: 1px solid var(--border); margin-bottom: 1px; }
-.bb-panel-header { background: var(--bg-hover); border-bottom: 1px solid var(--border); padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; }
-.bb-panel-title { font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; }
-.bb-panel-subtitle { font-size: 0.65rem; color: var(--text-faded); }
-.bb-panel-body { padding: 12px; }
-.bb-panel-accent { border-top: 2px solid var(--accent); }
-.stButton > button { background: var(--accent) !important; color: var(--text-inverse) !important; border: none !important; border-radius: var(--radius-sm) !important; font-family: var(--font) !important; font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; font-size: 0.75rem !important; }
-.stButton > button:hover { background: var(--accent-dim) !important; box-shadow: 0 0 12px var(--accent-glow) !important; }
-[data-testid="stMetric"] { background: var(--bg-panel) !important; border: 1px solid var(--border) !important; border-radius: var(--radius) !important; }
-[data-testid="stMetricValue"] { font-family: var(--font) !important; font-weight: 700 !important; color: var(--text) !important; }
-[data-testid="stMetricLabel"] { font-family: var(--font) !important; color: var(--text-dim) !important; text-transform: uppercase !important; font-size: 0.6rem !important; letter-spacing: 1px !important; }
-@media (max-width: 768px) { .block-container { padding: 0.5rem !important; } }
-</style>
-""", unsafe_allow_html=True)
-
+# ── Market Data ─────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def _market_snapshot():
-    fallback = {"SPX": {"price": 4500.0, "change": 0.45}, "NIFTY": {"price": 22500.0, "change": -0.12}, "NDX": {"price": 14000.0, "change": 0.78}, "BTC": {"price": 67500.0, "change": 1.23}}
+    fallback = {
+        "SPX": {"price": 4500.0, "change": 0.45},
+        "NIFTY": {"price": 22500.0, "change": -0.12},
+        "NDX": {"price": 14000.0, "change": 0.78},
+        "BTC": {"price": 67500.0, "change": 1.23},
+    }
     out = {}
     try:
         import yfinance as yf
@@ -100,7 +64,7 @@ def _market_snapshot():
                 h = yf.Ticker(t).history(period="2d")
                 if len(h) >= 2:
                     c, p = h["Close"].iloc[-1], h["Close"].iloc[-2]
-                    out[n] = {"price": c, "change": (c - p) / p * 100}
+                    out[n] = {"price": float(c), "change": float((c - p) / p * 100)}
                 else:
                     out[n] = fallback[n]
             except Exception:
@@ -108,39 +72,26 @@ def _market_snapshot():
     except Exception:
         return fallback
     return out
+
 market_data = _market_snapshot()
 
-def _render_nav(current_page: str):
-    pages = [("app.py", "⌂", "DASHBOARD"), ("pages/2_Portfolio.py", "◫", "PORTFOLIO"), ("pages/3_Analysis.py", "▣", "ANALYSIS"), ("pages/4_History.py", "◫", "HISTORY"), ("pages/5_Compare.py", "⚖", "COMPARE")]
-    for page, icon, label in pages:
-        active = " active" if page == current_page else ""
-        if page == current_page:
-            st.markdown(f'<div class="bb-nav-item{active}">{icon}&nbsp;&nbsp;{label}</div>', unsafe_allow_html=True)
-        else:
-            st.page_link(page, label=f"{icon}  {label}")
+# ── Sidebar & Command Bar ───────────────────────────────────
+page_sidebar("pages/5_Compare.py", user=user, market_data=market_data)
+command_bar("AXIOM / BENCHMARK", f"PORTFOLIO: {portfolio['name'].upper()}")
 
-with st.sidebar:
-    st.markdown('<div class="bb-sidebar-header"><h1>▶ AI PORTFOLIO OPTIMIZER</h1></div>', unsafe_allow_html=True)
-    st.markdown('<div class="bb-section"><div class="bb-section-title">Market Data</div>', unsafe_allow_html=True)
-    for name, data in market_data.items():
-        cls = "bb-ticker-change-pos" if data["change"] >= 0 else "bb-ticker-change-neg"
-        sign = "+" if data["change"] >= 0 else ""
-        st.markdown(f'<div class="bb-ticker-row"><span class="bb-ticker-symbol">{name}</span><div><span class="bb-ticker-price">{data["price"]:,.2f}</span> <span class="{cls}">{sign}{data["change"]:.2f}%</span></div></div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-    uname = user.get("username", "USER")
-    st.markdown(f'<div class="bb-user-block"><div class="bb-user-avatar">{uname[:2].upper()}</div><div><div class="bb-user-name">{uname.upper()}</div><div class="bb-user-role">INVESTOR ACCOUNT</div></div></div>', unsafe_allow_html=True)
-    st.markdown('<div class="bb-section"><div class="bb-section-title">Navigation</div>', unsafe_allow_html=True)
-    _render_nav("pages/5_Compare.py")
-    st.markdown('</div>', unsafe_allow_html=True)
-    if st.button("◀ LOGOUT", width='stretch'):
-        for k in ["logged_in", "user", "current_portfolio", "results"]:
-            st.session_state.pop(k, None)
-        st.switch_page("app.py")
-    st.markdown('<div class="bb-sidebar-footer">TERMINAL EDITION v5.0</div>', unsafe_allow_html=True)
+# ── Header ──────────────────────────────────────────────────
+st.markdown("""
+<div style="padding: 20px 0 12px;">
+    <div style="font-size:1.6rem;font-weight:800;color:#f0f0f5;letter-spacing:-0.03em;font-family:'Inter',sans-serif;">
+        Benchmark Comparison
+    </div>
+    <div style="font-size:0.85rem;color:#8b8b9e;margin-top:6px;">
+        Optimized vs Equal-Weight vs S&P 500 (SPY)
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-st.markdown(f'<div class="bb-cmd-bar"><span class="bb-cmd-prompt">➜</span><span style="color:var(--text-dim);">BENCHMARK COMPARISON // PORTFOLIO: {portfolio["name"].upper()}</span></div>', unsafe_allow_html=True)
-st.markdown('<div style="padding:12px 0;"><span style="font-size:1.4rem;font-weight:800;color:var(--text);letter-spacing:-1px;">⚖ BENCHMARK COMPARISON</span><br><span style="font-size:0.8rem;color:var(--text-dim);">OPTIMIZED VS EQUAL-WEIGHT VS S&P 500 (SPY)</span></div>', unsafe_allow_html=True)
-
+# ── Data Prep ───────────────────────────────────────────────
 available = results.get("tickers", [])
 final_weights = results.get("final_weights", {})
 returns_df = results.get("returns", pd.DataFrame())
@@ -148,7 +99,7 @@ opt_result = results.get("opt_result", {})
 baseline = results.get("baseline", {})
 
 if returns_df.empty or not available:
-    st.error("NO RETURN DATA — RE-RUN ANALYSIS")
+    st.error("No return data — re-run analysis")
     st.stop()
 
 def extract_close_series(raw_df: pd.DataFrame, ticker: str) -> pd.Series:
@@ -178,9 +129,10 @@ def extract_close_series(raw_df: pd.DataFrame, ticker: str) -> pd.Series:
     numeric_cols = raw_df.select_dtypes(include=[np.number]).columns
     if len(numeric_cols) > 0:
         return raw_df[numeric_cols[0]].dropna()
-    raise ValueError(f"CANNOT EXTRACT CLOSE PRICE FOR {ticker}")
+    raise ValueError(f"Cannot extract close price for {ticker}")
 
-with st.spinner("FETCHING SPY BENCHMARK..."):
+# ── Fetch SPY ───────────────────────────────────────────────
+with st.spinner("Fetching SPY benchmark..."):
     spy_available = False
     try:
         raw_spy = fetch_stock_data(["SPY"])
@@ -189,17 +141,17 @@ with st.spinner("FETCHING SPY BENCHMARK..."):
         aligned_returns = returns_df.loc[common_idx]
         aligned_spy = pd.Series(spy_returns.loc[common_idx].astype(float).dropna(), name="SPY")
         if len(common_idx) < 10:
-            st.warning(f"ONLY {len(common_idx)} OVERLAPPING DAYS WITH SPY")
+            st.warning(f"Only {len(common_idx)} overlapping days with SPY")
         spy_available = True
     except Exception as e:
-        st.error(f"SPY FETCH FAILED: {e}")
+        st.error(f"SPY fetch failed: {e}")
 
 if not spy_available:
     st.stop()
 
 aligned_tickers = [t for t in available if t in aligned_returns.columns]
 if not aligned_tickers:
-    st.error("NO OVERLAPPING TICKERS")
+    st.error("No overlapping tickers")
     st.stop()
 
 w_opt_raw = np.array([final_weights.get(t, 0.0) for t in aligned_tickers])
@@ -228,26 +180,20 @@ def max_drawdown_pct(cum_series: pd.Series) -> float:
     drawdown = (cum_series - rolling_max) / rolling_max
     return float(drawdown.min() * 100)
 
-PLOTLY_THEME: dict[str, Any] = dict(
-    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(family="JetBrains Mono, monospace", color="#e5e5e5", size=11),
-    margin=dict(l=10, r=10, t=40, b=10),
-    xaxis=dict(gridcolor="#2a2a2a", linecolor="#3a3a3a"),
-    yaxis=dict(gridcolor="#2a2a2a", linecolor="#3a3a3a"),
-    legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor="#2a2a2a", borderwidth=1)
-)
+# ── Performance Metrics Table ───────────────────────────────
+section_header("Performance Metrics", "Side-by-side comparison", accent="primary")
+glass_container(accent="primary")
 
-st.markdown('<div class="bb-panel bb-panel-accent"><div class="bb-panel-header"><span class="bb-panel-title">◈ Performance Metrics</span></div><div class="bb-panel-body">', unsafe_allow_html=True)
 metrics_data = {
-    "Metric": ["TOTAL RETURN", "ANN RETURN", "ANN VOL", "SHARPE", "MAX DD"],
-    "OPTIMIZED": [
+    "Metric": ["Total Return", "Ann Return", "Ann Vol", "Sharpe", "Max DD"],
+    "Optimized": [
         f"{(cum_opt.iloc[-1] - 1) * 100:.2f}%",
         f"{opt_daily.mean() * TRADING_DAYS * 100:.2f}%",
         f"{opt_daily.std() * np.sqrt(TRADING_DAYS) * 100:.2f}%",
         f"{compute_sharpe(opt_daily):.3f}",
         f"{max_drawdown_pct(cum_opt):.2f}%"
     ],
-    "EQUAL-WEIGHT": [
+    "Equal-Weight": [
         f"{(cum_eq.iloc[-1] - 1) * 100:.2f}%",
         f"{eq_daily.mean() * TRADING_DAYS * 100:.2f}%",
         f"{eq_daily.std() * np.sqrt(TRADING_DAYS) * 100:.2f}%",
@@ -262,65 +208,171 @@ metrics_data = {
         f"{max_drawdown_pct(cum_spy):.2f}%"
     ]
 }
-st.dataframe(pd.DataFrame(metrics_data),   hide_index=True)
-st.markdown('</div></div>', unsafe_allow_html=True)
+st.dataframe(pd.DataFrame(metrics_data), hide_index=True, width='stretch')
+st.markdown("</div>", unsafe_allow_html=True)
 
-st.markdown('<div class="bb-panel"><div class="bb-panel-header"><span class="bb-panel-title">◫ KPI Summary</span></div><div class="bb-panel-body">', unsafe_allow_html=True)
+# ── KPI Summary ─────────────────────────────────────────────
+section_header("KPI Summary", "Optimized portfolio highlights", accent="green")
 k1, k2, k3 = st.columns(3)
-k1.metric("OPT TOTAL RETURN", f"{(cum_opt.iloc[-1]-1)*100:.2f}%", delta=f"{((cum_opt.iloc[-1]-1) - (cum_spy.iloc[-1]-1))*100:.2f}% vs SPY")
-k2.metric("OPT SHARPE", f"{compute_sharpe(opt_daily):.3f}", delta=f"{compute_sharpe(opt_daily) - compute_sharpe(aligned_spy):.3f} vs SPY")
-k3.metric("OPT MAX DD", f"{max_drawdown_pct(cum_opt):.2f}%", delta=f"{max_drawdown_pct(cum_opt) - max_drawdown_pct(cum_spy):.2f}% vs SPY", delta_color="inverse")
-st.markdown('</div></div>', unsafe_allow_html=True)
+with k1:
+    st.metric("Opt Total Return", f"{(cum_opt.iloc[-1]-1)*100:.2f}%",
+              delta=f"{((cum_opt.iloc[-1]-1) - (cum_spy.iloc[-1]-1))*100:.2f}% vs SPY")
+with k2:
+    st.metric("Opt Sharpe", f"{compute_sharpe(opt_daily):.3f}",
+              delta=f"{compute_sharpe(opt_daily) - compute_sharpe(aligned_spy):.3f} vs SPY")
+with k3:
+    st.metric("Opt Max DD", f"{max_drawdown_pct(cum_opt):.2f}%",
+              delta=f"{max_drawdown_pct(cum_opt) - max_drawdown_pct(cum_spy):.2f}% vs SPY",
+              delta_color="inverse")
 
-st.markdown('<div class="bb-panel bb-panel-green"><div class="bb-panel-header"><span class="bb-panel-title">◈ Cumulative Returns vs Benchmark</span></div><div class="bb-panel-body">', unsafe_allow_html=True)
+# ── Cumulative Returns Chart ────────────────────────────────
+section_header("Cumulative Returns vs Benchmark", "Growth trajectory", accent="cyan")
+glass_container(accent="cyan")
+
 fig = go.Figure()
-fig.add_trace(go.Scatter(x=cum_opt.index, y=(cum_opt - 1) * 100, mode='lines', name="OPTIMIZED", line=dict(color="#ff6600", width=2.5)))
-fig.add_trace(go.Scatter(x=cum_eq.index, y=(cum_eq - 1) * 100, mode='lines', name="EQUAL-WEIGHT", line=dict(color="#888888", width=1.5, dash="dash")))
-fig.add_trace(go.Scatter(x=cum_spy.index, y=(cum_spy - 1) * 100, mode='lines', name="SPY", line=dict(color="#00d084", width=1.5, dash="dot")))
-fig.add_hline(y=0, line_color="#3a3a3a", line_width=0.8)
-fig.update_layout(**PLOTLY_THEME)
-fig.update_layout(xaxis_title="DATE", yaxis_title="CUMULATIVE RETURN (%)", height=450, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+fig.add_trace(go.Scatter(
+    x=cum_opt.index, y=(cum_opt - 1) * 100,
+    mode='lines', name="Optimized",
+    line=dict(color="#FF6B35", width=2.5)
+))
+fig.add_trace(go.Scatter(
+    x=cum_eq.index, y=(cum_eq - 1) * 100,
+    mode='lines', name="Equal-Weight",
+    line=dict(color="#8b8b9e", width=1.5, dash="dash")
+))
+fig.add_trace(go.Scatter(
+    x=cum_spy.index, y=(cum_spy - 1) * 100,
+    mode='lines', name="SPY",
+    line=dict(color="#10B981", width=1.5, dash="dot")
+))
+fig.add_hline(y=0, line_color="rgba(255,255,255,0.1)", line_width=1)
+fig.update_layout(
+    title="Cumulative Return Comparison",
+    xaxis_title="Date", yaxis_title="Cumulative Return (%)",
+    height=480,
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+)
+fig = apply_plotly_theme(fig)
 st.plotly_chart(fig, width='stretch')
-st.markdown('</div></div>', unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
 
-st.markdown('<div class="bb-panel"><div class="bb-panel-header"><span class="bb-panel-title">◫ Rolling 60-Day Sharpe</span></div><div class="bb-panel-body">', unsafe_allow_html=True)
+# ── Rolling Sharpe Chart ────────────────────────────────────
+section_header("Rolling 60-Day Sharpe", "Risk-adjusted momentum", accent="violet")
+glass_container(accent="violet")
+
 MIN_DAYS = 65
 if len(opt_daily) < MIN_DAYS:
-    st.info(f"INSUFFICIENT DATA: {len(opt_daily)} DAYS (NEED {MIN_DAYS})")
+    info_card(
+        "Insufficient Data",
+        f"Need {MIN_DAYS} days of data for rolling Sharpe calculation. Current: {len(opt_daily)} days.",
+        badge("NEED MORE DATA", "warning"),
+        accent="amber"
+    )
 else:
     def rolling_sharpe(series: pd.Series, window: int = 60, rf_daily: float = 0.05/252) -> pd.Series:
         roll_mean = series.rolling(window).mean()
         roll_std = series.rolling(window).std()
         return ((roll_mean - rf_daily) / roll_std * np.sqrt(252)).where(roll_std > 0)
+
     roll_opt = rolling_sharpe(opt_daily)
     roll_eq = rolling_sharpe(eq_daily)
     roll_spy = rolling_sharpe(aligned_spy)
-    fig2 = go.Figure()
-    fig2.add_trace(go.Scatter(x=roll_opt.index, y=roll_opt, mode='lines', name="OPTIMIZED", line=dict(color="#ff6600", width=2)))
-    fig2.add_trace(go.Scatter(x=roll_eq.index, y=roll_eq, mode='lines', name="EQUAL-WEIGHT", line=dict(color="#888888", width=1.5, dash="dash")))
-    fig2.add_trace(go.Scatter(x=roll_spy.index, y=roll_spy, mode='lines', name="SPY", line=dict(color="#00d084", width=1.5, dash="dot")))
-    fig2.add_hline(y=0, line_color="#3a3a3a", line_width=0.8)
-    fig2.update_layout(**PLOTLY_THEME)
-    fig2.update_layout(xaxis_title="DATE", yaxis_title="ROLLING SHARPE (60D)", height=400, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-    st.plotly_chart(fig2, width='stretch')
-st.markdown('</div></div>', unsafe_allow_html=True)
 
-st.markdown('<div class="bb-panel bb-panel-red"><div class="bb-panel-header"><span class="bb-panel-title">◫ Drawdown Comparison</span></div><div class="bb-panel-body">', unsafe_allow_html=True)
+    fig2 = go.Figure()
+    fig2.add_trace(go.Scatter(
+        x=roll_opt.index, y=roll_opt, mode='lines',
+        name="Optimized", line=dict(color="#FF6B35", width=2)
+    ))
+    fig2.add_trace(go.Scatter(
+        x=roll_eq.index, y=roll_eq, mode='lines',
+        name="Equal-Weight", line=dict(color="#8b8b9e", width=1.5, dash="dash")
+    ))
+    fig2.add_trace(go.Scatter(
+        x=roll_spy.index, y=roll_spy, mode='lines',
+        name="SPY", line=dict(color="#10B981", width=1.5, dash="dot")
+    ))
+    fig2.add_hline(y=0, line_color="rgba(255,255,255,0.1)", line_width=1)
+    fig2.update_layout(
+        title="Rolling Sharpe Ratio (60D)",
+        xaxis_title="Date", yaxis_title="Rolling Sharpe",
+        height=420,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    fig2 = apply_plotly_theme(fig2)
+    st.plotly_chart(fig2, width='stretch')
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+# ── Drawdown Chart ──────────────────────────────────────────
+section_header("Drawdown Comparison", "Peak-to-trough analysis", accent="red")
+glass_container(accent="red")
+
 def drawdown_series(cum: pd.Series) -> pd.Series:
     return ((cum - cum.cummax()) / cum.cummax()) * 100
 
 dd_opt = drawdown_series(cum_opt)
 dd_eq = drawdown_series(cum_eq)
 dd_spy = drawdown_series(cum_spy)
-fig3 = go.Figure()
-fig3.add_trace(go.Scatter(x=dd_opt.index, y=dd_opt, mode='lines', name="OPTIMIZED", line=dict(color="#ff6600", width=1.5), fill='tozeroy', fillcolor="rgba(255,102,0,0.1)"))
-fig3.add_trace(go.Scatter(x=dd_eq.index, y=dd_eq, mode='lines', name="EQUAL-WEIGHT", line=dict(color="#888888", width=1.2, dash="dash")))
-fig3.add_trace(go.Scatter(x=dd_spy.index, y=dd_spy, mode='lines', name="SPY", line=dict(color="#00d084", width=1.2, dash="dot")))
-fig3.add_hline(y=0, line_color="#3a3a3a", line_width=0.8)
-fig3.update_layout(**PLOTLY_THEME)
-fig3.update_layout(xaxis_title="DATE", yaxis_title="DRAWDOWN (%)", height=380, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-st.plotly_chart(fig3, width='stretch')
-st.markdown('</div></div>', unsafe_allow_html=True)
 
-st.markdown("---")
-st.caption("PAST PERFORMANCE DOES NOT GUARANTEE FUTURE RESULTS | AI PORTFOLIO OPTIMIZER Terminal Edition")
+fig3 = go.Figure()
+fig3.add_trace(go.Scatter(
+    x=dd_opt.index, y=dd_opt, mode='lines',
+    name="Optimized", line=dict(color="#FF6B35", width=1.5),
+    fill='tozeroy', fillcolor="rgba(255,107,53,0.08)"
+))
+fig3.add_trace(go.Scatter(
+    x=dd_eq.index, y=dd_eq, mode='lines',
+    name="Equal-Weight", line=dict(color="#8b8b9e", width=1.2, dash="dash")
+))
+fig3.add_trace(go.Scatter(
+    x=dd_spy.index, y=dd_spy, mode='lines',
+    name="SPY", line=dict(color="#10B981", width=1.2, dash="dot")
+))
+fig3.add_hline(y=0, line_color="rgba(255,255,255,0.1)", line_width=1)
+fig3.update_layout(
+    title="Drawdown Comparison",
+    xaxis_title="Date", yaxis_title="Drawdown (%)",
+    height=400,
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+)
+fig3 = apply_plotly_theme(fig3)
+st.plotly_chart(fig3, width='stretch')
+st.markdown("</div>", unsafe_allow_html=True)
+
+# ── Allocation Comparison ───────────────────────────────────
+section_header("Weight Allocation Comparison", "Optimized vs Equal-Weight", accent="amber")
+display_names = {t: t for t in aligned_tickers}
+c1, c2 = st.columns(2)
+with c1:
+    glass_container(accent="primary")
+    alloc_opt = {"Ticker": [display_names.get(t, t) for t in aligned_tickers],
+                 "Weight": [final_weights.get(t, 0) * 100 for t in aligned_tickers]}
+    fig_p1 = go.Figure(go.Pie(
+        labels=alloc_opt["Ticker"], values=alloc_opt["Weight"], hole=0.55,
+        marker_colors=["#FF6B35", "#00D9FF", "#8B5CF6", "#10B981", "#F43F5E", "#F59E0B", "#EC4899", "#6366F1"]
+    ))
+    fig_p1.update_layout(title="Optimized Weights", showlegend=True, height=320)
+    fig_p1 = apply_plotly_theme(fig_p1)
+    st.plotly_chart(fig_p1, width='stretch')
+    st.markdown("</div>", unsafe_allow_html=True)
+
+with c2:
+    glass_container(accent="cyan")
+    alloc_eq = {"Ticker": [display_names.get(t, t) for t in aligned_tickers],
+                "Weight": [100/len(aligned_tickers)] * len(aligned_tickers)}
+    fig_p2 = go.Figure(go.Pie(
+        labels=alloc_eq["Ticker"], values=alloc_eq["Weight"], hole=0.55,
+        marker_colors=["#8b8b9e", "#4a4a5e", "#6e6e8a", "#a0a0b8", "#555555", "#777777", "#999999", "#bbbbbb"]
+    ))
+    fig_p2.update_layout(title="Equal Weights", showlegend=True, height=320)
+    fig_p2 = apply_plotly_theme(fig_p2)
+    st.plotly_chart(fig_p2, width='stretch')
+    st.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown("""
+<div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:32px;padding-top:20px;">
+    <div style="font-size:0.65rem;color:#4a4a5e;text-align:center;letter-spacing:0.05em;">
+        Past performance does not guarantee future results | AXIOM Portfolio Intelligence · Terminal Edition
+    </div>
+</div>
+""", unsafe_allow_html=True)

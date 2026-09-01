@@ -1,0 +1,125 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Single-host AWS deployment for AI-Powered Portfolio Optimizer. Runs the
+  Streamlit dashboard in Docker and persists SQLite/FAISS data on EBS.
+
+Parameters:
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: Latest Amazon Linux 2023 x86_64 AMI in this Region.
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC that contains the selected public subnet.
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public subnet with auto-assign public IPv4 enabled.
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Existing EC2 key pair for SSH access.
+  AllowedCidr:
+    Type: String
+    Description: Your public IPv4 address in CIDR form, for example 203.0.113.10/32.
+    AllowedPattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}/(3[0-2]|[12]?[0-9])$
+  InstanceType:
+    Type: String
+    Default: t3.large
+    AllowedValues:
+      - t3.medium
+      - t3.large
+    Description: Use t3.large for the most reliable FinBERT inference experience.
+  RootVolumeGiB:
+    Type: Number
+    Default: 40
+    MinValue: 30
+    MaxValue: 200
+    Description: Encrypted gp3 storage for Docker images, SQLite, and FAISS data.
+  RepositoryUrl:
+    Type: String
+    Default: https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer.git
+    Description: Public Git repository to clone at boot.
+  RepositoryBranch:
+    Type: String
+    Default: main
+    Description: Git branch to deploy.
+
+Resources:
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH and Streamlit only from the operator's address.
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedCidr
+          Description: SSH administration
+        - IpProtocol: tcp
+          FromPort: 8501
+          ToPort: 8501
+          CidrIp: !Ref AllowedCidr
+          Description: Streamlit dashboard
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-sg'
+
+  PortfolioInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds:
+        - !GetAtt AppSecurityGroup.GroupId
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: !Ref RootVolumeGiB
+            Encrypted: true
+            DeleteOnTermination: false
+      MetadataOptions:
+        HttpTokens: required
+        HttpEndpoint: enabled
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-portfolio-optimizer'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+          exec > >(tee /var/log/portfolio-bootstrap.log | logger -t portfolio-bootstrap -s 2>/dev/console) 2>&1
+
+          dnf update -y
+          dnf install -y docker git
+          systemctl enable --now docker
+          usermod -aG docker ec2-user
+
+          mkdir -p /usr/local/lib/docker/cli-plugins
+          curl -fsSL https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 \
+            -o /usr/local/lib/docker/cli-plugins/docker-compose
+          chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+          mkdir -p /opt/portfolio
+          git clone --depth 1 --branch '${RepositoryBranch}' '${RepositoryUrl}' /opt/portfolio
+          touch /opt/portfolio/.env
+          chown -R ec2-user:ec2-user /opt/portfolio
+
+          cd /opt/portfolio
+          docker compose up --build -d
+
+Outputs:
+  DashboardUrl:
+    Description: Open this URL after stack creation completes. It is restricted to AllowedCidr.
+    Value: !Sub 'http://${PortfolioInstance.PublicDnsName}:8501'
+  PublicIp:
+    Description: Public IPv4 address of the instance.
+    Value: !GetAtt PortfolioInstance.PublicIp
+  InstanceId:
+    Description: EC2 instance ID.
+    Value: !Ref PortfolioInstance
+  BootstrapLogCommand:
+    Description: SSH command to inspect bootstrap output if deployment fails.
+    Value: !Sub 'sudo tail -n 200 /var/log/portfolio-bootstrap.log'

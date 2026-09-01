@@ -1,35 +1,8 @@
-# docker-compose.aws.yml
-version: "3.9"
+# Single-host demo (local or one EC2 instance).
+# Default: Streamlit only (fits t3.medium / 4 GB).
+# Optional API: docker compose --profile api up --build -d  (use t3.large)
 
 services:
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
-    container_name: portfolio-api
-    ports:
-      - "8080:8080"
-    environment:
-      - PORT=8080
-      - PYTHONPATH=/app
-      - PYTHONUNBUFFERED=1
-      - DATABASE_URL=sqlite:////tmp/data/portfolio_optimizer.db
-      - DB_DIR=/tmp/data
-      - FAISS_INDEX_PATH=/tmp/faiss_index
-      - NEWS_API_KEY_1=${NEWS_API_KEY_1}
-      - NEWS_API_KEY_2=${NEWS_API_KEY_2}
-      - GROQ_API_KEY=${GROQ_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-    volumes:
-      - app-data:/tmp/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
   frontend:
     build:
       context: .
@@ -37,20 +10,50 @@ services:
     container_name: portfolio-dashboard
     ports:
       - "8501:8501"
+    env_file:
+      - .env
     environment:
-      - PORT=8501
-      - PYTHONPATH=/app
-      - PYTHONUNBUFFERED=1
-      - API_BASE_URL=http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):8080
-    depends_on:
-      - api
+      PORT: "8501"
+      PYTHONPATH: /app
+      PYTHONUNBUFFERED: "1"
+      DB_DIR: /data
+      FAISS_INDEX_PATH: /data/faiss_index
+    volumes:
+      - app-data:/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 180s
+
+  api:
+    profiles: ["api"]
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: portfolio-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      PORT: "8000"
+      PYTHONPATH: /app
+      PYTHONUNBUFFERED: "1"
+      DB_DIR: /data
+      FAISS_INDEX_PATH: /data/faiss_index
+      DATABASE_URL: sqlite:////data/portfolio_optimizer.db
+    volumes:
+      - app-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
 
 volumes:
   app-data:

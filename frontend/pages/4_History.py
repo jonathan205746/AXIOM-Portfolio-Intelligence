@@ -1,7 +1,6 @@
 """
-frontend/pages/4_History.py  (Bloomberg Terminal Edition)
-----------------------------------------------------------
-History tracking with terminal aesthetic.
+Axiom Performance History v2.1
+Optimization run tracking with glassmorphic terminal aesthetic.
 """
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
@@ -12,80 +11,37 @@ import plotly.graph_objects as go
 from typing import Any
 from src.database.db import get_portfolio_history, get_sharpe_trend
 
-st.set_page_config(page_title="HISTORY | AI Portfolio Optimizer", page_icon="📊", layout="wide")
+st.set_page_config(page_title="History | Axiom", page_icon="◫", layout="wide")
 
 if not st.session_state.get("logged_in"):
-    st.warning("AUTHENTICATION REQUIRED")
-    st.page_link("pages/1_Login.py", label="▶ GO TO LOGIN")
+    st.warning("Authentication required")
+    st.page_link("pages/1_Login.py", label="▶ Go to Login")
     st.stop()
 
 user = st.session_state["user"]
 portfolio = st.session_state.get("current_portfolio")
 if not portfolio:
-    st.warning("SELECT PORTFOLIO FIRST")
-    st.page_link("pages/2_Portfolio.py", label="◫ GO TO PORTFOLIO")
+    st.warning("Select a portfolio first")
+    st.page_link("pages/2_Portfolio.py", label="◫ Go to Portfolio")
     st.stop()
 
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap');
-:root {
-  --bg: #050505; --bg-panel: #0a0a0a; --bg-hover: #141414; --bg-active: #1a1a1a; --bg-input: #0d0d0d;
-  --text: #e5e5e5; --text-dim: #888888; --text-faded: #555555; --text-inverse: #050505;
-  --accent: #ff6600; --accent-dim: #cc5200; --accent-glow: rgba(255,102,0,0.25); --accent-soft: rgba(255,102,0,0.1);
-  --positive: #00d084; --positive-dim: #00a868; --positive-bg: rgba(0,208,132,0.08);
-  --negative: #ff3333; --negative-dim: #cc0000; --negative-bg: rgba(255,51,51,0.08);
-  --border: #2a2a2a; --border-bright: #3a3a3a; --grid: #111111;
-  --font: 'JetBrains Mono','Courier New',monospace; --radius: 0px; --radius-sm: 2px;
-}
-<link href="https://fonts.googleapis.com/icon?family=Material+Icons"
-      rel="stylesheet">
-* { font-family: var(--font) !important; }
-.block-container { padding: 0.5rem 1rem 1rem !important; max-width: 100% !important; }
-[data-testid="stAppViewContainer"] { background: var(--bg) !important; }
-[data-testid="stSidebarNav"] { display: none !important; }
-[data-testid="stSidebar"] { background: var(--bg-panel) !important; border-right: 1px solid var(--border) !important; min-width: 280px !important; }
-[data-testid="stSidebar"] > div:first-child { padding: 0 !important; }
-.bb-sidebar-header { background: linear-gradient(90deg, var(--accent), var(--accent-dim)); padding: 12px 16px; border-bottom: 1px solid var(--border); }
-.bb-sidebar-header h1 { color: var(--text-inverse) !important; font-size: 0.85rem !important; font-weight: 800 !important; letter-spacing: 1px; margin: 0; }
-.bb-section { padding: 8px 16px; border-bottom: 1px solid var(--border); }
-.bb-section-title { font-size: 0.6rem; font-weight: 700; color: var(--accent) !important; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
-.bb-ticker-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 0.75rem; border-bottom: 1px dotted var(--border); }
-.bb-ticker-row:last-child { border-bottom: none; }
-.bb-ticker-symbol { color: var(--text); font-weight: 600; }
-.bb-ticker-price { color: var(--text-dim); }
-.bb-ticker-change-pos { color: var(--positive); font-weight: 700; }
-.bb-ticker-change-neg { color: var(--negative); font-weight: 700; }
-.bb-nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; margin: 2px 0; border-left: 3px solid transparent; color: var(--text-dim) !important; font-size: 0.8rem; font-weight: 500; text-decoration: none !important; transition: all 0.15s; cursor: pointer; }
-.bb-nav-item:hover { background: var(--bg-hover); border-left-color: var(--accent-dim); color: var(--text) !important; }
-.bb-nav-item.active { background: var(--accent-soft); border-left-color: var(--accent); color: var(--accent) !important; font-weight: 700; }
-.bb-user-block { background: var(--bg-hover); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; align-items: center; gap: 10px; }
-.bb-user-avatar { width: 28px; height: 28px; background: var(--accent); color: var(--text-inverse); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 800; }
-.bb-user-name { font-size: 0.8rem; font-weight: 600; color: var(--text); }
-.bb-user-role { font-size: 0.65rem; color: var(--text-dim); }
-.bb-sidebar-footer { padding: 10px 16px; font-size: 0.6rem; color: var(--text-faded); border-top: 1px solid var(--border); text-align: center; }
-.bb-cmd-bar { background: var(--bg-panel); border-bottom: 1px solid var(--border); padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 0.8rem; margin-bottom: 1px; }
-.bb-cmd-prompt { color: var(--accent); font-weight: 700; }
-.bb-panel { background: var(--bg-panel); border: 1px solid var(--border); margin-bottom: 1px; }
-.bb-panel-header { background: var(--bg-hover); border-bottom: 1px solid var(--border); padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; }
-.bb-panel-title { font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; }
-.bb-panel-subtitle { font-size: 0.65rem; color: var(--text-faded); }
-.bb-panel-body { padding: 12px; }
-.bb-panel-accent { border-top: 2px solid var(--accent); }
-.stButton > button { background: var(--accent) !important; color: var(--text-inverse) !important; border: none !important; border-radius: var(--radius-sm) !important; font-family: var(--font) !important; font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; font-size: 0.75rem !important; }
-.stButton > button:hover { background: var(--accent-dim) !important; box-shadow: 0 0 12px var(--accent-glow) !important; }
-[data-testid="stMetric"] { background: var(--bg-panel) !important; border: 1px solid var(--border) !important; border-radius: var(--radius) !important; }
-[data-testid="stMetricValue"] { font-family: var(--font) !important; font-weight: 700 !important; color: var(--text) !important; }
-[data-testid="stMetricLabel"] { font-family: var(--font) !important; color: var(--text-dim) !important; text-transform: uppercase !important; font-size: 0.6rem !important; letter-spacing: 1px !important; }
-.badge-success { background: var(--positive-bg); color: var(--positive); padding: 2px 8px; border-radius: 2px; font-size: 0.7rem; font-weight: 700; }
-.badge-warning { background: var(--negative-bg); color: var(--negative); padding: 2px 8px; border-radius: 2px; font-size: 0.7rem; font-weight: 700; }
-@media (max-width: 768px) { .block-container { padding: 0.5rem !important; } }
-</style>
-""", unsafe_allow_html=True)
+# ── Design System ───────────────────────────────────────────
+from frontend.ui.theme import inject_theme, apply_plotly_theme
+from frontend.ui.components import (
+    page_sidebar, command_bar, section_header, metric_grid,
+    glass_container, info_card, badge
+)
+inject_theme()
 
+# ── Market Data ─────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def _market_snapshot():
-    fallback = {"SPX": {"price": 4500.0, "change": 0.45}, "NIFTY": {"price": 22500.0, "change": -0.12}, "NDX": {"price": 14000.0, "change": 0.78}, "BTC": {"price": 67500.0, "change": 1.23}}
+    fallback = {
+        "SPX": {"price": 4500.0, "change": 0.45},
+        "NIFTY": {"price": 22500.0, "change": -0.12},
+        "NDX": {"price": 14000.0, "change": 0.78},
+        "BTC": {"price": 67500.0, "change": 1.23},
+    }
     out = {}
     try:
         import yfinance as yf
@@ -94,7 +50,7 @@ def _market_snapshot():
                 h = yf.Ticker(t).history(period="2d")
                 if len(h) >= 2:
                     c, p = h["Close"].iloc[-1], h["Close"].iloc[-2]
-                    out[n] = {"price": c, "change": (c - p) / p * 100}
+                    out[n] = {"price": float(c), "change": float((c - p) / p * 100)}
                 else:
                     out[n] = fallback[n]
             except Exception:
@@ -102,62 +58,59 @@ def _market_snapshot():
     except Exception:
         return fallback
     return out
+
 market_data = _market_snapshot()
 
-def _render_nav(current_page: str):
-    pages = [("app.py", "⌂", "DASHBOARD"), ("pages/2_Portfolio.py", "◫", "PORTFOLIO"), ("pages/3_Analysis.py", "▣", "ANALYSIS"), ("pages/4_History.py", "◫", "HISTORY"), ("pages/5_Compare.py", "⚖", "COMPARE")]
-    for page, icon, label in pages:
-        active = " active" if page == current_page else ""
-        if page == current_page:
-            st.markdown(f'<div class="bb-nav-item{active}">{icon}&nbsp;&nbsp;{label}</div>', unsafe_allow_html=True)
-        else:
-            st.page_link(page, label=f"{icon}  {label}")
+# ── Sidebar & Command Bar ───────────────────────────────────
+page_sidebar("pages/4_History.py", user=user, market_data=market_data)
+command_bar("AXIOM / HISTORY", f"PORTFOLIO: {portfolio['name'].upper()}")
 
-with st.sidebar:
-    st.markdown('<div class="bb-sidebar-header"><h1>▶ AI PORTFOLIO OPTIMIZER</h1></div>', unsafe_allow_html=True)
-    st.markdown('<div class="bb-section"><div class="bb-section-title">Market Data</div>', unsafe_allow_html=True)
-    for name, data in market_data.items():
-        cls = "bb-ticker-change-pos" if data["change"] >= 0 else "bb-ticker-change-neg"
-        sign = "+" if data["change"] >= 0 else ""
-        st.markdown(f'<div class="bb-ticker-row"><span class="bb-ticker-symbol">{name}</span><div><span class="bb-ticker-price">{data["price"]:,.2f}</span> <span class="{cls}">{sign}{data["change"]:.2f}%</span></div></div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-    uname = user.get("username", "USER")
-    st.markdown(f'<div class="bb-user-block"><div class="bb-user-avatar">{uname[:2].upper()}</div><div><div class="bb-user-name">{uname.upper()}</div><div class="bb-user-role">INVESTOR ACCOUNT</div></div></div>', unsafe_allow_html=True)
-    st.markdown('<div class="bb-section"><div class="bb-section-title">Navigation</div>', unsafe_allow_html=True)
-    _render_nav("pages/4_History.py")
-    st.markdown('</div>', unsafe_allow_html=True)
-    if st.button("◀ LOGOUT", width='stretch'):
-        for k in ["logged_in", "user", "current_portfolio", "results"]:
-            st.session_state.pop(k, None)
-        st.switch_page("app.py")
-    st.markdown('<div class="bb-sidebar-footer">TERMINAL EDITION v5.0</div>', unsafe_allow_html=True)
-
-st.markdown(f'<div class="bb-cmd-bar"><span class="bb-cmd-prompt">➜</span><span style="color:var(--text-dim);">HISTORY // PORTFOLIO: {portfolio["name"].upper()}</span></div>', unsafe_allow_html=True)
-st.markdown('<div style="padding:12px 0;"><span style="font-size:1.4rem;font-weight:800;color:var(--text);letter-spacing:-1px;">◫ PERFORMANCE HISTORY</span><br><span style="font-size:0.8rem;color:var(--text-dim);">REVIEW OPTIMIZATION RUN PROGRESSION</span></div>', unsafe_allow_html=True)
+# ── Header ──────────────────────────────────────────────────
+st.markdown("""
+<div style="padding: 20px 0 12px;">
+    <div style="font-size:1.6rem;font-weight:800;color:#f0f0f5;letter-spacing:-0.03em;font-family:'Inter',sans-serif;">
+        Performance History
+    </div>
+    <div style="font-size:0.85rem;color:#8b8b9e;margin-top:6px;">
+        Review optimization run progression and strategy evolution
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 history = get_portfolio_history(portfolio["id"], limit=30)
 
 if not history:
-    st.info("NO OPTIMIZATION RUNS YET")
-    st.page_link("pages/3_Analysis.py", label="▣ RUN FIRST ANALYSIS")
+    info_card(
+        "No Optimization Runs",
+        "Run your first analysis to begin tracking portfolio performance over time.",
+        badge("START HERE", "accent"),
+        accent="cyan"
+    )
+    if st.button("▣ Run First Analysis →", type="primary", use_container_width=True):
+        st.switch_page("pages/3_Analysis.py")
     st.stop()
 
-PLOTLY_THEME: dict[str, Any] = dict(
-    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(family="JetBrains Mono, monospace", color="#e5e5e5", size=11),
-    margin=dict(l=10, r=10, t=40, b=10),
-    xaxis=dict(gridcolor="#2a2a2a", linecolor="#3a3a3a"),
-    yaxis=dict(gridcolor="#2a2a2a", linecolor="#3a3a3a"),
-    legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor="#2a2a2a", borderwidth=1)
-)
+# ── Summary Metrics ─────────────────────────────────────────
+latest = history[0] if history else None
+if latest:
+    section_header("Latest Run Summary", f"Recorded {latest.get('run_date', 'N/A')[:10]}", accent="green")
+    metrics = [
+        {"label": "Sharpe Ratio", "value": f"{latest.get('sharpe_ratio', 0):.3f}", "tone": "cyan", "icon": "◉"},
+        {"label": "Expected Return", "value": f"{latest.get('expected_return', 0)*100:.2f}%", "tone": "positive" if latest.get("expected_return", 0) > 0 else "negative", "icon": "▲"},
+        {"label": "Volatility", "value": f"{latest.get('volatility', 0)*100:.2f}%", "tone": "negative", "icon": "◊"},
+        {"label": "Alpha Used", "value": f"{latest.get('alpha_used', 0):.2f}", "tone": "accent", "icon": "◈"},
+    ]
+    metric_grid(metrics, columns=4)
 
-st.markdown('<div class="bb-panel bb-panel-accent"><div class="bb-panel-header"><span class="bb-panel-title">◈ Sharpe Ratio Over Time</span></div><div class="bb-panel-body">', unsafe_allow_html=True)
+# ── Sharpe Trend Chart ──────────────────────────────────────
+section_header("Sharpe Ratio Over Time", "Performance trajectory", accent="primary")
+glass_container(accent="primary")
+
 trend = get_sharpe_trend(portfolio["id"])
 if len(trend) >= 2:
     trend_df = pd.DataFrame(trend)
     trend_df["date"] = pd.to_datetime(trend_df["date"], errors="coerce")
     trend_df = trend_df.dropna(subset=["date"]).sort_values("date")
-    fig = go.Figure()
 
     base_sharpe = trend_df["sharpe_ratio"].iloc[0]
     base_return = trend_df["expected_return"].iloc[0]
@@ -167,19 +120,57 @@ if len(trend) >= 2:
     return_pct = (trend_df["expected_return"] / base_return - 1) * 100
     vol_pct = (trend_df["volatility"] / base_vol - 1) * 100
 
-    fig.add_trace(go.Scatter(x=trend_df["date"], y=sharpe_pct, mode='lines+markers',
-              name="SHARPE", line=dict(color='#ff6600', width=2), marker=dict(size=5)))
-    fig.add_trace(go.Scatter(x=trend_df["date"], y=return_pct, mode='lines+markers',
-              name="RETURN", line=dict(color='#00d084', width=2), marker=dict(size=5)))
-    fig.add_trace(go.Scatter(x=trend_df["date"], y=vol_pct, mode='lines+markers',
-              name="VOLATILITY", line=dict(color='#ff3333', width=2), marker=dict(size=5)))
-    fig.update_layout(**PLOTLY_THEME)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=trend_df["date"], y=sharpe_pct, mode='lines+markers',
+        name="Sharpe", line=dict(color='#FF6B35', width=2.5),
+        marker=dict(size=6, color='#FF6B35', line=dict(color='#fff', width=1))
+    ))
+    fig.add_trace(go.Scatter(
+        x=trend_df["date"], y=return_pct, mode='lines+markers',
+        name="Return", line=dict(color='#10B981', width=2),
+        marker=dict(size=5, color='#10B981')
+    ))
+    fig.add_trace(go.Scatter(
+        x=trend_df["date"], y=vol_pct, mode='lines+markers',
+        name="Volatility", line=dict(color='#F43F5E', width=2),
+        marker=dict(size=5, color='#F43F5E')
+    ))
+    fig.add_hline(y=0, line_color="rgba(255,255,255,0.1)", line_width=1)
+    fig.update_layout(
+        title="Relative Change from First Run (%)",
+        xaxis_title="Date", yaxis_title="Change (%)",
+        height=420, hovermode="x unified"
+    )
+    fig = apply_plotly_theme(fig)
     st.plotly_chart(fig, width='stretch')
 else:
-    st.info("RUN AT LEAST 2 ANALYSES FOR TRENDS")
-st.markdown('</div></div>', unsafe_allow_html=True)
+    snapshot = pd.DataFrame({
+        "Metric": ["Sharpe Ratio", "Expected Return (%)", "Volatility (%)"],
+        "Value": [
+            latest.get("sharpe_ratio", 0) if latest else 0,
+            latest.get("expected_return", 0) * 100 if latest else 0,
+            latest.get("volatility", 0) * 100 if latest else 0,
+        ],
+        "Color": ["#00D9FF", "#10B981", "#F43F5E"],
+    })
+    fig = go.Figure(go.Bar(
+        x=snapshot["Metric"], y=snapshot["Value"],
+        marker_color=snapshot["Color"], text=snapshot["Value"].map(lambda value: f"{value:.2f}"),
+        textposition="outside",
+    ))
+    fig.update_layout(
+        title="Latest Run Performance Snapshot",
+        yaxis_title="Metric Value",
+        height=420,
+        showlegend=False,
+    )
+    st.plotly_chart(apply_plotly_theme(fig), width="stretch")
 
-st.markdown('<div class="bb-panel"><div class="bb-panel-header"><span class="bb-panel-title">◫ Recommendation Changes</span></div><div class="bb-panel-body">', unsafe_allow_html=True)
+# ── Recommendation Changes ──────────────────────────────────
+section_header("Recommendation Changes", "AI guidance evolution", accent="violet")
+glass_container(accent="violet")
+
 def _normalize_recommendations(items):
     normalized = {}
     for item in items or []:
@@ -198,20 +189,43 @@ if len(history) >= 2:
     previous = history[1]
     latest_recs = _normalize_recommendations(latest.get("recommendations", []))
     previous_recs = _normalize_recommendations(previous.get("recommendations", []))
+
     for ticker in sorted(set(latest_recs) | set(previous_recs)):
         curr = latest_recs.get(ticker, "") or "N/A"
         prev = previous_recs.get(ticker, "") or "N/A"
         changed = str(curr).strip() != str(prev).strip()
-        badge = '<span class="badge-warning">CHANGED</span>' if changed else '<span class="badge-success">UNCHANGED</span>'
-        st.markdown(f"**{ticker}:** {badge}", unsafe_allow_html=True)
-        st.markdown(f"- PREVIOUS: {prev if prev != 'N/A' else '—'}")
-        st.markdown(f"- CURRENT: {curr if curr != 'N/A' else '—'}")
-        st.markdown("---")
-else:
-    st.info("RUN AT LEAST 2 ANALYSES TO COMPARE")
-st.markdown('</div></div>', unsafe_allow_html=True)
+        badge_html = badge("CHANGED", "warning") if changed else badge("UNCHANGED", "positive")
 
-st.markdown('<div class="bb-panel bb-panel-green"><div class="bb-panel-header"><span class="bb-panel-title">◫ All Past Runs</span></div><div class="bb-panel-body">', unsafe_allow_html=True)
+        st.markdown(f'''
+        <div style="
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.04);
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin-bottom: 8px;
+            transition: all 0.15s ease;
+        " onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <strong style="color:#f0f0f5;font-size:0.85rem;font-family:'Inter',sans-serif;">{ticker}</strong>
+                {badge_html}
+            </div>
+            <div style="font-size:0.75rem;color:#4a4a5e;margin-bottom:2px;">PREVIOUS: <span style="color:#8b8b9e;">{prev if prev != 'N/A' else '—'}</span></div>
+            <div style="font-size:0.75rem;color:#4a4a5e;">CURRENT: <span style="color:#f0f0f5;">{curr if curr != 'N/A' else '—'}</span></div>
+        </div>
+        ''', unsafe_allow_html=True)
+else:
+    info_card(
+        "No Comparison Available",
+        "Run at least 2 analyses to compare recommendation changes between runs.",
+        badge("NEED 2+ RUNS", "warning"),
+        accent="amber"
+    )
+
+
+# ── All Past Runs Table ─────────────────────────────────────
+section_header("All Past Runs", f"{len(history)} records", accent="green")
+glass_container(accent="green")
+
 rows = []
 for run in history:
     tickers = run.get("tickers") or []
@@ -223,9 +237,17 @@ for run in history:
         "Return": f"{run['expected_return']*100:.2f}%" if run.get("expected_return") else "N/A",
         "Volatility": f"{run['volatility']*100:.2f}%" if run.get("volatility") else "N/A",
     })
-if rows:
-    st.dataframe(pd.DataFrame(rows),   hide_index=True)
-st.markdown('</div></div>', unsafe_allow_html=True)
 
-st.markdown("---")
-st.caption("AI PORTFOLIO OPTIMIZER | Terminal Edition")
+if rows:
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width='stretch')
+else:
+    st.info("No runs recorded yet")
+
+
+st.markdown("""
+<div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:32px;padding-top:20px;">
+    <div style="font-size:0.65rem;color:#4a4a5e;text-align:center;letter-spacing:0.05em;">
+        AXIOM Portfolio Intelligence · Terminal Edition
+    </div>
+</div>
+""", unsafe_allow_html=True)

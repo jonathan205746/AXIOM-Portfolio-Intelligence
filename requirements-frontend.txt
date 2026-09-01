@@ -7,7 +7,7 @@
 streamlit>=1.36.0
 
 # ---Data & Financial Libraries---
-yfinance==0.2.55
+yfinance==1.7.0
 pandas==2.2.3
 numpy==1.26.4
 

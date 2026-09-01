@@ -103,14 +103,23 @@ Open the dashboard at `http://localhost:8501` and the API documentation at `http
 
 ## Docker
 
-With `.env` configured, run both services with:
+With `.env` configured (copy `.env.example`), start the dashboard:
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 - Dashboard: `http://localhost:8501`
+
+The FastAPI service is optional (second PyTorch process). Enable it with:
+
+```bash
+docker compose --profile api up --build
+```
+
 - API: `http://localhost:8000`
+
+Cheapest AWS demo (one EC2 host in `ap-south-1`): see [deploy/ec2/README.md](deploy/ec2/README.md).
 
 ## API highlights
 

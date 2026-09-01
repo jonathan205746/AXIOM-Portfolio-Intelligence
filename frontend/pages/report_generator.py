@@ -1,5 +1,6 @@
 """
-report_generator.py — Bloomberg Terminal Style HTML Report
+Axiom Report Generator v2.1
+Self-contained HTML reports in institutional glassmorphic aesthetic.
 """
 import pandas as pd
 import plotly.graph_objects as go
@@ -8,8 +9,21 @@ from datetime import datetime
 from src.optimization.health_score import HealthScoreEngine
 
 
-def generate_bloomberg_report(portfolio, results, display_names):
-    """Generate a self-contained HTML report in Bloomberg Terminal style."""
+def _get_action(ticker: str, final_weights: dict, weight_changes: dict) -> str:
+    """Determine action label for a ticker."""
+    final = final_weights.get(ticker, 0)
+    if final < 0.001:
+        return "EXCLUDE"
+    change = weight_changes.get(ticker, {}).get("change", 0)
+    if change > 0.001:
+        return "BUY"
+    if change < -0.001:
+        return "SELL"
+    return "HOLD"
+
+
+def generate_axiom_report(portfolio, results, display_names):
+    """Generate a self-contained HTML report in Axiom glassmorphic style."""
     opt_result = results.get("opt_result", {})
     baseline = results.get("baseline", {})
     final_weights = results.get("final_weights", {})
@@ -20,12 +34,7 @@ def generate_bloomberg_report(portfolio, results, display_names):
     frontier_df = results.get("frontier_df", pd.DataFrame())
     returns_df = results.get("returns", pd.DataFrame())
     available = results.get("tickers", [])
-    # Defensive fallback: news may live under several keys
-    all_news = (
-        results.get("all_news", {})
-        or results.get("news", {})
-        or results.get("articles", {})
-    )
+    all_news = results.get("all_news", {}) or results.get("news", {}) or results.get("articles", {})
 
     sharpe = opt_result.get("sharpe_ratio", 0)
     var95 = risk_report.get("value_at_risk", {}).get("historical_95", {})
@@ -36,8 +45,7 @@ def generate_bloomberg_report(portfolio, results, display_names):
 
     news_counts = {t: len(all_news.get(t, [])) for t in available}
     health = results.get("health_score") or HealthScoreEngine.calculate(
-        sharpe=sharpe,
-        volatility=vol,
+        sharpe=sharpe, volatility=vol,
         var95=var95.get("var_pct", 0.0),
         max_drawdown_pct=mdd.get("max_drawdown_pct", 0.0),
         sentiment_scores=sentiment_scores,
@@ -49,34 +57,57 @@ def generate_bloomberg_report(portfolio, results, display_names):
     ai_score = health["score"]
     score_label = f'{health["label"]} · {health["grade"]}'
 
-    # Currency symbol
     pf_curr = portfolio.get("currency", "USD")
     currency_symbol = "₹" if pf_curr == "INR" else "$"
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    gen_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    pf_name = portfolio.get("name", "PORTFOLIO").upper()
 
-    # Weights table
+    # ── Color System (Axiom v2.1) ───────────────────────────
+    C = {
+        "bg_base": "#020202",
+        "bg_elevated": "#0a0a0f",
+        "bg_surface": "#12121a",
+        "bg_glass": "rgba(18, 18, 26, 0.72)",
+        "accent": "#FF6B35",
+        "accent_dim": "#CC4F25",
+        "accent_glow": "rgba(255, 107, 53, 0.20)",
+        "cyan": "#00D9FF",
+        "green": "#10B981",
+        "red": "#F43F5E",
+        "violet": "#8B5CF6",
+        "amber": "#F59E0B",
+        "text_primary": "#f0f0f5",
+        "text_secondary": "#8b8b9e",
+        "text_tertiary": "#4a4a5e",
+        "text_inverse": "#020202",
+        "border_subtle": "rgba(255, 255, 255, 0.05)",
+        "border_active": "rgba(255, 255, 255, 0.10)",
+    }
+
+    # ── Weights Table ─────────────────────────────────────────
     weights_rows = []
     vols = risk_report.get("volatility", {}).get("per_ticker_annualized", {})
     max_vol = max(vols.values()) if vols else 0
+
     for t in available:
         w_opt = opt_result.get("weights", {}).get(t, 0) * 100
         w_final = final_weights.get(t, 0) * 100
         wc = combined.get("weight_changes", {}).get(t, {})
         change = wc.get("change", 0) * 100
 
-        # Action logic: tiny changes (<1%) are HOLD, not BUY/SELL
         if w_opt < 0.1 and w_final < 0.1:
             action = "EXCLUDE"
-            action_color = "#888888"
+            action_color = C["text_secondary"]
         elif abs(change) < 1.0:
             action = "HOLD"
-            action_color = "#888888"
+            action_color = C["text_secondary"]
         else:
             action = wc.get("action", "HOLD")
-            action_color = "#00d084" if action == "BUY" else ("#ff3333" if action == "SELL" else "#888888")
+            action_color = C["green"] if action == "BUY" else (C["red"] if action == "SELL" else C["text_secondary"])
 
-        change_color = "#00d084" if change >= 0 else "#ff3333"
+        change_color = C["green"] if change >= 0 else C["red"]
 
-        # Exclusion / adjustment reason
         reason = ""
         if action == "EXCLUDE":
             reasons = []
@@ -95,45 +126,50 @@ def generate_bloomberg_report(portfolio, results, display_names):
         elif action == "SELL":
             reason = "Reduce concentration / sentiment drag"
 
-        weights_rows.append(f"""<tr>
-            <td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;color:#e5e5e5;font-weight:600;">{display_names.get(t, t)}</td>
-            <td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;color:#888;text-align:right;">{w_opt:.2f}%</td>
-            <td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;color:#ff6600;text-align:right;font-weight:700;">{w_final:.2f}%</td>
-            <td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;text-align:right;color:{change_color};">{change:+.2f}%</td>
-            <td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;text-align:right;color:{action_color};font-weight:700;">{action}</td>
-            <td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;text-align:right;color:#555;font-size:0.7rem;">{reason}</td>
+        weights_rows.append(f"""
+        <tr>
+            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};color:{C['text_primary']};font-weight:600;font-family:'Inter',sans-serif;">{display_names.get(t, t)}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};color:{C['text_secondary']};text-align:right;font-family:'JetBrains Mono',monospace;">{w_opt:.2f}%</td>
+            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};color:{C['accent']};text-align:right;font-weight:700;font-family:'JetBrains Mono',monospace;">{w_final:.2f}%</td>
+            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{change_color};font-family:'JetBrains Mono',monospace;">{change:+.2f}%</td>
+            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{action_color};font-weight:700;font-family:'JetBrains Mono',monospace;">{action}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{C['text_tertiary']};font-size:0.72rem;">{reason}</td>
         </tr>""")
     weights_html = "\n".join(weights_rows)
 
-    # Sentiment rows — fixed threshold ±0.05
+    # ── Sentiment Rows ────────────────────────────────────────
     sentiment_rows = []
     for t in available:
         score = sentiment_scores.get(t, 0)
         label = "POSITIVE" if score >= 0.05 else ("NEGATIVE" if score <= -0.05 else "NEUTRAL")
-        color = "#00d084" if score >= 0.05 else ("#ff3333" if score <= -0.05 else "#888888")
+        color = C["green"] if score >= 0.05 else (C["red"] if score <= -0.05 else C["text_secondary"])
         bar_width = int((score + 1) / 2 * 100)
-        sentiment_rows.append(f"""<tr>
-            <td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;color:#e5e5e5;font-weight:600;">{display_names.get(t, t)}</td>
-            <td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;">
-                <div style="background:#1a1a1a;height:4px;width:100px;"><div style="background:{color};height:100%;width:{bar_width}%;"></div></div>
+        sentiment_rows.append(f"""
+        <tr>
+            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};color:{C['text_primary']};font-weight:600;font-family:'Inter',sans-serif;">{display_names.get(t, t)}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};width:120px;">
+                <div style="background:{C['bg_elevated']};height:6px;border-radius:3px;overflow:hidden;">
+                    <div style="background:linear-gradient(90deg, {color}, {color}80);height:100%;width:{bar_width}%;border-radius:3px;box-shadow:0 0 8px {color}40;"></div>
+                </div>
             </td>
-            <td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;text-align:right;color:{color};font-weight:700;">{score:+.3f}</td>
-            <td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;text-align:right;color:{color};">{label}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{color};font-weight:700;font-family:'JetBrains Mono',monospace;">{score:+.3f}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{color};font-size:0.75rem;font-weight:600;">{label}</td>
         </tr>""")
     sentiment_html = "\n".join(sentiment_rows)
 
-    # Risk per ticker
+    # ── Risk Per Ticker ───────────────────────────────────────
     risk_rows = []
     for t in available:
         v = vols.get(t, 0) * 100
-        c = "#ff3333" if v > vol * 100 else "#00d084"
-        risk_rows.append(f"""<tr>
-            <td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;color:#e5e5e5;">{display_names.get(t, t)}</td>
-            <td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;text-align:right;color:{c};">{v:.2f}%</td>
+        c = C["red"] if v > vol * 100 else C["green"]
+        risk_rows.append(f"""
+        <tr>
+            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};color:{C['text_primary']};font-family:'Inter',sans-serif;">{display_names.get(t, t)}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{c};font-family:'JetBrains Mono',monospace;font-weight:600;">{v:.2f}%</td>
         </tr>""")
     risk_html = "\n".join(risk_rows)
 
-    # Recommendations
+    # ── Recommendations ───────────────────────────────────────
     rec_parts = []
     if recommendations:
         for rec in recommendations:
@@ -142,46 +178,73 @@ def generate_bloomberg_report(portfolio, results, display_names):
             label = rec.get("sentiment_label", "NEUTRAL")
             weight_pct = rec.get("portfolio_weight_pct", "0")
             text = rec.get("recommendation", "")
-            # Use same threshold as sentiment table
-            color = "#00d084" if score >= 0.05 else ("#ff3333" if score <= -0.05 else "#888888")
-            rec_parts.append(f"""<div style="margin-bottom:16px;padding:12px;background:#0d0d0d;border-left:2px solid {color};">
-                <div style="font-size:0.8rem;font-weight:700;color:#e5e5e5;margin-bottom:4px;">{display_names.get(t, t)} — WEIGHT: {weight_pct}% | SENTIMENT: <span style="color:{color}">{score:+.3f} ({label})</span></div>
-                <div style="font-size:0.75rem;color:#888;line-height:1.5;">{text}</div>
+            color = C["green"] if score >= 0.05 else (C["red"] if score <= -0.05 else C["text_secondary"])
+            glow = "rgba(16,185,129,0.08)" if score >= 0.05 else ("rgba(244,63,94,0.08)" if score <= -0.05 else "rgba(255,255,255,0.02)")
+            rec_parts.append(f"""
+            <div style="margin-bottom:12px;padding:14px;background:{glow};border:1px solid {C['border_subtle']};border-left:3px solid {color};border-radius:0 12px 12px 0;transition:all 0.2s ease;"
+                 onmouseover="this.style.transform='translateX(4px)';this.style.borderColor='{C['border_active']}';"
+                 onmouseout="this.style.transform='translateX(0)';this.style.borderColor='{C['border_subtle']}';"
+            >
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <span style="font-size:0.85rem;font-weight:700;color:{C['text_primary']};font-family:'Inter',sans-serif;">{display_names.get(t, t)}</span>
+                    <span style="background:{color}15;color:{color};padding:2px 8px;border-radius:6px;font-size:0.65rem;font-weight:700;letter-spacing:0.04em;">{label}</span>
+                </div>
+                <div style="font-size:0.75rem;color:{C['text_secondary']};margin-bottom:4px;">
+                    Weight: <strong style="color:{C['text_primary']};font-family:'JetBrains Mono',monospace;">{weight_pct}%</strong> · 
+                    Sentiment: <strong style="color:{color};font-family:'JetBrains Mono',monospace;">{score:+.3f}</strong>
+                </div>
+                <div style="font-size:0.78rem;color:{C['text_secondary']};line-height:1.6;">{text}</div>
             </div>""")
-    rec_html = "\n".join(rec_parts) if rec_parts else '<div style="color:#888;font-size:0.8rem;">NO LLM RECOMMENDATIONS GENERATED</div>'
+    rec_html = "\n".join(rec_parts) if rec_parts else f'<div style="color:{C["text_tertiary"]};font-size:0.8rem;padding:12px;">No LLM recommendations generated</div>'
 
-    # News
+    # ── News ──────────────────────────────────────────────────
     news_parts = []
     for t in available:
         articles = all_news.get(t, [])
         if articles:
-            news_parts.append(f'<div style="margin-bottom:12px;"><div style="font-size:0.75rem;font-weight:700;color:#ff6600;margin-bottom:4px;">{display_names.get(t, t)} — {len(articles)} ARTICLES</div>')
+            news_parts.append(f'<div style="margin-bottom:14px;"><div style="font-size:0.78rem;font-weight:700;color:{C["accent"]};margin-bottom:6px;font-family:\'Inter\',sans-serif;">{display_names.get(t, t)} — {len(articles)} articles</div>')
             for a in articles[:5]:
-                news_parts.append(f'<div style="font-size:0.72rem;color:#888;padding:2px 0;">• {a.get("title", "")}</div>')
+                news_parts.append(f'<div style="font-size:0.74rem;color:{C["text_secondary"]};padding:3px 0;border-bottom:1px solid {C["border_subtle"]};">• {a.get("title", "")}</div>')
             news_parts.append('</div>')
-    news_html = "\n".join(news_parts) if news_parts else '<div style="color:#555;font-size:0.75rem;">NO NEWS DATA</div>'
+    news_html = "\n".join(news_parts) if news_parts else f'<div style="color:{C["text_tertiary"]};font-size:0.75rem;">No news data</div>'
 
-    # Charts
+    # ── Charts ────────────────────────────────────────────────
     frontier_div = ""
+    frontier_fig = None
     if not frontier_df.empty:
         try:
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=frontier_df["volatility"]*100, y=frontier_df["return"]*100, mode='markers', marker=dict(color=frontier_df["sharpe"], colorscale=[[0,'#ff3333'],[0.5,'#ff6600'],[1,'#00d084']], size=4, opacity=0.5), name="FRONTIER"))
-            fig.add_trace(go.Scatter(x=[opt_result.get("volatility",0)*100], y=[opt_result.get("expected_return",0)*100], mode='markers+text', marker=dict(color='#ff6600', size=14, symbol='star'), text=["OPTIMAL"], textposition="top center", name="OPTIMAL"))
-            fig.add_trace(go.Scatter(x=[baseline.get("volatility",0)*100], y=[baseline.get("expected_return",0)*100], mode='markers+text', marker=dict(color='#888888', size=10, symbol='diamond'), text=["BASELINE"], textposition="bottom center", name="BASELINE"))
+            fig.add_trace(go.Scatter(
+                x=frontier_df["volatility"]*100, y=frontier_df["return"]*100, mode='markers',
+                marker=dict(color=frontier_df["sharpe"], colorscale=[[0, C["red"]], [0.5, C["accent"]], [1, C["green"]]], size=4, opacity=0.5),
+                name="Frontier"
+            ))
+            fig.add_trace(go.Scatter(
+                x=[opt_result.get("volatility", 0)*100], y=[opt_result.get("expected_return", 0)*100],
+                mode='markers+text', marker=dict(color=C["accent"], size=14, symbol='star', line=dict(color='white', width=1)),
+                text=["OPTIMAL"], textposition="top center", name="Optimal"
+            ))
+            fig.add_trace(go.Scatter(
+                x=[baseline.get("volatility", 0)*100], y=[baseline.get("expected_return", 0)*100],
+                mode='markers+text', marker=dict(color=C["text_secondary"], size=10, symbol='diamond'),
+                text=["BASELINE"], textposition="bottom center", name="Baseline"
+            ))
             fig.update_layout(
                 title="EFFICIENT FRONTIER", xaxis_title="VOLATILITY (%)", yaxis_title="RETURN (%)",
-                height=400, paper_bgcolor="#0a0a0a", plot_bgcolor="#0a0a0a",
-                font=dict(family="JetBrains Mono, monospace", color="#e5e5e5", size=10),
+                height=400, paper_bgcolor=C["bg_elevated"], plot_bgcolor=C["bg_elevated"],
+                font=dict(family="JetBrains Mono, monospace", color=C["text_primary"], size=10),
                 margin=dict(l=50, r=20, t=50, b=40),
-                xaxis=dict(gridcolor="#2a2a2a", linecolor="#3a3a3a"),
-                yaxis=dict(gridcolor="#2a2a2a", linecolor="#3a3a3a"),
-                legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor="#2a2a2a", borderwidth=1, font=dict(size=9))
+                xaxis=dict(gridcolor=C["border_subtle"], linecolor=C["border_active"]),
+                yaxis=dict(gridcolor=C["border_subtle"], linecolor=C["border_active"]),
+                legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor=C["border_subtle"], borderwidth=1, font=dict(size=9))
             )
+            frontier_fig = fig
             frontier_div = fig.to_html(full_html=False, include_plotlyjs=False)
         except Exception:
             frontier_div = ""
+
     weights_bar_div = ""
+    weights_bar_fig = None
     if final_weights and baseline:
         try:
             from plotly.subplots import make_subplots
@@ -196,209 +259,406 @@ def generate_bloomberg_report(portfolio, results, display_names):
             ))
             fig_w.add_trace(go.Bar(
                 y=[display_names.get(t, t) for t in tickers_list], x=final_vals,
-                orientation='h', marker=dict(color='#ff6600'),
-                text=[f"{v:.1f}%" for v in final_vals], textposition='outside'
+                orientation='h', marker=dict(color=C["accent"], line=dict(color=C["accent"], width=1)),
+                text=[f"{v:.1f}%" for v in final_vals], textposition='outside',
+                textfont=dict(color=C["text_primary"], size=9)
             ), row=1, col=1)
             fig_w.add_trace(go.Bar(
                 y=[display_names.get(t, t) for t in tickers_list], x=equal_vals,
-                orientation='h', marker=dict(color='#888888'),
-                text=[f"{v:.1f}%" for v in equal_vals], textposition='outside'
+                orientation='h', marker=dict(color=C["text_secondary"], line=dict(color=C["text_secondary"], width=1)),
+                text=[f"{v:.1f}%" for v in equal_vals], textposition='outside',
+                textfont=dict(color=C["text_primary"], size=9)
             ), row=1, col=2)
             fig_w.update_layout(
-                showlegend=False, height=max(300, 40 * len(tickers_list)),
-                paper_bgcolor="#0a0a0a", plot_bgcolor="#0a0a0a",
-                font=dict(family="JetBrains Mono, monospace", color="#e5e5e5", size=10),
+                showlegend=False, height=max(320, 45 * len(tickers_list)),
+                paper_bgcolor=C["bg_elevated"], plot_bgcolor=C["bg_elevated"],
+                font=dict(family="JetBrains Mono, monospace", color=C["text_primary"], size=10),
                 margin=dict(l=100, r=20, t=40, b=40)
             )
-            fig_w.update_xaxes(title_text="WEIGHT (%)", gridcolor="#2a2a2a", linecolor="#3a3a3a")
-            fig_w.update_yaxes(gridcolor="#2a2a2a", linecolor="#3a3a3a")
+            fig_w.update_xaxes(title_text="WEIGHT (%)", gridcolor=C["border_subtle"], linecolor=C["border_active"])
+            fig_w.update_yaxes(gridcolor=C["border_subtle"], linecolor=C["border_active"])
+            weights_bar_fig = fig_w
             weights_bar_div = fig_w.to_html(full_html=False, include_plotlyjs=False)
         except Exception:
             weights_bar_div = ""
 
     corr_div = ""
+    corr_fig = None
     if not returns_df.empty:
         try:
             corr = returns_df.corr()
             corr.columns = [display_names.get(t, t) for t in corr.columns]
             corr.index = corr.columns
-            fig_c = px.imshow(corr, color_continuous_scale=[[0,'#ff3333'],[0.5,'#111111'],[1,'#00d084']], aspect="auto")
-            fig_c.update_traces(texttemplate="%{z:.2f}", textfont=dict(size=8, color="#e5e5e5"))
+            fig_c = go.Figure(go.Heatmap(
+                z=corr.values,
+                x=corr.columns.tolist(),
+                y=corr.index.tolist(),
+                colorscale=[[0, C["red"]], [0.5, C["bg_elevated"]], [1, C["green"]]],
+                zmin=-1,
+                zmax=1,
+                text=corr.round(2).values,
+                texttemplate="%{text}",
+                textfont=dict(size=8, color=C["text_primary"]),
+                colorbar=dict(title="Correlation"),
+            ))
             fig_c.update_layout(
                 title="CORRELATION MATRIX", height=350,
-                paper_bgcolor="#0a0a0a", plot_bgcolor="#0a0a0a",
-                font=dict(family="JetBrains Mono, monospace", color="#e5e5e5", size=10),
+                paper_bgcolor=C["bg_elevated"], plot_bgcolor=C["bg_elevated"],
+                font=dict(family="JetBrains Mono, monospace", color=C["text_primary"], size=10),
                 margin=dict(l=50, r=20, t=50, b=40),
-                coloraxis_colorbar=dict(tickfont=dict(color="#888"), titlefont=dict(color="#888"))
+                coloraxis_colorbar=dict(tickfont=dict(color=C["text_secondary"]), titlefont=dict(color=C["text_secondary"]))
             )
+            corr_fig = fig_c
             corr_div = fig_c.to_html(full_html=False, include_plotlyjs=False)
         except Exception:
             corr_div = ""
 
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    gen_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    pf_name = portfolio.get("name", "PORTFOLIO").upper()
+    # The allocation chart is placed first in the report, so it must carry
+    # the inline Plotly library. This keeps reports fully offline-capable and
+    # ensures Plotly is defined before any chart script executes.
+    if weights_bar_fig is not None:
+        weights_bar_div = weights_bar_fig.to_html(full_html=False, include_plotlyjs="inline")
+    elif frontier_fig is not None:
+        frontier_div = frontier_fig.to_html(full_html=False, include_plotlyjs="inline")
+    elif corr_fig is not None:
+        corr_div = corr_fig.to_html(full_html=False, include_plotlyjs="inline")
+
+    # ── Score Breakdown ───────────────────────────────────────
+    score_breakdown_rows = "\n".join(
+        f'<tr><td style="padding:8px 12px;border-bottom:1px solid {C["border_subtle"]};color:{C["text_primary"]};font-family:\'Inter\',sans-serif;">{k.replace("_", " ").title()}</td>'
+        f'<td style="padding:8px 12px;border-bottom:1px solid {C["border_subtle"]};text-align:right;color:{C["accent"]};font-weight:700;font-family:\'JetBrains Mono\',monospace;">{v:.1f}/100</td>'
+        f'<td style="padding:8px 12px;border-bottom:1px solid {C["border_subtle"]};text-align:right;color:{C["text_tertiary"]};font-family:\'JetBrains Mono\',monospace;">{health.get("component_weights", {}).get(k, 0)*100:.0f}%</td></tr>'
+        for k, v in health.get("components", {}).items()
+    )
+
+    score_improvements_html = "\n".join(
+        f'<div style="padding:4px 0;color:{C["text_secondary"]};font-size:0.75rem;">• {tip}</div>' 
+        for tip in health.get("improvements", [])
+    )
+
+    adaptive_candidates = results.get("adaptive_candidates", []) or []
+    selected_cap = results.get("selected_cap")
+    adaptive_rows = "\n".join(
+        f'<tr><td style="padding:8px 12px;border-bottom:1px solid {C["border_subtle"]};color:{C["text_primary"]};font-family:\'JetBrains Mono\',monospace;">{c.get("max_weight_cap", 0)*100:.1f}%</td>'
+        f'<td style="padding:8px 12px;border-bottom:1px solid {C["border_subtle"]};text-align:right;color:{C["accent"]};font-weight:700;font-family:\'JetBrains Mono\',monospace;">{c.get("health_score", 0):.1f}</td>'
+        f'<td style="padding:8px 12px;border-bottom:1px solid {C["border_subtle"]};text-align:right;color:{C["text_primary"]};font-family:\'JetBrains Mono\',monospace;">{c.get("sharpe_ratio", 0):.3f}</td>'
+        f'<td style="padding:8px 12px;border-bottom:1px solid {C["border_subtle"]};text-align:right;color:{C["text_primary"]};font-family:\'JetBrains Mono\',monospace;">{c.get("volatility", 0)*100:.1f}%</td></tr>'
+        for c in adaptive_candidates
+    )
+
+    adaptive_html = (
+        f'<div style="margin-top:16px;padding:12px;background:{C["bg_surface"]};border-radius:10px;">'
+        f'<div style="color:{C["accent"]};font-weight:700;margin-bottom:8px;font-family:\'Inter\',sans-serif;font-size:0.8rem;">ADAPTIVE CAP SEARCH</div>'
+        f'<table style="width:100%;font-size:0.75rem;"><thead><tr><th style="text-align:left;color:{C["text_tertiary"]};font-weight:600;">MAX WEIGHT</th>'
+        f'<th style="text-align:right;color:{C["text_tertiary"]};font-weight:600;">HEALTH</th>'
+        f'<th style="text-align:right;color:{C["text_tertiary"]};font-weight:600;">SHARPE</th>'
+        f'<th style="text-align:right;color:{C["text_tertiary"]};font-weight:600;">VOL</th></tr></thead>'
+        f'<tbody>{adaptive_rows}</tbody></table>'
+        f'<div style="margin-top:8px;color:{C["text_secondary"]};font-size:0.72rem;font-family:\'JetBrains Mono\',monospace;">'
+        f'SELECTED CAP: <strong style="color:{C["text_primary"]}">{(selected_cap or 0)*100:.1f}%</strong> | '
+        f'POTENTIAL SCORE: <strong style="color:{C["text_primary"]}">{health.get("potential_score", ai_score):.1f}/100</strong></div></div>'
+        if adaptive_candidates else ''
+    )
+
     exp_ret = opt_result.get("expected_return", 0)
     exp_ret_cls = "pos" if exp_ret > 0 else "neg"
     avg_sent_cls = "pos" if avg_sent > 0.05 else ("neg" if avg_sent < -0.05 else "accent")
 
-    score_breakdown_rows = "".join(
-        f'<tr><td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;">{k.replace("_", " ").title()}</td>'
-        f'<td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;text-align:right;color:#ff6600;font-weight:700;">{v:.1f}/100</td>'
-        f'<td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;text-align:right;color:#888;">{health.get("component_weights", {}).get(k, 0)*100:.0f}%</td></tr>'
-        for k, v in health.get("components", {}).items()
-    )
-    score_improvements_html = "".join(
-        f'<div style="padding:3px 0;color:#888;">• {tip}</div>' for tip in health.get("improvements", [])
-    )
-    adaptive_candidates = results.get("adaptive_candidates", []) or []
-    selected_cap = results.get("selected_cap")
-    adaptive_rows = "".join(
-        f'<tr><td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;">{c.get("max_weight_cap", 0)*100:.1f}%</td>'
-        f'<td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;text-align:right;color:#ff6600;">{c.get("health_score", 0):.1f}</td>'
-        f'<td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;text-align:right;">{c.get("sharpe_ratio", 0):.3f}</td>'
-        f'<td style="padding:6px 10px;border-bottom:1px dotted #2a2a2a;text-align:right;">{c.get("volatility", 0)*100:.1f}%</td></tr>'
-        for c in adaptive_candidates
-    )
-    adaptive_html = (
-        '<div style="margin-top:14px;"><div style="color:#ff6600;font-weight:700;margin-bottom:6px;">ADAPTIVE CAP SEARCH</div>'
-        '<table><thead><tr><th>MAX WEIGHT</th><th style="text-align:right">HEALTH</th><th style="text-align:right">SHARPE</th><th style="text-align:right">VOL</th></tr></thead>'
-        f'<tbody>{adaptive_rows}</tbody></table>'
-        f'<div style="margin-top:8px;color:#888;">SELECTED CAP: <strong style="color:#e5e5e5;">{(selected_cap or 0)*100:.1f}%</strong> | POTENTIAL SCORE: <strong style="color:#e5e5e5;">{health.get("potential_score", ai_score):.1f}/100</strong></div></div>'
-        if adaptive_candidates else ''
-    )
-
+    # ── HTML Assembly ─────────────────────────────────────────
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI PORTFOLIO REPORT — {pf_name}</title>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-<style><link href="https://fonts.googleapis.com/icon?family=Material+Icons"
-      rel="stylesheet">
+<title>AXIOM REPORT — {pf_name}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
   * {{ margin:0; padding:0; box-sizing:border-box; }}
-  body {{ font-family:'JetBrains Mono','Courier New',monospace; background:#050505; color:#e5e5e5; font-size:0.8rem; line-height:1.5; }}
-  .page {{ max-width:900px; margin:0 auto; padding:24px; }}
-  .header {{ border-bottom:2px solid #ff6600; padding-bottom:16px; margin-bottom:24px; }}
-  .header-top {{ display:flex; justify-content:space-between; align-items:flex-start; }}
-  .header h1 {{ font-size:1.4rem; font-weight:800; color:#ff6600; letter-spacing:-0.5px; }}
-  .header .meta {{ font-size:0.7rem; color:#888; margin-top:4px; }}
-  .header .badge {{ background:#ff6600; color:#050505; padding:2px 8px; font-size:0.65rem; font-weight:800; }}
-  .section {{ margin-bottom:28px; border:1px solid #2a2a2a; }}
-  .section-header {{ background:#0d0d0d; border-bottom:1px solid #2a2a2a; padding:8px 12px; display:flex; justify-content:space-between; align-items:center; }}
-  .section-title {{ font-size:0.7rem; font-weight:700; color:#ff6600; text-transform:uppercase; letter-spacing:1px; }}
-  .section-sub {{ font-size:0.6rem; color:#555; }}
-  .section-body {{ padding:12px; background:#0a0a0a; }}
-  table {{ width:100%; border-collapse:collapse; font-size:0.75rem; }}
-  th {{ background:#141414; color:#ff6600; text-align:left; padding:8px 10px; font-size:0.65rem; text-transform:uppercase; letter-spacing:0.5px; border-bottom:1px solid #3a3a3a; }}
-  td {{ padding:6px 10px; }}
-  .kpi-grid {{ display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:#2a2a2a; border:1px solid #2a2a2a; }}
-  .kpi-cell {{ background:#0a0a0a; padding:12px; text-align:center; }}
-  .kpi-value {{ font-size:1.3rem; font-weight:700; color:#e5e5e5; }}
-  .kpi-value.accent {{ color:#ff6600; }}
-  .kpi-value.pos {{ color:#00d084; }}
-  .kpi-value.neg {{ color:#ff3333; }}
-  .kpi-label {{ font-size:0.55rem; color:#555; text-transform:uppercase; letter-spacing:1px; margin-top:4px; }}
-  .disclaimer {{ border-top:1px solid #2a2a2a; padding-top:16px; margin-top:32px; font-size:0.65rem; color:#555; line-height:1.6; }}
-  .chart-container {{ margin:12px 0; }}
-  @media print {{ body {{ background:#fff; color:#000; }} .section {{ border-color:#ccc; }} }}
+  body {{ 
+    font-family:'Inter', system-ui, sans-serif; 
+    background: {C["bg_base"]}; 
+    color: {C["text_primary"]}; 
+    font-size:0.82rem; 
+    line-height:1.6;
+    background-image: 
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(255,107,53,0.06), transparent),
+      radial-gradient(ellipse 60% 40% at 80% 80%, rgba(0,217,255,0.03), transparent);
+  }}
+
+  .page {{ max-width:1000px; margin:0 auto; padding:32px 24px; }}
+
+  /* Header */
+  .header {{ 
+    background: {C["bg_glass"]}; 
+    border: 1px solid {C["border_subtle"]}; 
+    border-radius: 16px; 
+    backdrop-filter: blur(20px);
+    padding: 24px; 
+    margin-bottom: 24px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04);
+  }}
+  .header-top {{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }}
+  .header h1 {{ font-size:1.6rem; font-weight:800; color:{C["accent"]}; letter-spacing:-0.03em; font-family:'Inter',sans-serif; }}
+  .header .meta {{ font-size:0.75rem; color:{C["text_secondary"]}; margin-top:4px; font-family:'JetBrains Mono',monospace; }}
+  .header .badge {{ 
+    background: linear-gradient(135deg, {C["accent"]}, {C["accent_dim"]}); 
+    color:{C["text_inverse"]}; 
+    padding:4px 10px; 
+    border-radius: 6px; 
+    font-size:0.65rem; 
+    font-weight:800; 
+    letter-spacing:0.04em;
+    box-shadow: 0 2px 8px {C["accent_glow"]};
+  }}
+  .header-info {{ display:flex; gap:24px; margin-top:12px; padding-top:12px; border-top:1px solid {C["border_subtle"]}; font-size:0.75rem; color:{C["text_secondary"]}; font-family:'JetBrains Mono',monospace; }}
+  .header-info strong {{ color:{C["text_primary"]}; }}
+
+  /* Glass Panel */
+  .panel {{ 
+    background: {C["bg_glass"]}; 
+    border: 1px solid {C["border_subtle"]}; 
+    border-radius: 16px; 
+    backdrop-filter: blur(20px);
+    margin-bottom: 20px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.04);
+    overflow: hidden;
+    transition: all 0.2s ease;
+  }}
+  .panel:hover {{ border-color: {C["border_active"]}; }}
+  .panel-header {{ 
+    background: linear-gradient(90deg, {C["accent_glow"]}, transparent); 
+    padding: 14px 20px; 
+    border-bottom: 1px solid {C["border_subtle"]};
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }}
+  .panel-header.green {{ background: linear-gradient(90deg, rgba(16,185,129,0.08), transparent); }}
+  .panel-header.red {{ background: linear-gradient(90deg, rgba(244,63,94,0.08), transparent); }}
+  .panel-header.cyan {{ background: linear-gradient(90deg, rgba(0,217,255,0.08), transparent); }}
+  .panel-header.violet {{ background: linear-gradient(90deg, rgba(139,92,246,0.08), transparent); }}
+  .panel-title {{ font-size:0.78rem; font-weight:700; color:{C["accent"]}; text-transform:uppercase; letter-spacing:0.08em; font-family:'Inter',sans-serif; }}
+  .panel-title.green {{ color: {C["green"]}; }}
+  .panel-title.red {{ color: {C["red"]}; }}
+  .panel-title.cyan {{ color: {C["cyan"]}; }}
+  .panel-title.violet {{ color: {C["violet"]}; }}
+  .panel-sub {{ font-size:0.65rem; color:{C["text_tertiary"]}; font-weight:500; letter-spacing:0.04em; }}
+  .panel-body {{ padding: 20px; }}
+
+  /* KPI Grid */
+  .kpi-grid {{ display:grid; grid-template-columns:repeat(4, 1fr); gap:1px; background:{C["border_subtle"]}; border:1px solid {C["border_subtle"]}; border-radius: 12px; overflow: hidden; }}
+  .kpi-cell {{ background: {C["bg_surface"]}; padding: 16px; text-align: center; transition: all 0.15s ease; }}
+  .kpi-cell:hover {{ background: rgba(255,255,255,0.03); }}
+  .kpi-value {{ font-size:1.4rem; font-weight:700; color:{C["text_primary"]}; font-family:'JetBrains Mono',monospace; line-height:1; letter-spacing:-0.02em; }}
+  .kpi-value.accent {{ color: {C["accent"]}; text-shadow: 0 0 20px {C["accent_glow"]}; }}
+  .kpi-value.pos {{ color: {C["green"]}; }}
+  .kpi-value.neg {{ color: {C["red"]}; }}
+  .kpi-value.cyan {{ color: {C["cyan"]}; }}
+  .kpi-label {{ font-size:0.6rem; color:{C["text_tertiary"]}; text-transform:uppercase; letter-spacing:0.08em; font-weight:600; margin-top:6px; font-family:'Inter',sans-serif; }}
+
+  /* Tables */
+  table {{ width:100%; border-collapse:collapse; font-size:0.78rem; }}
+  th {{ background: rgba(255,255,255,0.02); color:{C["accent"]}; text-align:left; padding:10px 12px; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:700; font-family:'Inter',sans-serif; border-bottom:1px solid {C["border_subtle"]}; }}
+  td {{ padding:8px 12px; }}
+  tr {{ transition: all 0.15s ease; }}
+  tr:hover {{ background: rgba(255,255,255,0.02); }}
+
+  /* Chart Container */
+  .chart-container {{ margin: 16px 0; background: {C["bg_elevated"]}; border-radius: 12px; padding: 12px; border: 1px solid {C["border_subtle"]}; }}
+
+  /* Status Badges */
+  .badge-pos {{ background: rgba(16,185,129,0.12); color:{C["green"]}; padding:2px 8px; border-radius:6px; font-size:0.65rem; font-weight:700; border:1px solid rgba(16,185,129,0.2); }}
+  .badge-neg {{ background: rgba(244,63,94,0.12); color:{C["red"]}; padding:2px 8px; border-radius:6px; font-size:0.65rem; font-weight:700; border:1px solid rgba(244,63,94,0.2); }}
+  .badge-neutral {{ background: rgba(255,255,255,0.04); color:{C["text_secondary"]}; padding:2px 8px; border-radius:6px; font-size:0.65rem; font-weight:700; border:1px solid rgba(255,255,255,0.06); }}
+
+  /* Disclaimer */
+  .disclaimer {{ 
+    background: {C["bg_glass"]}; 
+    border: 1px solid {C["border_subtle"]}; 
+    border-radius: 16px; 
+    backdrop-filter: blur(20px);
+    padding: 20px; 
+    margin-top: 32px; 
+    font-size:0.72rem; 
+    color:{C["text_tertiary"]}; 
+    line-height:1.7;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+  }}
+  .disclaimer strong {{ color: {C["accent"]}; }}
+
+  /* Animations */
+  @keyframes fadeInUp {{ from {{ opacity: 0; transform: translateY(16px); }} to {{ opacity: 1; transform: translateY(0); }} }}
+  .animate-in {{ animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }}
+
+  @media print {{ body {{ background: #fff; color: #000; }} .panel {{ border-color: #ccc; background: #fff; }} }}
+  @media (max-width: 768px) {{ .kpi-grid {{ grid-template-columns: repeat(2, 1fr); }} .page {{ padding: 16px; }} }}
 </style>
 </head>
 <body>
 <div class="page">
 
-  <div class="header">
+  <!-- Header -->
+  <div class="header animate-in">
     <div class="header-top">
       <div>
-        <h1>▶ AI PORTFOLIO OPTIMIZER</h1>
-        <div class="meta">TERMINAL EDITION v5.0 | PORTFOLIO ANALYSIS REPORT</div>
+        <h1>◈ AXIOM PORTFOLIO INTELLIGENCE</h1>
+        <div class="meta">TERMINAL EDITION v2.1 · QUANTITATIVE ANALYSIS REPORT</div>
       </div>
       <div class="badge">CONFIDENTIAL</div>
     </div>
-    <div style="display:flex;justify-content:space-between;margin-top:12px;font-size:0.75rem;color:#888;">
-      <div>PORTFOLIO: <strong style="color:#e5e5e5;">{pf_name}</strong></div>
-      <div>CURRENCY: <strong style="color:#e5e5e5;">{pf_curr}</strong></div>
-      <div>DATE: <strong style="color:#e5e5e5;">{now_str}</strong></div>
+    <div class="header-info">
+      <div>PORTFOLIO: <strong>{pf_name}</strong></div>
+      <div>CURRENCY: <strong>{pf_curr}</strong></div>
+      <div>GENERATED: <strong>{now_str}</strong></div>
     </div>
   </div>
 
-  <div class="section">
-    <div class="section-header"><span class="section-title">◈ Portfolio Health Score</span><span class="section
-    -sub">COMPOSITE METRIC</span></div>
-    <div class="section-body">
+  <!-- Health Score -->
+  <div class="panel animate-in">
+    <div class="panel-header">
+      <span class="panel-title">◈ Portfolio Health Score</span>
+      <span class="panel-sub">COMPOSITE METRIC · 0-100 SCALE</span>
+    </div>
+    <div class="panel-body">
       <div class="kpi-grid">
-        <div class="kpi-cell"><div class="kpi-value accent">{ai_score:.0f}</div><div class="kpi-label">AI Score — {score_label}</div></div>
-        <div class="kpi-cell"><div class="kpi-value">{sharpe:.3f}</div><div class="kpi-label">Sharpe Ratio</div></div>
-        <div class="kpi-cell"><div class="kpi-value {exp_ret_cls}">{exp_ret*100:.2f}%</div><div class="kpi-label">Exp Return</div></div>
-        <div class="kpi-cell"><div class="kpi-value neg">{vol*100:.2f}%</div><div class="kpi-label">Volatility</div></div>
-        <div class="kpi-cell"><div class="kpi-value neg">{currency_symbol}{var95.get("var_usd", 0):,.0f}</div><div class="kpi-label">95% VaR</div></div>
-        <div class="kpi-cell"><div class="kpi-value neg">{currency_symbol}{var99.get("var_usd", 0):,.0f}</div><div class="kpi-label">99% VaR</div></div>
-        <div class="kpi-cell"><div class="kpi-value neg">{mdd.get("max_drawdown_pct", 0):.2f}%</div><div class="kpi-label">Max Drawdown</div></div>
-        <div class="kpi-cell"><div class="kpi-value {avg_sent_cls}">{avg_sent:+.3f}</div><div class="kpi-label">Avg Sentiment</div></div>
+        <div class="kpi-cell">
+          <div class="kpi-value accent">{ai_score:.0f}</div>
+          <div class="kpi-label">AI Score · {score_label}</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="kpi-value cyan">{sharpe:.3f}</div>
+          <div class="kpi-label">Sharpe Ratio</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="kpi-value {exp_ret_cls}">{exp_ret*100:.2f}%</div>
+          <div class="kpi-label">Exp Return</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="kpi-value neg">{vol*100:.2f}%</div>
+          <div class="kpi-label">Volatility</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="kpi-value neg">{currency_symbol}{var95.get("var_usd", 0):,.0f}</div>
+          <div class="kpi-label">95% VaR</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="kpi-value neg">{currency_symbol}{var99.get("var_usd", 0):,.0f}</div>
+          <div class="kpi-label">99% VaR</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="kpi-value neg">{mdd.get("max_drawdown_pct", 0):.2f}%</div>
+          <div class="kpi-label">Max Drawdown</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="kpi-value {avg_sent_cls}">{avg_sent:+.3f}</div>
+          <div class="kpi-label">Avg Sentiment</div>
+        </div>
       </div>
     </div>
   </div>
-  
-  <div class="section">
-    <div class="section-header"><span class="section-title">◈ AI Health Score v3 Breakdown</span><span class="section-sub">EXPLAINABLE 0-100 MODEL</span></div>
-    <div class="section-body">
-      <table><thead><tr><th>COMPONENT</th><th style="text-align:right">SCORE</th><th style="text-align:right">WEIGHT</th></tr></thead><tbody>{score_breakdown_rows}</tbody></table>
-      <div style="margin-top:12px;padding:8px;background:#0d0d0d;font-size:0.7rem;color:#888;">BASE: {health.get("base_score", 0):.1f} | PENALTIES: -{health.get("penalty_total", 0):.1f} | FINAL: <strong style="color:#ff6600;">{ai_score:.1f}/100</strong></div>
-      <div style="margin-top:10px;font-size:0.7rem;">{score_improvements_html}</div>
+
+  <!-- Health Breakdown -->
+  <div class="panel animate-in">
+    <div class="panel-header">
+      <span class="panel-title">◈ AI Health Score v3 Breakdown</span>
+      <span class="panel-sub">EXPLAINABLE MODEL</span>
+    </div>
+    <div class="panel-body">
+      <table>
+        <thead><tr><th>COMPONENT</th><th style="text-align:right">SCORE</th><th style="text-align:right">WEIGHT</th></tr></thead>
+        <tbody>{score_breakdown_rows}</tbody>
+      </table>
+      <div style="margin-top:14px;padding:10px 14px;background:{C["bg_elevated"]};border-radius:8px;font-size:0.74rem;color:{C["text_secondary"]};font-family:'JetBrains Mono',monospace;border:1px solid {C["border_subtle"]};">
+        BASE: <strong style="color:{C['text_primary']}">{health.get("base_score", 0):.1f}</strong> | 
+        PENALTIES: <strong style="color:{C['red']}">-{health.get("penalty_total", 0):.1f}</strong> | 
+        FINAL: <strong style="color:{C['accent']}">{ai_score:.1f}/100</strong>
+      </div>
+      <div style="margin-top:10px;">{score_improvements_html}</div>
       {adaptive_html}
     </div>
   </div>
 
-  <div class="section">
-    <div class="section-header"><span class="section-title">◈ High-Level Snapshot</span><span class="section-sub">FINAL vs EQUAL WEIGHT</span></div>
-    <div class="section-body">
-      <div class="chart-container">{weights_bar_div or '<div style="color:#555;font-size:0.75rem;">CHART NOT AVAILABLE</div>'}</div>
+  <!-- Weight Allocation -->
+  <div class="panel animate-in">
+    <div class="panel-header cyan">
+      <span class="panel-title cyan">◫ Portfolio Allocation</span>
+      <span class="panel-sub">OPTIMIZED VS EQUAL WEIGHT</span>
+    </div>
+    <div class="panel-body">
+      <div class="chart-container">{weights_bar_div or f'<div style="color:{C["text_tertiary"]};font-size:0.75rem;">Chart not available</div>'}</div>
     </div>
   </div>
 
-  <div class="section">
-    <div class="section-header"><span class="section-title">◫ Portfolio Composition</span><span class="section-sub">OPTIMIZED WEIGHTS</span></div>
-    <div class="section-body">
+  <!-- Composition Table -->
+  <div class="panel animate-in">
+    <div class="panel-header violet">
+      <span class="panel-title violet">◫ Portfolio Composition</span>
+      <span class="panel-sub">OPTIMIZED WEIGHTS & ACTIONS</span>
+    </div>
+    <div class="panel-body">
       <table>
-        <thead><tr><th>TICKER</th><th style="text-align:right">OPTIMIZED</th><th style="text-align:right">FINAL</th><th style="text-align:right">CHANGE</th><th style="text-align:right">ACTION</th><th style="text-align:right">REASON</th></tr></thead>
+        <thead>
+          <tr>
+            <th>TICKER</th>
+            <th style="text-align:right">OPTIMIZED</th>
+            <th style="text-align:right">FINAL</th>
+            <th style="text-align:right">CHANGE</th>
+            <th style="text-align:right">ACTION</th>
+            <th style="text-align:right">REASON</th>
+          </tr>
+        </thead>
         <tbody>{weights_html}</tbody>
       </table>
     </div>
   </div>
 
-  <div class="section">
-    <div class="section-header"><span class="section-title">◈ Efficient Frontier</span><span class="section-sub">RISK vs RETURN</span></div>
-    <div class="section-body">
-      <div class="chart-container">{frontier_div or '<div style="color:#555;font-size:0.75rem;">CHART NOT AVAILABLE</div>'}</div>
+  <!-- Efficient Frontier -->
+  <div class="panel animate-in">
+    <div class="panel-header">
+      <span class="panel-title">◈ Efficient Frontier</span>
+      <span class="panel-sub">RISK VS RETURN</span>
+    </div>
+    <div class="panel-body">
+      <div class="chart-container">{frontier_div or f'<div style="color:{C["text_tertiary"]};font-size:0.75rem;">Chart not available</div>'}</div>
     </div>
   </div>
 
-  <div class="section">
-    <div class="section-header"><span class="section-title">◫ Risk Breakdown</span><span class="section-sub">PER-TICKER VOLATILITY</span></div>
-    <div class="section-body">
+  <!-- Risk Breakdown -->
+  <div class="panel animate-in">
+    <div class="panel-header red">
+      <span class="panel-title red">◫ Risk Breakdown</span>
+      <span class="panel-sub">PER-TICKER VOLATILITY</span>
+    </div>
+    <div class="panel-body">
       <table>
         <thead><tr><th>TICKER</th><th style="text-align:right">ANN VOLATILITY</th></tr></thead>
         <tbody>{risk_html}</tbody>
       </table>
-      <div style="margin-top:12px;padding:8px;background:#0d0d0d;font-size:0.7rem;color:#888;">
-        PORTFOLIO VOLATILITY: <strong style="color:#e5e5e5;">{vol*100:.2f}%</strong> |
-        CONCENTRATION RISK: <strong style="color:#e5e5e5;">{risk_report.get("concentration", {}).get("label", "N/A")}</strong>
+      <div style="margin-top:14px;padding:10px 14px;background:{C["bg_elevated"]};border-radius:8px;font-size:0.74rem;color:{C["text_secondary"]};font-family:'JetBrains Mono',monospace;border:1px solid {C["border_subtle"]};">
+        PORTFOLIO VOLATILITY: <strong style="color:{C['text_primary']}">{vol*100:.2f}%</strong> | 
+        CONCENTRATION RISK: <strong style="color:{C['text_primary']}">{risk_report.get("concentration", {}).get("label", "N/A")}</strong>
       </div>
     </div>
   </div>
 
-  <div class="section">
-    <div class="section-header"><span class="section-title">◫ Correlation Matrix</span><span class="section-sub">RETURN CORRELATIONS</span></div>
-    <div class="section-body">
-      <div class="chart-container">{corr_div or '<div style="color:#555;font-size:0.75rem;">CHART NOT AVAILABLE</div>'}</div>
+  <!-- Correlation -->
+  <div class="panel animate-in">
+    <div class="panel-header green">
+      <span class="panel-title green">◫ Correlation Matrix</span>
+      <span class="panel-sub">RETURN CORRELATIONS</span>
+    </div>
+    <div class="panel-body">
+      <div class="chart-container">{corr_div or f'<div style="color:{C["text_tertiary"]};font-size:0.75rem;">Chart not available</div>'}</div>
     </div>
   </div>
 
-  <div class="section">
-    <div class="section-header"><span class="section-title">◉ Sentiment Analysis</span><span class="section-sub">FINBERT NLP SCORES</span></div>
-    <div class="section-body">
+  <!-- Sentiment -->
+  <div class="panel animate-in">
+    <div class="panel-header cyan">
+      <span class="panel-title cyan">◉ Sentiment Analysis</span>
+      <span class="panel-sub">FINBERT NLP SCORES</span>
+    </div>
+    <div class="panel-body">
       <table>
         <thead><tr><th>TICKER</th><th>BAR</th><th style="text-align:right">SCORE</th><th style="text-align:right">LABEL</th></tr></thead>
         <tbody>{sentiment_html}</tbody>
@@ -406,24 +666,39 @@ def generate_bloomberg_report(portfolio, results, display_names):
     </div>
   </div>
 
-  <div class="section">
-    <div class="section-header"><span class="section-title">◫ Recent Headlines</span><span class="section-sub">NEWS FEED</span></div>
-    <div class="section-body">{news_html}</div>
+  <!-- News -->
+  <div class="panel animate-in">
+    <div class="panel-header">
+      <span class="panel-title">◫ Recent Headlines</span>
+      <span class="panel-sub">NEWS FEED</span>
+    </div>
+    <div class="panel-body">{news_html}</div>
   </div>
 
-  <div class="section">
-    <div class="section-header"><span class="section-title">◉ AI Recommendations</span><span class="section-sub">GROQ LLAMA 3.3 70B</span></div>
-    <div class="section-body">{rec_html}</div>
+  <!-- AI Recommendations -->
+  <div class="panel animate-in">
+    <div class="panel-header violet">
+      <span class="panel-title violet">◉ AI Recommendations</span>
+      <span class="panel-sub">GROQ LLAMA 3.3 70B</span>
+    </div>
+    <div class="panel-body">{rec_html}</div>
   </div>
 
-  <div class="disclaimer">
-    <strong style="color:#ff6600;">DISCLAIMER:</strong> This report is generated by an AI-powered portfolio optimization system for informational purposes only.
-    It does not constitute investment advice. Past performance does not guarantee future results.
+  <!-- Disclaimer -->
+  <div class="disclaimer animate-in">
+    <strong>DISCLAIMER:</strong> This report is generated by an AI-powered portfolio optimization system for informational purposes only. 
+    It does not constitute investment advice. Past performance does not guarantee future results. 
     All metrics are based on historical data and statistical models. Consult a qualified financial advisor before making investment decisions.<br><br>
-    <span style="color:#555;">AI Portfolio Optimizer | Bloomberg Terminal Edition | Generated {gen_str}</span>
+    <span style="color:{C['text_tertiary']};font-family:'JetBrains Mono',monospace;">
+      AXIOM Portfolio Intelligence v2.1 · Generated {gen_str}
+    </span>
   </div>
 
 </div>
 </body>
 </html>"""
     return html
+
+
+# Backward compatibility alias
+generate_bloomberg_report = generate_axiom_report

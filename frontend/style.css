@@ -1,5 +1,12 @@
 /* ============================================================
-   AI Portfolio Optimizer — Bloomberg Terminal Theme
+   AXIOM — Legacy Terminal Theme (v1.0 Backup)
+   ============================================================
+   This is the original Bloomberg Terminal aesthetic preserved
+   as a toggleable legacy theme. Activate via the theme toggle
+   in the sidebar to switch between Axiom Glass and Terminal.
+
+   To use: Set st.session_state["axiom_theme"] = "legacy"
+   Then call inject_theme() which will load this palette.
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap');
@@ -302,7 +309,8 @@ body {
   border-bottom: 1px solid var(--border);
   padding: 8px 16px;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
+  padding-bottom: 6px;
   gap: 12px;
   font-size: 0.8rem;
   margin-bottom: 1px;
