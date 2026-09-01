@@ -1,297 +1,248 @@
-# API Reference
+# AXIOM Portfolio Intelligence — API Reference
 
-Base URL (local): `http://localhost:8000`
-Interactive docs: `http://localhost:8000/docs`
-ReDoc: `http://localhost:8000/redoc`
+## Status
 
-Built by Parmod | [GitHub](https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer)
+The public AWS deployment currently runs the **Streamlit frontend service** on port `8501`. The FastAPI service is an optional local/development interface and is not required for the deployed dashboard workflow.
 
----
+Before relying on this document, start the API and verify its generated OpenAPI schema:
 
-## Authentication
-
-No authentication required for local development.
-For production deployment, add API key header: `X-API-Key: your_key`
-
----
-
-## Endpoints
-
----
-
-### GET /health
-
-Health check endpoint.
-
-**Request:**
-```
-GET /health
+```bash
+docker compose --profile api up --build -d
 ```
 
-**Response:**
+Then open:
+
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+- OpenAPI JSON: `http://localhost:8000/openapi.json`
+
+The running OpenAPI schema is the authoritative contract. Routes described below should be published only when they exist in the current backend build.
+
+## Base URLs
+
+| Environment | Base URL |
+| --- | --- |
+| Local FastAPI | `http://localhost:8000` |
+| Docker API profile | `http://localhost:8000` |
+| Public Streamlit demo | `http://13.207.84.157:8501` |
+
+## Authentication and security
+
+Do not expose an unauthenticated development API directly to the public internet.
+
+For a production API, add:
+
+- HTTPS
+- authenticated users or service credentials
+- authorization for user-owned portfolios
+- rate limiting
+- input-size limits
+- CORS allow-listing
+- secret management through AWS Secrets Manager or SSM
+- structured audit logs without API keys or sensitive holdings
+
+## Health endpoint
+
+### `GET /health`
+
+Returns service availability and safe configuration status.
+
+Example:
+
+```bash
+curl -fsS http://localhost:8000/health
+```
+
+Example response:
+
 ```json
 {
   "status": "ok",
-  "version": "1.0.0",
-  "author": "Parmod"
+  "service": "axiom-api",
+  "version": "1.0.0"
 }
 ```
 
----
+Health responses must not include secret values.
 
-### POST /optimize
+## Portfolio optimization
 
-Main endpoint. Runs the full pipeline:
-stock data → news → sentiment → optimization → risk → LLM recommendations.
+### `POST /optimize`
 
-**Request Body:**
+Runs the quantitative analysis and, when enabled, news sentiment and grounded recommendation stages.
+
+Example request:
+
 ```json
 {
   "tickers": ["AAPL", "MSFT", "GOOGL"],
   "current_weights": {
-    "AAPL": 0.40,
-    "MSFT": 0.40,
-    "GOOGL": 0.20
+    "AAPL": 0.4,
+    "MSFT": 0.35,
+    "GOOGL": 0.25
   },
-  "period": "6mo",
-  "risk_free_rate": 0.05
+  "period": "1y",
+  "risk_free_rate": 0.05,
+  "use_news": true,
+  "use_llm": true
 }
 ```
 
-**Request Fields:**
+Suggested validation rules:
 
-| Field | Type | Required | Default | Description |
-|---|---|---|---|---|
-| tickers | list[str] | Yes | — | Stock symbols. Min 2, Max 10 |
-| current_weights | dict | No | null | Current allocation. Must sum to 1.0 |
-| period | str | No | "6mo" | History period: 1mo, 3mo, 6mo, 1y, 2y |
-| risk_free_rate | float | No | 0.05 | Annual risk-free rate (5% default) |
+| Field | Type | Required | Rule |
+| --- | --- | --- | --- |
+| `tickers` | `string[]` | Yes | Normalized, unique symbols; enforce a safe maximum |
+| `current_weights` | object | No | Non-negative values that sum approximately to `1.0` |
+| `period` | string | No | Supported historical window such as `6mo` or `1y` |
+| `risk_free_rate` | number | No | Annual decimal rate within an allowed range |
+| `use_news` | boolean | No | Enables external news retrieval |
+| `use_llm` | boolean | No | Enables Groq recommendation generation |
 
-**Response:**
+Example response shape:
+
 ```json
 {
+  "tickers": ["AAPL", "MSFT", "GOOGL"],
   "optimal_weights": {
-    "AAPL": 0.352,
-    "MSFT": 0.448,
-    "GOOGL": 0.200
+    "AAPL": 0.32,
+    "MSFT": 0.38,
+    "GOOGL": 0.3
   },
-  "expected_annual_return": 14.2,
-  "annual_volatility": 18.5,
-  "sharpe_ratio": 1.43,
-  "rebalancing_actions": [
-    {
-      "ticker": "AAPL",
-      "current_weight": 40.0,
-      "optimal_weight": 35.2,
-      "change": -4.8,
-      "action": "SELL"
-    },
-    {
-      "ticker": "MSFT",
-      "current_weight": 40.0,
-      "optimal_weight": 44.8,
-      "change": 4.8,
-      "action": "BUY"
-    },
-    {
-      "ticker": "GOOGL",
-      "current_weight": 20.0,
-      "optimal_weight": 20.0,
-      "change": 0.0,
-      "action": "HOLD"
-    }
-  ],
-  "recommendations": {
-    "AAPL": "Strong positive sentiment driven by iPhone 15 cycle and services growth. Quantitative optimization suggests slight reduction from current 40% to 35.2%. Recommend REDUCE.",
-    "MSFT": "Neutral-to-positive sentiment with Azure cloud growth offsetting AI investment concerns. Optimization suggests increasing weight to 44.8%. Recommend BUY.",
-    "GOOGL": "Mixed sentiment around ad revenue recovery and Gemini competition. Current weight of 20% aligns with optimal. Recommend HOLD."
+  "expected_annual_return": 0.14,
+  "annual_volatility": 0.19,
+  "sharpe_ratio": 0.74,
+  "sentiment_scores": {
+    "AAPL": 0.18,
+    "MSFT": 0.11,
+    "GOOGL": -0.04
   },
+  "recommendations": {},
   "risk_report": {
-    "volatility_by_stock": {
-      "AAPL": 22.1,
-      "MSFT": 18.3,
-      "GOOGL": 24.7
-    },
-    "value_at_risk": {
-      "var_percentage": 1.83,
-      "var_amount": 1830.0,
-      "confidence_level": 0.95,
-      "interpretation": "With 95% confidence, maximum daily loss is 1.83% (₹1,830 on ₹1,00,000 portfolio)"
-    },
-    "max_drawdown": {
-      "max_drawdown_percentage": 24.5,
-      "interpretation": "Worst historical decline from peak: 24.5%"
-    },
-    "correlation_matrix": {
-      "AAPL": {"AAPL": 1.0, "MSFT": 0.82, "GOOGL": 0.75},
-      "MSFT": {"AAPL": 0.82, "MSFT": 1.0, "GOOGL": 0.79},
-      "GOOGL": {"AAPL": 0.75, "MSFT": 0.79, "GOOGL": 1.0}
-    }
-  }
-}
-```
-
-**Response Fields:**
-
-| Field | Type | Description |
-|---|---|---|
-| optimal_weights | dict | Optimized portfolio weights (sum = 1.0) |
-| expected_annual_return | float | Expected annual return % |
-| annual_volatility | float | Annualized portfolio volatility % |
-| sharpe_ratio | float | Risk-adjusted return metric |
-| rebalancing_actions | list | BUY / SELL / HOLD per ticker |
-| recommendations | dict | LLM-generated explanation per ticker |
-| risk_report | dict | VaR, volatility, drawdown, correlation |
-
----
-
-### GET /sentiment/{ticker}
-
-Get FinBERT sentiment score for a stock based on recent news.
-
-**Request:**
-```
-GET /sentiment/AAPL
-```
-
-**Response:**
-```json
-{
-  "ticker": "AAPL",
-  "sentiment_score": 0.72,
-  "sentiment_label": "positive",
-  "article_count": 8
-}
-```
-
-**Sentiment Score Interpretation:**
-
-| Score Range | Label | Meaning |
-|---|---|---|
-| 0.10 to 1.0 | positive | Majority of news is favorable |
-| -0.10 to 0.10 | neutral | Mixed or no clear sentiment |
-| -1.0 to -0.10 | negative | Majority of news is unfavorable |
-
----
-
-### GET /news/{ticker}
-
-Get recent news articles for a stock ticker.
-
-**Request:**
-```
-GET /news/MSFT?days_back=7
-```
-
-**Query Parameters:**
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| days_back | int | 7 | How many days of news to fetch |
-
-**Response:**
-```json
-[
-  {
-    "ticker": "MSFT",
-    "title": "Microsoft Azure reports 28% revenue growth in Q3",
-    "description": "Microsoft's cloud division Azure grew 28% year-over-year, beating analyst estimates of 26% growth.",
-    "url": "https://reuters.com/...",
-    "published_at": "2025-04-30T10:00:00Z",
-    "source": "Reuters",
-    "text": "Microsoft Azure reports 28% revenue growth in Q3. Microsoft's cloud division Azure grew 28% year-over-year..."
+    "value_at_risk_95": -0.021,
+    "maximum_drawdown": -0.24,
+    "correlation_matrix": {}
   },
-  {
-    "ticker": "MSFT",
-    "title": "Microsoft Copilot adoption accelerates among enterprise customers",
-    "description": "...",
-    "url": "https://...",
-    "published_at": "2025-04-29T14:30:00Z",
-    "source": "Bloomberg",
-    "text": "..."
-  }
-]
-```
-
----
-
-## Error Responses
-
-All errors follow this format:
-```json
-{
-  "detail": "Error message explaining what went wrong"
+  "warnings": []
 }
 ```
 
-**Error Codes:**
+The numeric values above illustrate the schema only. They are not expected returns or investment recommendations.
 
-| Code | Meaning | Common Cause |
-|---|---|---|
-| 200 | Success | — |
-| 400 | Bad Request | Invalid ticker, weights don't sum to 1 |
-| 404 | Not Found | Ticker not found on Yahoo Finance |
-| 429 | Too Many Requests | NewsAPI rate limit hit (100/day free) |
-| 500 | Internal Server Error | Check server logs |
-| 501 | Not Implemented | Module not yet built |
+Python example:
 
----
-
-## Example Usage
-
-### Python (requests)
 ```python
 import requests
 
+payload = {
+    "tickers": ["AAPL", "MSFT", "GOOGL"],
+    "period": "1y",
+    "risk_free_rate": 0.05,
+    "use_news": True,
+    "use_llm": False,
+}
+
 response = requests.post(
     "http://localhost:8000/optimize",
-    json={
-        "tickers": ["AAPL", "MSFT", "GOOGL"],
-        "current_weights": {"AAPL": 0.4, "MSFT": 0.4, "GOOGL": 0.2},
-        "period": "6mo",
-        "risk_free_rate": 0.05
-    }
+    json=payload,
+    timeout=120,
 )
-
-result = response.json()
-print("Optimal weights:", result["optimal_weights"])
-print("Sharpe ratio:", result["sharpe_ratio"])
-for ticker, rec in result["recommendations"].items():
-    print(f"\n{ticker}: {rec}")
+response.raise_for_status()
+print(response.json())
 ```
 
-### curl
+## Sentiment endpoint
+
+### `GET /sentiment/{ticker}`
+
+When implemented, returns aggregated FinBERT sentiment for recent relevant articles.
+
 ```bash
-curl -X POST "http://localhost:8000/optimize" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tickers": ["AAPL", "MSFT"],
-    "period": "6mo"
-  }'
+curl -fsS http://localhost:8000/sentiment/AAPL
 ```
 
-### JavaScript (fetch)
-```javascript
-const response = await fetch('http://localhost:8000/optimize', {
-  method: 'POST',
-  headers: {'Content-Type': 'application/json'},
-  body: JSON.stringify({
-    tickers: ['AAPL', 'MSFT', 'GOOGL'],
-    period: '6mo'
-  })
-});
-const data = await response.json();
-console.log(data.optimal_weights);
+Example response shape:
+
+```json
+{
+  "ticker": "AAPL",
+  "sentiment_score": 0.18,
+  "sentiment_label": "neutral",
+  "article_count": 12,
+  "generated_at": "2026-09-01T19:10:20Z"
+}
 ```
 
----
+Sentiment is a model output, not a verified statement about future price movement.
 
-## Rate Limits
+## News endpoint
 
-| Source | Limit | Notes |
-|---|---|---|
-| NewsAPI (free) | 100 requests/day | 1 request/ticker/call |
-| OpenAI GPT-4 | Depends on plan | ~$0.03/1K tokens |
-| OpenAI GPT-3.5 | Depends on plan | ~$0.001/1K tokens (use for testing) |
-| yfinance | No hard limit | Avoid hammering — cache results |
-| This API | No limit | Single-user demo |
+### `GET /news/{ticker}`
+
+When implemented, returns recent deduplicated news metadata.
+
+```bash
+curl -fsS "http://localhost:8000/news/AAPL?days_back=7"
+```
+
+Do not return provider API keys, full copyrighted article bodies, or unsafe HTML.
+
+## Error format
+
+FastAPI normally returns validation errors in its standard `detail` field. Application errors should also include a stable machine-readable code.
+
+```json
+{
+  "detail": "No market data was returned for one or more symbols.",
+  "code": "MARKET_DATA_UNAVAILABLE",
+  "request_id": "request-id"
+}
+```
+
+| HTTP status | Meaning |
+| --- | --- |
+| `400` | Invalid business input |
+| `401` | Authentication required or invalid |
+| `403` | Authenticated caller lacks access |
+| `404` | Portfolio, run, or ticker resource not found |
+| `422` | Request schema validation failed |
+| `429` | Application or provider rate limit exceeded |
+| `502` | Upstream market, news, or LLM provider failed |
+| `503` | Optional model/service temporarily unavailable |
+| `500` | Unexpected server error |
+
+## Provider failures and fallback
+
+The API should preserve quantitative output when optional services fail:
+
+- market-price failure: stop or exclude affected symbols with a clear warning
+- news failure: continue without fresh sentiment
+- FinBERT failure: continue with quantitative-only allocation
+- FAISS failure: skip retrieval and do not claim grounded generation
+- Groq failure: return deterministic fallback text and preserve risk results
+
+## Rate limits
+
+Provider quotas change by account and plan. Do not hard-code public promises such as “100 requests per day” without checking the active provider terms.
+
+Recommended controls:
+
+- cache safe market/news responses
+- use request timeouts and bounded retries
+- add per-user and global rate limits
+- return `Retry-After` when appropriate
+- monitor provider error rate, latency, and spend
+
+## Versioning
+
+If the API becomes public, introduce an explicit prefix such as `/api/v1` before clients depend on it. Breaking schema changes should create a new version or a documented migration period.
+
+## Contract verification
+
+Export the real schema from the running service:
+
+```bash
+curl -fsS http://localhost:8000/openapi.json -o openapi.json
+```
+
+Compare this document with `openapi.json` during CI. Do not document routes or fields that are absent from the generated schema.
