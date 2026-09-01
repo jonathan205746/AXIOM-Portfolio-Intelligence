@@ -75,6 +75,7 @@ The platform uses FinBERT for financial sentiment analysis, FAISS for semantic r
   - [Optional API service](#optional-api-service)
   - [Database and persistence](#database-and-persistence)
   - [Testing](#testing)
+  - [Verified walk-forward backtest](#verified-walk-forward-backtest)
   - [Security notes](#security-notes)
   - [Known limitations](#known-limitations)
   - [Roadmap](#roadmap)
@@ -326,8 +327,6 @@ AI-Powered-Portfolio-Optimizer/
 │   ├── aws/
 │   │   ├── README.md
 │   │   └── ec2-stack.yaml
-│   └── ec2/
-│       └── README.md
 ├── docs/
 │   ├── api_reference.md
 │   ├── architecture.md
@@ -522,7 +521,6 @@ Deployment resources:
 
 - [CloudFormation template](deploy/aws/ec2-stack.yaml)
 - [AWS deployment guide](deploy/aws/README.md)
-- [EC2 operations guide](deploy/ec2/README.md)
 
 ### Validate the CloudFormation template
 
@@ -672,6 +670,42 @@ Recommended test coverage includes:
 - report generation and HTML escaping
 - Docker health checks
 
+## Verified walk-forward backtest
+
+A reproducible price-only walk-forward backtest evaluates the quantitative optimizer, monthly equal weight, and the S&P 500 benchmark from 4 January 2021 through 31 December 2025.
+
+Configuration:
+
+- assets: `AAPL`, `MSFT`, `GOOGL`, `AMZN`, `META`
+- benchmark: `^GSPC`
+- lookback: 252 trading days
+- rebalance frequency: monthly
+- annual risk-free rate: 5%
+- weight range: 2% minimum and 35% maximum
+- transaction cost: 15 basis points per traded notional
+
+| Metric | AXIOM combined | Quantitative only | Equal weight | Benchmark |
+| --- | ---: | ---: | ---: | ---: |
+| CAGR | Not measured* | 16.83% | 20.59% | 13.12% |
+| Annualized volatility | Not measured* | 26.51% | 26.76% | 16.96% |
+| Sharpe ratio | Not measured* | 0.531 | 0.648 | 0.519 |
+| Sortino ratio | Not measured* | 0.790 | 0.909 | 0.712 |
+| Maximum drawdown | Not measured* | -39.63% | -46.55% | -25.43% |
+| Annual turnover | Not measured* | 174.27% | 25.04% | N/A |
+| Transaction-cost drag | Not measured* | 3.84% | 0.55% | 0.00% |
+
+*AXIOM combined is not measured because the repository does not yet contain a point-in-time historical news and sentiment dataset. Current news must not be used to simulate past decisions.*
+
+Equal weighting produced the strongest CAGR and Sharpe ratio for this concentrated large-cap technology universe. Quantitative MPT reduced maximum drawdown relative to equal weight but generated materially higher turnover and transaction costs. The diversified S&P 500 benchmark produced the lowest volatility and drawdown.
+
+Annual turnover uses the standard one-way definition:
+
+`turnover = 0.5 × Σ |target weight − pre-trade weight|`
+
+Transaction costs use the complete traded notional across purchases and sales. See [backtesting.md](backtesting.md) for methodology, limitations, and reproducibility requirements.
+
+> Historical performance does not guarantee future results. The backtest is provided for research and educational use only.
+
 ## Security notes
 
 - Never commit `.env`, `.pem`, access keys, or API keys.
@@ -720,7 +754,6 @@ Additional documentation is available in:
 - [Architecture overview](docs/architecture.md)
 - [API reference](docs/api_reference.md)
 - [AWS deployment guide](deploy/aws/README.md)
-- [EC2 operations guide](deploy/ec2/README.md)
 
 ## Contributing
 

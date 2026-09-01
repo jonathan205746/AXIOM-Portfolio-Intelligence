@@ -67,10 +67,6 @@ future. They show that:
 5. a concentrated technology universe is not directly comparable with the
    diversified S&P 500 without acknowledging the universe difference.
 
-The AXIOM combined strategy remains unmeasured because a point-in-time
-historical financial-news dataset is not currently available. Using current
-NewsAPI results to simulate historical sentiment would introduce look-ahead
-bias.
 
 
 *AXIOM combined is not measured because the repository does not yet contain a point-in-time historical news/sentiment dataset. Current news must not be used to simulate past decisions.*
