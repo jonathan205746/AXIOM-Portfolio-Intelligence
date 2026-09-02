@@ -2,11 +2,20 @@
 Axiom Report Generator v2.1
 Self-contained HTML reports in institutional glassmorphic aesthetic.
 """
-import pandas as pd
-import plotly.graph_objects as go
-import plotly.express as px
 from datetime import datetime
+from html import escape
+
+import bleach
+import markdown
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+
 from src.optimization.health_score import HealthScoreEngine
+from src.utils.sentiment import (
+    SentimentLabel,
+    classify_sentiment,
+)
 
 
 def _get_action(ticker: str, final_weights: dict, weight_changes: dict) -> str:
@@ -21,6 +30,68 @@ def _get_action(ticker: str, final_weights: dict, weight_changes: dict) -> str:
         return "SELL"
     return "HOLD"
 
+
+ALLOWED_AI_HTML_TAGS = [
+    "p",
+    "strong",
+    "em",
+    "ul",
+    "ol",
+    "li",
+    "br",
+]
+
+
+def render_ai_commentary(commentary: str) -> str:
+    """Convert AI Markdown to a small, sanitized HTML subset."""
+
+    converted = markdown.markdown(
+        commentary or "",
+        extensions=[],
+    )
+
+    return bleach.clean(
+        converted,
+        tags=ALLOWED_AI_HTML_TAGS,
+        attributes={},
+        protocols=[],
+        strip=True,
+    )
+
+
+def get_report_sentiment(
+    score: float | None,
+    colors: dict,
+) -> tuple[str, str, str, int]:
+    """Return canonical label, color, display score and bar width."""
+
+    sentiment = classify_sentiment(score)
+
+    color_by_label = {
+        SentimentLabel.POSITIVE: colors["green"],
+        SentimentLabel.NEGATIVE: colors["red"],
+        SentimentLabel.NEUTRAL: colors["text_secondary"],
+        SentimentLabel.INSUFFICIENT_EVIDENCE: colors["amber"],
+    }
+
+    if score is None:
+        return (
+            sentiment.value,
+            color_by_label[sentiment],
+            "N/A",
+            50,
+        )
+
+    numeric_score = float(score)
+    bar_width = int((numeric_score + 1.0) / 2.0 * 100)
+    bar_width = max(0, min(100, bar_width))
+
+    return (
+        sentiment.value,
+        color_by_label[sentiment],
+        f"{numeric_score:+.3f}",
+        bar_width,
+    )
 
 def generate_axiom_report(portfolio, results, display_names):
     """Generate a self-contained HTML report in Axiom glassmorphic style."""
@@ -141,10 +212,11 @@ def generate_axiom_report(portfolio, results, display_names):
     # ── Sentiment Rows ────────────────────────────────────────
     sentiment_rows = []
     for t in available:
-        score = sentiment_scores.get(t, 0)
-        label = "POSITIVE" if score >= 0.05 else ("NEGATIVE" if score <= -0.05 else "NEUTRAL")
-        color = C["green"] if score >= 0.05 else (C["red"] if score <= -0.05 else C["text_secondary"])
-        bar_width = int((score + 1) / 2 * 100)
+        score = sentiment_scores.get(t)
+        label, color, score_text, bar_width = get_report_sentiment(
+        score,
+        C,
+         )
         sentiment_rows.append(f"""
         <tr>
             <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};color:{C['text_primary']};font-weight:600;font-family:'Inter',sans-serif;">{display_names.get(t, t)}</td>
@@ -153,7 +225,7 @@ def generate_axiom_report(portfolio, results, display_names):
                     <div style="background:linear-gradient(90deg, {color}, {color}80);height:100%;width:{bar_width}%;border-radius:3px;box-shadow:0 0 8px {color}40;"></div>
                 </div>
             </td>
-            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{color};font-weight:700;font-family:'JetBrains Mono',monospace;">{score:+.3f}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{color};font-weight:700;font-family:'JetBrains Mono',monospace;">{score_text}</td>
             <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{color};font-size:0.75rem;font-weight:600;">{label}</td>
         </tr>""")
     sentiment_html = "\n".join(sentiment_rows)
@@ -174,39 +246,74 @@ def generate_axiom_report(portfolio, results, display_names):
     rec_parts = []
     if recommendations:
         for rec in recommendations:
-            t = rec.get("ticker", "")
-            score = rec.get("sentiment_score", 0)
-            label = rec.get("sentiment_label", "NEUTRAL")
-            weight_pct = rec.get("portfolio_weight_pct", "0")
-            text = rec.get("recommendation", "")
-            color = C["green"] if score >= 0.05 else (C["red"] if score <= -0.05 else C["text_secondary"])
-            glow = "rgba(16,185,129,0.08)" if score >= 0.05 else ("rgba(244,63,94,0.08)" if score <= -0.05 else "rgba(255,255,255,0.02)")
-            rec_parts.append(f"""
+          ticker = rec.get("ticker", "")
+          score = rec.get("sentiment_score")
+          label, color, score_text, _ = get_report_sentiment(
+            score,
+            C,
+          )
+
+          optimizer_weight_pct = escape(
+            str(rec.get("portfolio_weight_pct", "N/A"))
+          ) 
+          commentary_html = render_ai_commentary(
+            str(rec.get("recommendation", ""))
+          )
+
+          glow_by_label = {
+            SentimentLabel.POSITIVE.value: "rgba(16,185,129,0.08)",
+            SentimentLabel.NEGATIVE.value: "rgba(244,63,94,0.08)",
+            SentimentLabel.NEUTRAL.value: "rgba(255,255,255,0.02)",
+            SentimentLabel.INSUFFICIENT_EVIDENCE.value: (
+              "rgba(245,158,11,0.08)"
+            ),
+          }
+          glow = glow_by_label[label]
+          rec_parts.append(f"""
             <div style="margin-bottom:12px;padding:14px;background:{glow};border:1px solid {C['border_subtle']};border-left:3px solid {color};border-radius:0 12px 12px 0;transition:all 0.2s ease;"
             >
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                    <span style="font-size:0.85rem;font-weight:700;color:{C['text_primary']};font-family:'Inter',sans-serif;">{display_names.get(t, t)}</span>
+                    <span style="font-size:0.85rem;font-weight:700;color:{C['text_primary']};font-family:'Inter',sans-serif;">{escape(str(display_names.get(ticker, ticker)))}</span>
                     <span style="background:{color}15;color:{color};padding:2px 8px;border-radius:6px;font-size:0.65rem;font-weight:700;letter-spacing:0.04em;">{label}</span>
                 </div>
                 <div style="font-size:0.75rem;color:{C['text_secondary']};margin-bottom:4px;">
-                    Weight: <strong style="color:{C['text_primary']};font-family:'JetBrains Mono',monospace;">{weight_pct}%</strong> · 
-                    Sentiment: <strong style="color:{color};font-family:'JetBrains Mono',monospace;">{score:+.3f}</strong>
+                    Optimizer target:<strong style="color:{C['text_primary']};font-family:'JetBrains Mono',monospace;">{optimizer_weight_pct}%%</strong> · 
+                    Sentiment: <strong style="color:{color};font-family:'JetBrains Mono',monospace;">{score_text}</strong>
                 </div>
-                <div style="font-size:0.78rem;color:{C['text_secondary']};line-height:1.6;">{text}</div>
+                <div style="font-size:0.78rem;color:{C['text_secondary']};line-height:1.6;">{commentary_html}</div>
             </div>""")
-    rec_html = "\n".join(rec_parts) if rec_parts else f'<div style="color:{C["text_tertiary"]};font-size:0.8rem;padding:12px;">No LLM recommendations generated</div>'
+    rec_html = (
+      "\n".join(rec_parts)
+      if rec_parts
+        else (
+          f'<div style="color:{C["text_tertiary"]};'
+          'font-size:0.8rem;padding:12px;">'
+          "AI research commentary was not generated. "
+          "Quantitative results remain available."
+          "</div>"
+        )
+      )
 
     # ── News ──────────────────────────────────────────────────
-    news_parts = []
-    for t in available:
-        articles = all_news.get(t, [])
-        if articles:
-            news_parts.append(f'<div style="margin-bottom:14px;"><div style="font-size:0.78rem;font-weight:700;color:{C["accent"]};margin-bottom:6px;font-family:\'Inter\',sans-serif;">{display_names.get(t, t)} — {len(articles)} articles</div>')
-            for a in articles[:5]:
-                news_parts.append(f'<div style="font-size:0.74rem;color:{C["text_secondary"]};padding:3px 0;border-bottom:1px solid {C["border_subtle"]};">• {a.get("title", "")}</div>')
-            news_parts.append('</div>')
-    news_html = "\n".join(news_parts) if news_parts else f'<div style="color:{C["text_tertiary"]};font-size:0.75rem;">No news data</div>'
+    news_parts.append(
+      f'<div style="margin-bottom:14px;">'
+      f'<div style="font-size:0.78rem;font-weight:700;'
+      f'color:{C["accent"]};margin-bottom:6px;'
+      f'font-family:\'Inter\',sans-serif;">'
+      f'{escape(str(display_names.get(t, t)))} '
+      f'— {len(articles)} articles</div>'
+    )
 
+    for article in articles[:5]:
+      title = escape(str(article.get("title", "")))
+      news_parts.append(
+        f'<div style="font-size:0.74rem;'
+        f'color:{C["text_secondary"]};padding:3px 0;'
+        f'border-bottom:1px solid {C["border_subtle"]};">'
+        f'• {title}</div>'
+    )
+
+    news_parts.append("</div>")
     # ── Charts ────────────────────────────────────────────────
     frontier_div = ""
     frontier_fig = None
@@ -678,20 +785,24 @@ def generate_axiom_report(portfolio, results, display_names):
     <div class="panel-body">{news_html}</div>
   </div>
 
-  <!-- AI Recommendations -->
+  <!-- AI Research Commentary  -->
   <div class="panel animate-in">
     <div class="panel-header violet">
-      <span class="panel-title violet">◉ AI Recommendations</span>
-      <span class="panel-sub">GROQ LLAMA 3.3 70B</span>
+      <span class="panel-title violet">◉ AI Research Commentary</span>
+      <span class="panel-sub">CONFIGURED GROQ MODEL</span>
     </div>
     <div class="panel-body">{rec_html}</div>
   </div>
 
   <!-- Disclaimer -->
   <div class="disclaimer animate-in">
-    <strong>DISCLAIMER:</strong> This report is generated by an AI-powered portfolio optimization system for informational purposes only. 
-    It does not constitute investment advice. Past performance does not guarantee future results. 
-    All metrics are based on historical data and statistical models. Consult a qualified financial advisor before making investment decisions.<br><br>
+    <strong>DISCLAIMER:</strong>
+      AXIOM is provided for research and educational purposes only and
+      does not constitute financial, investment, tax, or legal advice.
+      Market data, news, sentiment, model outputs, and generated commentary
+      may be incomplete, delayed, or inaccurate. Historical performance
+      does not guarantee future results. Consult a qualified professional
+      before making financial decisions.<br><br>
     <span style="color:{C['text_tertiary']};font-family:'JetBrains Mono',monospace;">
       AXIOM Portfolio Intelligence v2.1 · Generated {gen_str}
     </span>
