@@ -103,7 +103,11 @@ TICKER_TO_COMPANY = {
     "SQ": "Block",
     "HOOD": "Robinhood",
 }
-# NewsAPI query contract.
+
+# Alternative company names commonly used in financial headlines.
+# These aliases improve relevance filtering without changing the
+# NewsAPI response schema.
+
 TICKER_ALIASES = {
     "GOOGL": ("Alphabet", "Google", "YouTube", "Waymo"),
     "GOOG": ("Alphabet", "Google", "YouTube", "Waymo"),
@@ -149,7 +153,10 @@ def get_ticker_aliases(
     """Return normalized aliases used to validate article relevance."""
 
     canonical_ticker = ticker.upper().strip()
-    aliases = list(TICKER_ALIASES.get(canonical_ticker, ()))
+
+    aliases = list(
+        TICKER_ALIASES.get(canonical_ticker, ())
+    )
 
     resolved_company = (
         company_name
@@ -165,11 +172,13 @@ def get_ticker_aliases(
     if len(ticker_without_exchange) >= 3:
         aliases.append(ticker_without_exchange)
 
-    normalized_aliases = {
-        normalize_news_text(alias)
-        for alias in aliases
-        if normalize_news_text(alias)
-    }
+    normalized_aliases = set()
+
+    for alias in aliases:
+        normalized_alias = normalize_news_text(alias)
+
+        if normalized_alias:
+            normalized_aliases.add(normalized_alias)
 
     return tuple(
         sorted(
