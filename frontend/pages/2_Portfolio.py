@@ -108,10 +108,8 @@ def get_fx_rate(source_currency: str, target_currency: str, rate_date=None) -> f
             start=requested - timedelta(days=5),
             end=requested + timedelta(days=6),
         )
-    if history.empty:
-        raise RuntimeError(f"FX rate unavailable for {source}/{target}")
-    closes = history["Close"].dropna()
-    if closes.empty:
+    closes = history["Close"].dropna() if not history.empty else []
+    if len(closes) == 0:
         raise RuntimeError(f"FX rate unavailable for {source}/{target}")
     if rate_date is None:
         usd_to_inr = float(closes.iloc[-1])
@@ -121,6 +119,8 @@ def get_fx_rate(source_currency: str, target_currency: str, rate_date=None) -> f
         usd_to_inr = float(
             on_or_after.iloc[0] if len(on_or_after) else closes.iloc[-1]
         )
+    if not math.isfinite(usd_to_inr) or usd_to_inr <= 0:
+        raise RuntimeError("USD/INR provider returned an invalid rate")
     return usd_to_inr if source == "USD" else 1.0 / usd_to_inr
 
 def convert_money(amount: float, source: str, target: str, rate_date=None) -> float:
@@ -128,9 +128,18 @@ def convert_money(amount: float, source: str, target: str, rate_date=None) -> fl
 
 def get_current_price(yf_ticker: str):
     try:
-        data = yf.Ticker(yf_ticker).history(period="2d")
-        if not data.empty:
-            return float(data["Close"].iloc[-1])
+        data = yf.Ticker(yf_ticker).history(
+            period="5d", auto_adjust=False, timeout=15
+        )
+        if data.empty or "Close" not in data:
+            return None
+        closes = data["Close"].dropna()
+        if closes.empty:
+            return None
+        price = float(closes.iloc[-1])
+        if not math.isfinite(price) or price <= 0:
+            return None
+        return price
     except Exception:
         pass
     return None
@@ -292,9 +301,6 @@ with st.form("add_holding_form", clear_on_submit=True, enter_to_submit=False):
             for error in errors:
                 st.error(error)
         else:
-            # Validation guarantees these required fields are populated, but
-            # Streamlit's number_input typing still exposes them as optional.
-            assert quantity is not None and buy_price is not None
             valid, err_msg = validate_ticker(ticker_input)
             if not valid:
                 st.error(err_msg)
@@ -330,11 +336,14 @@ total_invested = 0.0
 total_current = 0.0
 prices_map = {}
 fx_errors = []
+market_data_errors = []
 
 with st.spinner("Fetching prices and FX rates..."):
     for h in holdings:
         current_price = get_current_price(h["ticker"])
         prices_map[h["ticker"]] = current_price
+        if current_price is None:
+            market_data_errors.append(h["ticker"])
         quote_currency = market_currency(h["ticker"], h["exchange"])
         buy_currency = (h.get("buy_currency") or quote_currency).upper()
         invested_native = h["quantity"] * h["buy_price"]
@@ -386,6 +395,14 @@ if fx_errors:
     st.warning(
         "Some positions could not be converted and are excluded from totals:\n\n- "
         + "\n- ".join(fx_errors)
+    )
+
+if market_data_errors:
+    st.warning(
+        "Live prices are temporarily unavailable for: "
+        + ", ".join(sorted(set(market_data_errors)))
+        + ". Their value, P&L, and allocation are shown as N/A until valid "
+          "market data is returned."
     )
 
 st.markdown("""
