@@ -159,7 +159,7 @@ class SentimentAnalyzer:
 
         # Use the shared AXIOM sentiment classification policy.
         # Keep the model-service response lowercase for backward compatibility.
-        label = classify_sentiment(score).lower()
+        label = classify_sentiment(score).value.lower()
 
         return {
             "score": score,

@@ -183,7 +183,7 @@ class RAGPipeline:
             "sentiment_label": sentiment_label,
             "portfolio_weight_pct": weight_pct,
             "recommendation": recommendation_text,
-       }
+        }
 
     def generate_portfolio_summary(self, recommendations: list) -> str:
         """Overall portfolio summary from all ticker recommendations."""
