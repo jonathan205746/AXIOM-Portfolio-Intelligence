@@ -214,9 +214,9 @@ def generate_axiom_report(portfolio, results, display_names):
     for t in available:
         score = sentiment_scores.get(t)
         label, color, score_text, bar_width = get_report_sentiment(
-        score,
-        C,
-         )
+          score,
+          C,
+        )
         sentiment_rows.append(f"""
         <tr>
             <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};color:{C['text_primary']};font-weight:600;font-family:'Inter',sans-serif;">{display_names.get(t, t)}</td>
@@ -243,77 +243,171 @@ def generate_axiom_report(portfolio, results, display_names):
     risk_html = "\n".join(risk_rows)
 
     # ── Recommendations ───────────────────────────────────────
+        # ── AI Research Commentary ─────────────────────────────────
     rec_parts = []
+
     if recommendations:
         for rec in recommendations:
-          ticker = rec.get("ticker", "")
-          score = rec.get("sentiment_score")
-          label, color, score_text, _ = get_report_sentiment(
-            score,
-            C,
-          )
+            ticker = rec.get("ticker", "")
+            score = rec.get("sentiment_score")
 
-          optimizer_weight_pct = escape(
-            str(rec.get("portfolio_weight_pct", "N/A"))
-          ) 
-          commentary_html = render_ai_commentary(
-            str(rec.get("recommendation", ""))
-          )
+            label, color, score_text, _ = get_report_sentiment(
+                score,
+                C,
+            )
 
-          glow_by_label = {
-            SentimentLabel.POSITIVE.value: "rgba(16,185,129,0.08)",
-            SentimentLabel.NEGATIVE.value: "rgba(244,63,94,0.08)",
-            SentimentLabel.NEUTRAL.value: "rgba(255,255,255,0.02)",
-            SentimentLabel.INSUFFICIENT_EVIDENCE.value: (
-              "rgba(245,158,11,0.08)"
-            ),
-          }
-          glow = glow_by_label[label]
-          rec_parts.append(f"""
-            <div style="margin-bottom:12px;padding:14px;background:{glow};border:1px solid {C['border_subtle']};border-left:3px solid {color};border-radius:0 12px 12px 0;transition:all 0.2s ease;"
-            >
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                    <span style="font-size:0.85rem;font-weight:700;color:{C['text_primary']};font-family:'Inter',sans-serif;">{escape(str(display_names.get(ticker, ticker)))}</span>
-                    <span style="background:{color}15;color:{color};padding:2px 8px;border-radius:6px;font-size:0.65rem;font-weight:700;letter-spacing:0.04em;">{label}</span>
+            optimizer_weight_pct = escape(
+                str(rec.get("portfolio_weight_pct", "N/A"))
+            )
+            commentary_html = render_ai_commentary(
+                str(rec.get("recommendation", ""))
+            )
+
+            glow_by_label = {
+                SentimentLabel.POSITIVE.value: (
+                    "rgba(16,185,129,0.08)"
+                ),
+                SentimentLabel.NEGATIVE.value: (
+                    "rgba(244,63,94,0.08)"
+                ),
+                SentimentLabel.NEUTRAL.value: (
+                    "rgba(255,255,255,0.02)"
+                ),
+                SentimentLabel.INSUFFICIENT_EVIDENCE.value: (
+                    "rgba(245,158,11,0.08)"
+                ),
+            }
+            glow = glow_by_label[label]
+
+            ticker_name = escape(
+                str(display_names.get(ticker, ticker))
+            )
+
+            rec_parts.append(
+                f"""
+                <div style="
+                    margin-bottom:12px;
+                    padding:14px;
+                    background:{glow};
+                    border:1px solid {C['border_subtle']};
+                    border-left:3px solid {color};
+                    border-radius:0 12px 12px 0;
+                ">
+                    <div style="
+                        display:flex;
+                        justify-content:space-between;
+                        align-items:center;
+                        margin-bottom:6px;
+                    ">
+                        <span style="
+                            font-size:0.85rem;
+                            font-weight:700;
+                            color:{C['text_primary']};
+                            font-family:'Inter',sans-serif;
+                        ">
+                            {ticker_name}
+                        </span>
+                        <span style="
+                            background:{color}15;
+                            color:{color};
+                            padding:2px 8px;
+                            border-radius:6px;
+                            font-size:0.65rem;
+                            font-weight:700;
+                        ">
+                            {label}
+                        </span>
+                    </div>
+                    <div style="
+                        font-size:0.75rem;
+                        color:{C['text_secondary']};
+                        margin-bottom:4px;
+                    ">
+                        Optimizer target:
+                        <strong style="
+                            color:{C['text_primary']};
+                            font-family:'JetBrains Mono',monospace;
+                        ">
+                            {optimizer_weight_pct}%
+                        </strong>
+                        · Sentiment:
+                        <strong style="
+                            color:{color};
+                            font-family:'JetBrains Mono',monospace;
+                        ">
+                            {score_text}
+                        </strong>
+                    </div>
+                    <div style="
+                        font-size:0.78rem;
+                        color:{C['text_secondary']};
+                        line-height:1.6;
+                    ">
+                        {commentary_html}
+                    </div>
                 </div>
-                <div style="font-size:0.75rem;color:{C['text_secondary']};margin-bottom:4px;">
-                    Optimizer target:<strong style="color:{C['text_primary']};font-family:'JetBrains Mono',monospace;">{optimizer_weight_pct}%%</strong> · 
-                    Sentiment: <strong style="color:{color};font-family:'JetBrains Mono',monospace;">{score_text}</strong>
-                </div>
-                <div style="font-size:0.78rem;color:{C['text_secondary']};line-height:1.6;">{commentary_html}</div>
-            </div>""")
-    rec_html = (
-      "\n".join(rec_parts)
-      if rec_parts
-        else (
-          f'<div style="color:{C["text_tertiary"]};'
-          'font-size:0.8rem;padding:12px;">'
-          "AI research commentary was not generated. "
-          "Quantitative results remain available."
-          "</div>"
+                """
+            )
+
+    if rec_parts:
+        rec_html = "\n".join(rec_parts)
+    else:
+        rec_html = (
+            f'<div style="color:{C["text_tertiary"]};'
+            'font-size:0.8rem;padding:12px;">'
+            "AI research commentary was not generated. "
+            "Quantitative results remain available."
+            "</div>"
         )
-      )
 
     # ── News ──────────────────────────────────────────────────
-    news_parts.append(
-      f'<div style="margin-bottom:14px;">'
-      f'<div style="font-size:0.78rem;font-weight:700;'
-      f'color:{C["accent"]};margin-bottom:6px;'
-      f'font-family:\'Inter\',sans-serif;">'
-      f'{escape(str(display_names.get(t, t)))} '
-      f'— {len(articles)} articles</div>'
-    )
+    news_parts = []
 
-    for article in articles[:5]:
-      title = escape(str(article.get("title", "")))
-      news_parts.append(
-        f'<div style="font-size:0.74rem;'
-        f'color:{C["text_secondary"]};padding:3px 0;'
-        f'border-bottom:1px solid {C["border_subtle"]};">'
-        f'• {title}</div>'
-    )
+    for ticker in available:
+        articles = all_news.get(ticker, [])
 
-    news_parts.append("</div>")
+        if not articles:
+            continue
+
+        ticker_name = escape(
+            str(display_names.get(ticker, ticker))
+        )
+
+        news_parts.append(
+            f'<div style="margin-bottom:14px;">'
+            f'<div style="font-size:0.78rem;font-weight:700;'
+            f'color:{C["accent"]};margin-bottom:6px;'
+            f'font-family:\'Inter\',sans-serif;">'
+            f"{ticker_name} — {len(articles)} articles"
+            "</div>"
+        )
+
+        for article in articles[:5]:
+            title = escape(
+                str(article.get("title", ""))
+            )
+
+            news_parts.append(
+                f'<div style="font-size:0.74rem;'
+                f'color:{C["text_secondary"]};padding:3px 0;'
+                f'border-bottom:1px solid '
+                f'{C["border_subtle"]};">'
+                f"• {title}"
+                "</div>"
+            )
+
+        news_parts.append("</div>")
+
+    if news_parts:
+        news_html = "\n".join(news_parts)
+    else:
+        news_html = (
+            f'<div style="color:{C["text_tertiary"]};'
+            'font-size:0.75rem;">'
+            "No ticker-specific news data is available."
+            "</div>"
+        )
+    
     # ── Charts ────────────────────────────────────────────────
     frontier_div = ""
     frontier_fig = None
