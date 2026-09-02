@@ -5,6 +5,7 @@ Holdings management with institutional terminal aesthetic.
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
+import math
 import streamlit as st
 import yfinance as yf
 from datetime import datetime, date
@@ -52,6 +53,34 @@ def normalize_ticker(ticker: str):
     if t.endswith(".NS"):
         return t, t.replace(".NS", ""), "IN"
     return t, t, "US"
+
+def market_currency(yf_ticker: str, exchange: str) -> str:
+    """Return the native quote currency used by the selected market."""
+    if exchange == "IN" or yf_ticker.upper().endswith((".NS", ".BO")):
+        return "INR"
+    return "USD"
+
+def validate_holding_input(
+    ticker: str,
+    quantity: float | None,
+    buy_price: float | None,
+) -> list[str]:
+    """Validate values again on the server before writing to SQLite."""
+    errors = []
+    if not (ticker or "").strip():
+        errors.append("Ticker is required.")
+    if quantity is None:
+        errors.append("Quantity is required.")
+    elif not math.isfinite(float(quantity)) or float(quantity) <= 0:
+        errors.append("Quantity must be greater than zero.")
+    if buy_price is None:
+        errors.append("Buy price is required.")
+    elif not math.isfinite(float(buy_price)) or float(buy_price) <= 0:
+        errors.append("Buy price must be greater than zero.")
+    return errors
+
+def currency_symbol(currency: str) -> str:
+    return {"INR": "₹", "USD": "$"}.get(currency, f"{currency} ")
 
 def get_current_price(yf_ticker: str):
     try:
@@ -192,27 +221,41 @@ st.markdown("""
 ">
 """, unsafe_allow_html=True)
 
-with st.form("add_holding_form", clear_on_submit=True):
+with st.form("add_holding_form", clear_on_submit=True, enter_to_submit=False):
     fc1, fc2, fc3, fc4, fc5 = st.columns([2, 1.5, 1.5, 1.5, 2])
     ticker_input = fc1.text_input("TICKER", placeholder="AAPL or TCS", key="add_ticker")
-    quantity = fc2.number_input("QTY", min_value=0.001, value=1.0, step=0.5, key="add_qty")
-    buy_price = fc3.number_input("BUY PRICE", min_value=0.01, value=100.0, key="add_price")
-    buy_currency = fc4.selectbox("CURR", ["USD", "INR"], key="add_curr")
+    quantity = fc2.number_input(
+        "QTY", min_value=0.001, max_value=1_000_000.0, value=None,
+        step=1.0, placeholder="Required", key="add_qty"
+    )
+    buy_price = fc3.number_input(
+        "BUY PRICE", min_value=0.01, max_value=100_000_000.0, value=None,
+        step=0.01, format="%.2f", placeholder="Required", key="add_price"
+    )
+    fc4.text_input(
+        "CURR", value="AUTO", disabled=True,
+        help="INR for NSE/BSE tickers and USD for US tickers.", key="add_curr_auto"
+    )
     buy_date_val = fc5.date_input("DATE", value=date.today(), key="add_date")
     
     submitted = st.form_submit_button("+ ADD HOLDING", use_container_width=True)
     if submitted:
-        if not ticker_input:
-            st.error("Ticker required")
+        errors = validate_holding_input(ticker_input, quantity, buy_price)
+        if errors:
+            for error in errors:
+                st.error(error)
         else:
             valid, err_msg = validate_ticker(ticker_input)
             if not valid:
                 st.error(err_msg)
             else:
                 yf_ticker, display, exchange = normalize_ticker(ticker_input)
+                buy_currency = market_currency(yf_ticker, exchange)
+                quantity_value = float(quantity) if quantity is not None else 0.0
+                buy_price_value = float(buy_price) if buy_price is not None else 0.0
                 result = add_holding(
                     selected_portfolio["id"], yf_ticker, display, exchange,
-                    quantity, buy_price, buy_currency,
+                    quantity_value, buy_price_value, buy_currency,
                     datetime.combine(buy_date_val, datetime.min.time())
                 )
                 if result:
@@ -230,32 +273,66 @@ if not holdings:
     st.stop()
 
 rows = []
-total_invested = 0
-total_current = 0
+totals_by_currency = {}
 prices_map = {}
+currency_mismatches = []
 
 with st.spinner("Fetching prices..."):
     for h in holdings:
         current_price = get_current_price(h["ticker"])
         prices_map[h["ticker"]] = current_price
+        quote_currency = market_currency(h["ticker"], h["exchange"])
+        buy_currency = (h.get("buy_currency") or "").upper()
+        has_currency_mismatch = buy_currency != quote_currency
         invested = h["quantity"] * h["buy_price"]
         current_val = h["quantity"] * current_price if current_price else invested
-        pnl = current_val - invested
-        pnl_pct = (pnl / invested * 100) if invested > 0 else 0
-        total_invested += invested
-        total_current += current_val
+        pnl = None if has_currency_mismatch else current_val - invested
+        pnl_pct = None if has_currency_mismatch else ((pnl / invested * 100) if invested > 0 else 0)
+        if has_currency_mismatch:
+            currency_mismatches.append(
+                f"{h['display_name']}: saved as {buy_currency}, market price is {quote_currency}"
+            )
+        else:
+            totals = totals_by_currency.setdefault(
+                quote_currency, {"invested": 0.0, "current": 0.0}
+            )
+            totals["invested"] += invested
+            totals["current"] += current_val
         rows.append({
             "Ticker": h["display_name"], "Exchange": h["exchange"], "Qty": h["quantity"],
-            "Buy Price": f"{h['buy_currency']} {h['buy_price']:.2f}",
-            "Current Price": f"{current_price:.2f}" if current_price else "N/A",
+            "Buy Price": f"{currency_symbol(buy_currency)}{h['buy_price']:.2f}",
+            "Current Price": f"{currency_symbol(quote_currency)}{current_price:.2f}" if current_price else "N/A",
             "Invested": invested, "Current Value": current_val if current_price else invested,
+            "Value Currency": quote_currency, "Currency Mismatch": has_currency_mismatch,
             "P&L": pnl, "P&L %": pnl_pct, "Buy Date": h["buy_date"], "_id": h["id"]
         })
 
-total_pnl = total_current - total_invested
-total_pnl_pct = (total_pnl / total_invested * 100) if total_invested > 0 else 0
+def total_text(field: str) -> str:
+    parts = []
+    for currency, totals in sorted(totals_by_currency.items()):
+        if field == "pnl":
+            value = totals["current"] - totals["invested"]
+            invested_value = totals["invested"]
+            percentage = (value / invested_value * 100) if invested_value > 0 else 0.0
+            parts.append(f"{currency_symbol(currency)}{value:+,.2f} ({percentage:+.2f}%)")
+        else:
+            parts.append(f"{currency_symbol(currency)}{totals[field]:,.2f}")
+    return " / ".join(parts) if parts else "N/A"
+
+total_invested_text = total_text("invested")
+total_current_text = total_text("current")
+total_pnl_text = total_text("pnl")
 
 section_header("Current Holdings", f"{len(rows)} positions", accent="cyan")
+
+if currency_mismatches:
+    st.error(
+        "Currency mismatch detected. P&L is hidden for these existing records because "
+        "comparing INR market prices with USD purchase prices would be misleading:\n\n- "
+        + "\n- ".join(currency_mismatches)
+        + "\n\nDelete and add these holdings again with the correct purchase price. "
+          "The form now assigns the market currency automatically."
+    )
 
 st.markdown("""
 <div style="
@@ -282,7 +359,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 for row in rows:
-    color = "#10B981" if row["P&L"] >= 0 else "#F43F5E"
+    color = "#8b8b9e" if row["P&L"] is None else ("#10B981" if row["P&L"] >= 0 else "#F43F5E")
     flag = "🇮🇳" if row["Exchange"] == "IN" else "🇺🇸"
     
     c1, c2, c3, c4, c5, c6, c7 = st.columns([2.2, 1, 1.4, 1.3, 1.4, 1.6, 0.6])
@@ -290,26 +367,34 @@ for row in rows:
     c2.write(f"<span style='color:#8b8b9e;font-family:JetBrains Mono;'>{row['Qty']:.2f}</span>", unsafe_allow_html=True)
     c3.write(f"<span style='color:#8b8b9e;font-family:JetBrains Mono;'>{row['Buy Price']}</span>", unsafe_allow_html=True)
     c4.write(f"<span style='color:#8b8b9e;font-family:JetBrains Mono;'>{row['Current Price']}</span>", unsafe_allow_html=True)
-    c5.write(f"<span style='color:#f0f0f5;font-family:JetBrains Mono;font-weight:600;'>{row['Current Value']:,.0f}</span>", unsafe_allow_html=True)
-    c6.markdown(f"<span style='color:{color};font-weight:700;font-family:JetBrains Mono;'>{row['P&L']:+.0f} ({row['P&L %']:+.1f}%)</span>", unsafe_allow_html=True)
+    c5.write(f"<span style='color:#f0f0f5;font-family:JetBrains Mono;font-weight:600;'>{currency_symbol(row['Value Currency'])}{row['Current Value']:,.0f}</span>", unsafe_allow_html=True)
+    pnl_display = (
+        "Fix currency"
+        if row["P&L"] is None
+        else f"{currency_symbol(row['Value Currency'])}{row['P&L']:+,.0f} ({row['P&L %']:+.1f}%)"
+    )
+    c6.markdown(f"<span style='color:{color};font-weight:700;font-family:JetBrains Mono;'>{pnl_display}</span>", unsafe_allow_html=True)
     if c7.button("×", key=f"del_{row['_id']}"):
         delete_holding(row["_id"])
         st.rerun()
 
 # Total Row
 st.markdown("<div style='border-top:1px solid rgba(255,255,255,0.08);margin:8px 0;'></div>", unsafe_allow_html=True)
-total_color = "#10B981" if total_pnl >= 0 else "#F43F5E"
+all_pnl_nonnegative = all(
+    totals["current"] - totals["invested"] >= 0
+    for totals in totals_by_currency.values()
+)
+total_color = "#10B981" if all_pnl_nonnegative else "#F43F5E"
 st.markdown(f"""
 <div style="display:flex;padding:10px 12px;align-items:center;">
     <div style="flex:2.2;"><strong style="color:#f0f0f5;font-size:0.9rem;">TOTAL</strong></div>
     <div style="flex:1;"><strong style="color:#f0f0f5;font-family:JetBrains Mono;">{sum(r['Qty'] for r in rows):.2f}</strong></div>
-    <div style="flex:1.4;"><strong style="color:#f0f0f5;font-family:JetBrains Mono;">${total_invested:,.2f}</strong></div>
+    <div style="flex:1.4;"><strong style="color:#f0f0f5;font-family:JetBrains Mono;">{total_invested_text}</strong></div>
     <div style="flex:1.3;"><span style="color:#4a4a5e;">—</span></div>
-    <div style="flex:1.4;"><strong style="color:#f0f0f5;font-family:JetBrains Mono;">${total_current:,.2f}</strong></div>
+    <div style="flex:1.4;"><strong style="color:#f0f0f5;font-family:JetBrains Mono;">{total_current_text}</strong></div>
     <div style="flex:1.6;">
         <div style="color:{total_color};font-size:1.1rem;font-weight:800;font-family:JetBrains Mono;text-align:center;">
-            ${total_pnl:,.2f}
-            <div style="font-size:0.75rem;">({total_pnl_pct:+.2f}%)</div>
+            {total_pnl_text}
         </div>
     </div>
     <div style="flex:0.6;"></div>
@@ -318,7 +403,11 @@ st.markdown(f"""
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ── Allocation Chart ────────────────────────────────────────
-if rows:
+valid_value_currencies = {
+    row["Value Currency"] for row in rows if not row["Currency Mismatch"]
+}
+
+if rows and len(valid_value_currencies) == 1:
     section_header("Allocation", "Current weight distribution", accent="violet")
     st.markdown("""
     <div style="
@@ -343,6 +432,12 @@ if rows:
     )
     st.plotly_chart(fig, width='stretch')
     st.markdown("</div>", unsafe_allow_html=True)
+elif rows and len(valid_value_currencies) > 1:
+    section_header("Allocation", "Currency-separated values", accent="violet")
+    st.info(
+        "Allocation is hidden for mixed INR/USD holdings because native values cannot "
+        "be added directly. Add an FX conversion layer before displaying a combined chart."
+    )
 
 st.info(f"**{len(rows)} tickers ready:** {', '.join([r['Ticker'] for r in rows])}")
 if st.button("▣ Go to Analysis →", type="primary", use_container_width=True):

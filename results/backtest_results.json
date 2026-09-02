@@ -1,0 +1,71 @@
+{
+  "status": "completed_price_only",
+  "axiom_combined_status": "not_measured_point_in_time_historical_news_unavailable",
+  "config": {
+    "tickers": [
+      "AAPL",
+      "MSFT",
+      "GOOGL",
+      "AMZN",
+      "META"
+    ],
+    "benchmark": "^GSPC",
+    "start": "2021-01-01",
+    "end": "2025-12-31",
+    "lookback": 252,
+    "risk_free_rate": 0.05,
+    "transaction_cost": 0.0015,
+    "min_weight": 0.02,
+    "max_weight": 0.35,
+    "initial_capital": 100000.0
+  },
+  "data": {
+    "first_date": "2021-01-04",
+    "last_date": "2025-12-31",
+    "observations": 1255
+  },
+  "strategies": {
+    "quantitative_only": {
+      "start_nav": 100000.0,
+      "end_nav": 217246.14843796912,
+      "observations": 1255,
+      "elapsed_years": 4.988364134154689,
+      "cagr": 0.1682818026532087,
+      "annualized_volatility": 0.2651366715828335,
+      "sharpe_ratio": 0.5314941426408798,
+      "sortino_ratio": 0.7903733144003192,
+      "maximum_drawdown": -0.39628376620952,
+      "annual_turnover": 3.485367521145426,
+      "transaction_cost_drag": 0.03837564811107584,
+      "total_transaction_cost": 3837.5648111075843
+    },
+    "equal_weight": {
+      "start_nav": 100000.0,
+      "end_nav": 254414.89995016728,
+      "observations": 1255,
+      "elapsed_years": 4.988364134154689,
+      "cagr": 0.2058622575107789,
+      "annualized_volatility": 0.26759807438499456,
+      "sharpe_ratio": 0.6481372783689039,
+      "sortino_ratio": 0.9089192440284627,
+      "maximum_drawdown": -0.4654662772036987,
+      "annual_turnover": 0.5008262716541725,
+      "transaction_cost_drag": 0.005453049857912611,
+      "total_transaction_cost": 545.3049857912612
+    },
+    "benchmark": {
+      "start_nav": 100000.0,
+      "end_nav": 184981.02172984555,
+      "observations": 1255,
+      "elapsed_years": 4.988364134154689,
+      "cagr": 0.13122776257854674,
+      "annualized_volatility": 0.1695767720628268,
+      "sharpe_ratio": 0.5188680647882385,
+      "sortino_ratio": 0.7118027111034086,
+      "maximum_drawdown": -0.2542509661923039,
+      "annual_turnover": 0.0,
+      "transaction_cost_drag": 0.0,
+      "total_transaction_cost": 0.0
+    }
+  }
+}
