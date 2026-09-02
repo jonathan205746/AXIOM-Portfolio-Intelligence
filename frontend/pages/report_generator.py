@@ -407,7 +407,6 @@ def generate_axiom_report(portfolio, results, display_names):
             "No ticker-specific news data is available."
             "</div>"
         )
-    
     # ── Charts ────────────────────────────────────────────────
     frontier_div = ""
     frontier_fig = None
