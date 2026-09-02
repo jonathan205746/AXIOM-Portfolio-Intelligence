@@ -7,12 +7,15 @@ Run this file directly to test:
     python src/data/news_fetcher.py
 """
 
-import requests
-import time
-import os
 import logging
-from typing import List, Dict, Optional
+import os
+import re
+import time
+import unicodedata
 from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -100,7 +103,180 @@ TICKER_TO_COMPANY = {
     "SQ": "Block",
     "HOOD": "Robinhood",
 }
+# NewsAPI query contract.
+TICKER_ALIASES = {
+    "GOOGL": ("Alphabet", "Google", "YouTube", "Waymo"),
+    "GOOG": ("Alphabet", "Google", "YouTube", "Waymo"),
+    "MSFT": ("Microsoft", "Azure", "Windows", "Microsoft Copilot"),
+    "AAPL": ("Apple", "iPhone", "iPad", "Mac", "App Store"),
+    "AMZN": ("Amazon", "Amazon Web Services", "AWS"),
+    "META": ("Meta Platforms", "Meta", "Facebook", "Instagram"),
+    "NVDA": ("Nvidia",),
+    "TSLA": ("Tesla",),
+    "SBIN.NS": ("State Bank of India", "SBI"),
+    "RELIANCE.NS": (
+        "Reliance Industries",
+        "Reliance",
+        "Jio",
+        "Jio Platforms",
+    ),
+    "TCS.NS": (
+        "Tata Consultancy Services",
+        "TCS",
+    ),
+    "INFY.NS": ("Infosys",),
+    "WIPRO.NS": ("Wipro",),
+    "HDFCBANK.NS": ("HDFC Bank",),
+    "ICICIBANK.NS": ("ICICI Bank",),
+}
 
+def normalize_news_text(value: str) -> str:
+    """Normalize text for reliable matching and deduplication."""
+
+    normalized = unicodedata.normalize(
+        "NFKC",
+        str(value or ""),
+    )
+    normalized = normalized.casefold()
+    normalized = re.sub(r"[^\w&]+", " ", normalized)
+    return " ".join(normalized.split())
+
+
+def get_ticker_aliases(
+    ticker: str,
+    company_name: Optional[str] = None,
+) -> tuple[str, ...]:
+    """Return normalized aliases used to validate article relevance."""
+
+    canonical_ticker = ticker.upper().strip()
+    aliases = list(TICKER_ALIASES.get(canonical_ticker, ()))
+
+    resolved_company = (
+        company_name
+        or TICKER_TO_COMPANY.get(canonical_ticker)
+    )
+
+    if resolved_company:
+        aliases.append(resolved_company)
+
+    ticker_without_exchange = canonical_ticker.split(".", 1)[0]
+
+    # Very short ticker symbols create excessive false matches.
+    if len(ticker_without_exchange) >= 3:
+        aliases.append(ticker_without_exchange)
+
+    normalized_aliases = {
+        normalize_news_text(alias)
+        for alias in aliases
+        if normalize_news_text(alias)
+    }
+
+    return tuple(
+        sorted(
+            normalized_aliases,
+            key=len,
+            reverse=True,
+        )
+    )
+
+
+def find_matching_aliases(
+    ticker: str,
+    title: str,
+    description: str = "",
+    company_name: Optional[str] = None,
+) -> list[str]:
+    """Return company aliases found in the article text."""
+
+    article_text = normalize_news_text(
+        f"{title or ''} {description or ''}"
+    )
+    matches = []
+
+    for alias in get_ticker_aliases(ticker, company_name):
+        pattern = rf"(?<!\w){re.escape(alias)}(?!\w)"
+
+        if re.search(pattern, article_text):
+            matches.append(alias)
+
+    return matches
+
+
+def is_ticker_relevant(
+    ticker: str,
+    title: str,
+    description: str = "",
+    company_name: Optional[str] = None,
+) -> bool:
+    """Return True when an article directly mentions the company."""
+
+    return bool(
+        find_matching_aliases(
+            ticker=ticker,
+            title=title,
+            description=description,
+            company_name=company_name,
+        )
+    )
+
+
+def filter_relevant_articles(
+    ticker: str,
+    articles: List[Dict],
+    company_name: Optional[str] = None,
+    max_articles: Optional[int] = None,
+) -> List[Dict]:
+    """
+    Remove irrelevant, empty and duplicate news articles.
+
+    The original article schema is preserved. Two evidence fields are
+    added: relevance_match and relevance_status.
+    """
+
+    filtered_articles = []
+    seen_titles = set()
+
+    for article in articles:
+        title = str(article.get("title") or "").strip()
+        description = str(
+            article.get("description") or ""
+        ).strip()
+
+        if not title or title == "[Removed]":
+            continue
+
+        normalized_title = normalize_news_text(title)
+
+        if not normalized_title:
+            continue
+
+        if normalized_title in seen_titles:
+            continue
+
+        matched_aliases = find_matching_aliases(
+            ticker=ticker,
+            title=title,
+            description=description,
+            company_name=company_name,
+        )
+
+        if not matched_aliases:
+            continue
+
+        seen_titles.add(normalized_title)
+
+        filtered_article = dict(article)
+        filtered_article["relevance_status"] = "DIRECT_MATCH"
+        filtered_article["relevance_match"] = matched_aliases
+        filtered_articles.append(filtered_article)
+
+        if (
+            max_articles is not None
+            and len(filtered_articles) >= max_articles
+        ):
+            break
+
+    return filtered_articles
 
 # ── Core Functions ─────────────────────────────────────────────────────────────
 
@@ -152,7 +328,7 @@ def fetch_news(
         "from": from_date,
         "sortBy": "relevancy",
         "language": "en",
-        "pageSize": max_articles,
+        "pageSize": min(max(max_articles * 3, max_articles), 100),
         "apiKey": NEWS_API_KEY,
     }
 
@@ -186,7 +362,22 @@ def fetch_news(
                 "text": f"{article['title']}. {article['description']}"
             })
 
-        logger.info(f"Found {len(articles)} articles for {ticker}")
+        raw_article_count = len(articles)
+
+        articles = filter_relevant_articles(
+           ticker=ticker,
+           articles=articles,
+           company_name=company_name,
+           max_articles=max_articles,
+        )
+
+        logger.info(
+            "News relevance for %s: %d/%d articles retained",
+            ticker,
+            len(articles),
+            raw_article_count,
+        )
+
         return articles
 
     except requests.exceptions.Timeout:
