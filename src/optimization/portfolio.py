@@ -250,6 +250,57 @@ class PortfolioOptimizer:
         return "\n".join(lines)
 
 
+def optimize_portfolio(
+    returns: pd.DataFrame,
+    risk_free_rate: float = RISK_FREE_RATE,
+    min_weight: float = MIN_WEIGHT,
+    max_weight: float = MAX_WEIGHT,
+) -> dict:
+    """
+    Backward-compatible optimizer accepting daily asset returns.
+
+    PortfolioOptimizer uses price data internally, so the returns are
+    converted into a synthetic price index before optimization.
+    """
+    if not isinstance(returns, pd.DataFrame):
+        raise TypeError("returns must be a pandas DataFrame")
+
+    if returns.empty:
+        raise ValueError("returns must not be empty")
+
+    clean_returns = (
+        returns
+        .replace([np.inf, -np.inf], np.nan)
+        .dropna(how="any")
+        .astype(float)
+    )
+
+    if clean_returns.empty:
+        raise ValueError("returns contain no usable observations")
+
+    # Add an initial base-price row so every supplied return is retained
+    # when PortfolioOptimizer calculates pct_change().
+    growth_index = (1.0 + clean_returns).cumprod()
+
+    initial_prices = pd.DataFrame(
+        [np.ones(len(clean_returns.columns))],
+        columns=clean_returns.columns,
+    )
+
+    synthetic_prices = pd.concat(
+        [initial_prices, growth_index.reset_index(drop=True)],
+        ignore_index=True,
+    )
+
+    optimizer = PortfolioOptimizer(synthetic_prices)
+
+    return optimizer.optimize(
+        risk_free_rate=risk_free_rate,
+        min_weight=min_weight,
+        max_weight=max_weight,
+    )
+
+
 # ── Quick Test ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
