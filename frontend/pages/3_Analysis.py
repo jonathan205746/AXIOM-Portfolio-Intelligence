@@ -16,6 +16,10 @@ from src.database.db import get_portfolio_holdings, save_optimization_run
 from pages.report_generator import generate_bloomberg_report
 from src.optimization.health_score import HealthScoreEngine
 from src.optimization.adaptive_optimizer import AdaptiveHealthOptimizer
+from src.utils.sentiment import (
+    SentimentLabel,
+    classify_sentiment,
+)
 
 st.set_page_config(page_title="Analysis | Axiom", page_icon="▣", layout="wide")
 
@@ -38,6 +42,52 @@ from frontend.ui.components import (
     glass_container, info_card, badge, loading_skeleton
 )
 inject_theme()
+
+SENTIMENT_VISUALS = {
+    SentimentLabel.POSITIVE: {
+        "label": "Positive",
+        "symbol": "▲",
+        "css": "positive",
+        "accent": "cyan",
+    },
+    SentimentLabel.NEGATIVE: {
+        "label": "Negative",
+        "symbol": "▼",
+        "css": "negative",
+        "accent": "red",
+    },
+    SentimentLabel.NEUTRAL: {
+        "label": "Neutral",
+        "symbol": "—",
+        "css": "neutral",
+        "accent": "primary",
+    },
+    SentimentLabel.INSUFFICIENT_EVIDENCE: {
+        "label": "Insufficient Evidence",
+        "symbol": "?",
+        "css": "neutral",
+        "accent": "amber",
+    },
+}
+
+
+def get_sentiment_visual(score: float | None) -> dict[str, str]:
+    sentiment = classify_sentiment(score)
+    return SENTIMENT_VISUALS[sentiment]
+
+def format_sentiment_score(score: float | None) -> str:
+    if score is None:
+        return "N/A"
+
+    return f"{score:+.3f}"
+
+
+def sentiment_progress_value(score: float | None) -> int:
+    if score is None:
+        return 50
+
+    progress_value = int((score + 1.0) / 2.0 * 100)
+    return max(0, min(100, progress_value))
 
 # ── Market Data ─────────────────────────────────────────────
 @st.cache_data(ttl=300)
@@ -153,7 +203,7 @@ with s1:
     st.caption(f"Quant: {int(alpha*100)}% • Sentiment: {int((1-alpha)*100)}%")
 with s2:
     portfolio_value = st.number_input("Portfolio Value (USD)", min_value=1000, max_value=10_000_000, value=100_000, step=10_000)
-    use_llm = st.checkbox("Enable LLM Recommendations", value=True)
+    use_llm = st.checkbox("Enable AI Research Commentary", value=True)
 
 run_button = st.button("▶ Run Optimization", type="primary", use_container_width=True)
 
@@ -297,8 +347,8 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
         st.error(f"Adaptive optimization failed: {exc}")
         return None
 
-    # ── LLM Recommendations (with visible diagnostics) ───────
-    _set("Generating LLM reasoning...", 92, "llm")
+    # ── Evidence-grounded AI research commentary ─────
+    _set("Generating AI research commentary...", 92, "llm")
     recommendations = []
     llm_error = None
 
@@ -317,17 +367,21 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
                     rec = rag.generate_recommendation(
                         ticker=ticker,
                         sentiment_score=sentiment_scores.get(ticker, 0.0),
-                        portfolio_weight=combined["final_weights"].get(ticker, 0.0),
-                        retrieved_articles=articles_text
+                        portfolio_weight=opt_result["weights"].get(ticker, 0.0),
+                        retrieved_articles=articles_text,
                     )
                     if rec:
                         recommendations.append(rec)
                 except Exception as exc:
                     st.warning(f"LLM failed for {display_names.get(ticker, ticker)}: {exc}")
         if not recommendations and not llm_error:
-            st.info("LLM returned no recommendations. Check that your API key and model endpoint are configured.")
-    else:
-        st.info("LLM Recommendations are disabled. Enable the checkbox above to run AI reasoning.")
+            st.info(
+                "No AI research commentary was returned. " 
+                " The quantitative results remain available.")
+        else:
+            st.info(
+                "AI research commentary is disabled. " 
+                " Quantitative analysis remains available.")
 
     results["recommendations"] = recommendations
     status_placeholder.empty()
@@ -529,14 +583,23 @@ with tab3:
     st.caption("FinBERT sentiment scores")
     for t in available:
         score = sentiment_scores[t]
-        label = "Positive" if score >= 0.3 else ("Negative" if score <= -0.3 else "Neutral")
-        emoji = "▲" if score >= 0.3 else ("▼" if score <= -0.3 else "—")
-        pct = int((score + 1) / 2 * 100)
+        visual = get_sentiment_visual(score)
+
+        progress_value = sentiment_progress_value(score)
+        score_text = format_sentiment_score(score)
+
         ca, cb, cc = st.columns([1.5, 4, 1.5])
-        ca.markdown(f"**{emoji} {display_names.get(t, t)}**")
-        cb.progress(pct)
-        css = "positive" if score >= 0.3 else ("negative" if score <= -0.3 else "neutral")
-        cc.markdown(f'<span class="{css}">{score:+.3f} ({label})</span>', unsafe_allow_html=True)
+
+        ca.markdown(
+            f"**{visual['symbol']} {display_names.get(t, t)}**"
+        )
+        cb.progress(progress_value)
+        cc.markdown(
+            f'<span class="{visual["css"]}">'
+            f'{score_text} ({visual["label"]})'
+            "</span>",
+            unsafe_allow_html=True,
+        )
 
     all_news = results.get("all_news", {})
     st.markdown("---")
@@ -644,24 +707,44 @@ with tab4:
         st.plotly_chart(fig_g3, width='stretch')
 
 with tab5:
-    st.caption("AI-generated guidance from Groq Llama 3.3 70B")
+    st.caption("Evidence-grounded research commentary from the configured Groq model")
     if not recommendations:
         info_card(
-            "LLM Recommendations Unavailable",
-            "Enable LLM in settings and re-run the optimization pipeline. Check API keys if enabled.",
-            badge("SETTINGS", "warning"),
-            accent="amber"
+            "AI Research Commentary Unavailable",
+            (
+                "The quantitative analysis remains available. "
+                "Enable AI commentary and re-run the pipeline if needed."
+            ),
+            badge("OPTIONAL", "warning"),
+            accent="amber",
         )
     else:
         for rec in recommendations:
-            t = rec.get("ticker", "")
-            score = rec.get("sentiment_score", 0)
-            label = rec.get("sentiment_label", "Neutral")
-            weight_pct = rec.get("portfolio_weight_pct", "0")
-            glass_container(accent="cyan" if score >= 0.3 else ("red" if score <= -0.3 else "primary"))
-            st.markdown(f"**{display_names.get(t, t)}** — Sentiment: {score:+.3f} ({label}) | Weight: {weight_pct}%")
-            st.markdown(rec.get("recommendation", ""))
-            st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+            ticker = rec.get("ticker", "")
+            score = rec.get("sentiment_score")
+            visual = get_sentiment_visual(score)
+            score_text = format_sentiment_score(score)
+            optimizer_weight_pct = rec.get(
+                "portfolio_weight_pct",
+                "N/A",
+            )
+            commentary = rec.get(
+                "recommendation",
+                "AI research commentary is unavailable.",
+            )
+
+            glass_container(accent=visual["accent"])
+
+            st.markdown(
+                f"**{display_names.get(ticker, ticker)}**"
+                f" — Sentiment: {score_text} ({visual['label']})"
+                f" | Optimizer target: {optimizer_weight_pct}%"
+            )
+            st.markdown(commentary)
+            st.markdown(
+                "<div style='height:8px;'></div>",
+                unsafe_allow_html=True,
+            )
 
 with tab6:
     st.caption("Cumulative returns and rolling Sharpe")
