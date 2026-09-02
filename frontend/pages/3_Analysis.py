@@ -75,6 +75,7 @@ def get_sentiment_visual(score: float | None) -> dict[str, str]:
     sentiment = classify_sentiment(score)
     return SENTIMENT_VISUALS[sentiment]
 
+
 def format_sentiment_score(score: float | None) -> str:
     if score is None:
         return "N/A"
@@ -309,24 +310,54 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
     results["all_news"] = all_news
 
     _set("Running FinBERT...", 55, "sentiment")
+
+    # Public/report values preserve missing evidence as None.
     sentiment_scores = {}
+
+    # The optimizer requires numeric values. A missing score receives
+    # 0.0 here only to mean "apply no sentiment adjustment."
+    optimization_sentiment_scores = {}
+
     for ticker in available:
         try:
-            headlines = [a.get("title", "") for a in all_news.get(ticker, []) if a.get("title")]
-            sentiment_scores[ticker] = aggregate_sentiment(headlines) if headlines else 0.0
+            headlines = [
+                article.get("title", "")
+                for article in all_news.get(ticker, [])
+                if article.get("title")
+            ]
+
+            if headlines:
+                score = float(aggregate_sentiment(headlines))
+                sentiment_scores[ticker] = score
+                optimization_sentiment_scores[ticker] = score
+            else:
+                sentiment_scores[ticker] = None
+                optimization_sentiment_scores[ticker] = 0.0
+
         except Exception as exc:
-            sentiment_scores[ticker] = 0.0
+            sentiment_scores[ticker] = None
+            optimization_sentiment_scores[ticker] = 0.0
             st.warning(
                 f"Sentiment analysis failed for {ticker}: "
                 f"{type(exc).__name__}: {exc}"
             )
+
     results["sentiment_scores"] = sentiment_scores
+    results["optimization_sentiment_scores"] = (
+        optimization_sentiment_scores
+    )
 
     _set("Searching health-aware portfolios...", 72, "adaptive")
     try:
         risk_analyzer = RiskAnalyzer(prices)
         news_counts = {t: len(all_news.get(t, [])) for t in available}
-        adaptive = AdaptiveHealthOptimizer(optimizer, risk_analyzer, sentiment_scores, news_counts)
+        adaptive = AdaptiveHealthOptimizer(
+           optimizer,
+           risk_analyzer,
+           optimization_sentiment_scores,
+           news_counts,
+        )
+
         selected = adaptive.search(alpha=alpha, portfolio_value=portfolio_value)
 
         opt_result = selected["opt_result"]
@@ -354,34 +385,57 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
 
     if use_llm:
         rag = None
+
         try:
             rag = RAGPipeline()
         except Exception as exc:
-            llm_error = f"LLM init failed: {exc}"
+            llm_error = f"LLM initialization failed: {exc}"
             st.warning(llm_error)
 
         if rag is not None:
             for ticker in available:
+                articles_text = [
+                    article.get("title", "")
+                    for article in all_news.get(ticker, [])
+                    if article.get("title")
+                ]
+                sentiment_score = sentiment_scores.get(ticker)
+
+                # Do not ask the LLM to interpret nonexistent evidence.
+                if sentiment_score is None or not articles_text:
+                    continue
+
                 try:
-                    articles_text = [a.get("title", "") for a in all_news.get(ticker, []) if a.get("title")]
                     rec = rag.generate_recommendation(
                         ticker=ticker,
-                        sentiment_score=sentiment_scores.get(ticker, 0.0),
-                        portfolio_weight=opt_result["weights"].get(ticker, 0.0),
+                        sentiment_score=sentiment_score,
+                        portfolio_weight=opt_result[
+                            "weights"
+                        ].get(ticker, 0.0),
                         retrieved_articles=articles_text,
                     )
+
                     if rec:
                         recommendations.append(rec)
+
                 except Exception as exc:
-                    st.warning(f"LLM failed for {display_names.get(ticker, ticker)}: {exc}")
+                    st.warning(
+                        "AI commentary failed for "
+                        f"{display_names.get(ticker, ticker)}: "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+
         if not recommendations and not llm_error:
             st.info(
-                "No AI research commentary was returned. " 
-                " The quantitative results remain available.")
-        else:
-            st.info(
-                "AI research commentary is disabled. " 
-                " Quantitative analysis remains available.")
+                "No evidence-grounded AI commentary was returned. "
+                "Quantitative results remain available."
+            )
+
+    else:
+        st.info(
+            "AI research commentary is disabled. "
+            "Quantitative analysis remains available."
+        )
 
     results["recommendations"] = recommendations
     status_placeholder.empty()
@@ -446,13 +500,32 @@ vol = risk_report.get("volatility", {}).get("portfolio_annualized", 0)
 health = results.get("health_score") or HealthScoreEngine.calculate(
     sharpe=sharpe,
     volatility=vol,
-    var95=risk_report.get("value_at_risk", {}).get("historical_95", {}).get("var_pct", 0.0),
-    max_drawdown_pct=risk_report.get("drawdown", {}).get("portfolio", {}).get("max_drawdown_pct", 0.0),
-    sentiment_scores=sentiment_scores,
+    var95=(
+        risk_report
+        .get("value_at_risk", {})
+        .get("historical_95", {})
+        .get("var_pct", 0.0)
+    ),
+    max_drawdown_pct=(
+        risk_report
+        .get("drawdown", {})
+        .get("portfolio", {})
+        .get("max_drawdown_pct", 0.0)
+    ),
+    sentiment_scores={
+        ticker: score
+        for ticker, score in sentiment_scores.items()
+        if score is not None
+    },
     final_weights=final_weights,
     risk_report=risk_report,
     baseline_sharpe=baseline.get("sharpe_ratio"),
-    news_counts={t: len(results.get("all_news", {}).get(t, [])) for t in available},
+    news_counts={
+        ticker: len(
+            results.get("all_news", {}).get(ticker, [])
+        )
+        for ticker in available
+    },
 )
 ai_score = health["score"]
 score_label = f'{health["label"]} · {health["grade"]}'
