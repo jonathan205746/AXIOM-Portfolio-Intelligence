@@ -23,7 +23,9 @@ Usage:
 
 import numpy as np
 from typing import Optional
-
+from src.optimization.rebalancing import (
+    classify_model_adjustment,
+)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -233,12 +235,9 @@ class CombinedSignal:
                 "direction": direction,
                 "old_weight": round(original, 4),
                 "new_weight": round(final, 4),
-                "action": (
-                    "BUY"
-                    if final > original + 1e-6
-                    else "SELL"
-                    if final < original - 1e-6
-                    else "HOLD"
+                "action": classify_model_adjustment(
+                    original,
+                    final,
                 ),
                 "exclusion_reason": reason
             }

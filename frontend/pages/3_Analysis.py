@@ -21,6 +21,9 @@ from src.utils.sentiment import (
     classify_sentiment,
 )
 
+from src.optimization.rebalancing import (
+    classify_model_adjustment,
+)
 st.set_page_config(page_title="Analysis | Axiom", page_icon="▣", layout="wide")
 
 if not st.session_state.get("logged_in"):
@@ -134,17 +137,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Action Helper ───────────────────────────────────────────
-def _get_action(ticker: str, final_weights: dict, weight_changes: dict) -> str:
-    final = final_weights.get(ticker, 0)
-    if final < 0.001:
-        return "EXCLUDE"
-    change = weight_changes.get(ticker, {}).get("change", 0)
-    if change > 0.001:
-        return "BUY"
-    if change < -0.001:
-        return "SELL"
-    return "HOLD"
 
 
 def _safe_float(value: Any, digits: int | None = None) -> float | None:
@@ -547,8 +539,12 @@ st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
 weights_csv = pd.DataFrame([
     {
         "Ticker": display_names.get(t, t),
-        "Weight": f"{final_weights[t] * 100:.2f}%",
-        "Action": _get_action(t, final_weights, combined["weight_changes"])
+        "Target Weight": f"{final_weights[t] * 100:.2f}%",
+        "Model Adjustment": classify_model_adjustment(
+            opt_result["weights"].get(t, 0.0),
+            final_weights.get(t, 0.0),
+        ),
+
     } for t in available
 ]).to_csv(index=False).encode("utf-8")
 
@@ -613,13 +609,22 @@ with tab1:
 
     glass_container(accent="primary")
     df_weights = pd.DataFrame([
-        {
-            "Ticker": display_names.get(t, t),
-            "Optimized": f"{opt_result['weights'][t]*100:.1f}%",
-            "Final": f"{final_weights[t]*100:.1f}%",
-            "Change": f"{combined['weight_changes'][t]['change']*100:+.1f}%",
-            "Action": _get_action(t, final_weights, combined["weight_changes"])
-        } for t in available
+    {
+        "Ticker": display_names.get(t, t),
+        "Quant Target": (
+            f"{opt_result['weights'][t] * 100:.1f}%"
+        ),
+        "Final Target": (
+            f"{final_weights[t] * 100:.1f}%"
+        ),
+        "Model Shift": (
+            f"{combined['weight_changes'][t]['change'] * 100:+.1f}%"
+        ),
+        "Model Adjustment": classify_model_adjustment(
+            opt_result["weights"].get(t, 0.0),
+            final_weights.get(t, 0.0),
+        ),
+} for t in available
     ])
     st.dataframe(df_weights, hide_index=True, width='stretch')
 

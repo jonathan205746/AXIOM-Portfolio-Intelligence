@@ -16,19 +16,9 @@ from src.utils.sentiment import (
     SentimentLabel,
     classify_sentiment,
 )
-
-
-def _get_action(ticker: str, final_weights: dict, weight_changes: dict) -> str:
-    """Determine action label for a ticker."""
-    final = final_weights.get(ticker, 0)
-    if final < 0.001:
-        return "EXCLUDE"
-    change = weight_changes.get(ticker, {}).get("change", 0)
-    if change > 0.001:
-        return "BUY"
-    if change < -0.001:
-        return "SELL"
-    return "HOLD"
+from src.optimization.rebalancing import (
+    classify_model_adjustment,
+)
 
 
 ALLOWED_AI_HTML_TAGS = [
@@ -163,20 +153,28 @@ def generate_axiom_report(portfolio, results, display_names):
     max_vol = max(vols.values()) if vols else 0
 
     for t in available:
-        w_opt = opt_result.get("weights", {}).get(t, 0) * 100
-        w_final = final_weights.get(t, 0) * 100
-        wc = combined.get("weight_changes", {}).get(t, {})
-        change = wc.get("change", 0) * 100
+        optimized_weight = float(
+            opt_result.get("weights", {}).get(t, 0.0)
+        )
+        final_weight = float(final_weights.get(t, 0.0))
 
-        if w_opt < 0.1 and w_final < 0.1:
-            action = "EXCLUDE"
-            action_color = C["text_secondary"]
-        elif abs(change) < 1.0:
-            action = "HOLD"
-            action_color = C["text_secondary"]
+        w_opt = optimized_weight * 100
+        w_final = final_weight * 100
+
+        wc = combined.get("weight_changes", {}).get(t, {})
+        change = (final_weight - optimized_weight) * 100
+
+        action = classify_model_adjustment(
+            optimized_weight,
+            final_weight,
+        )
+
+        if action == "INCREASE":
+            action_color = C["green"]
+        elif action == "DECREASE":
+            action_color = C["red"]
         else:
-            action = wc.get("action", "HOLD")
-            action_color = C["green"] if action == "BUY" else (C["red"] if action == "SELL" else C["text_secondary"])
+            action_color = C["text_secondary"]
 
         change_color = C["green"] if change >= 0 else C["red"]
 
@@ -191,12 +189,12 @@ def generate_axiom_report(portfolio, results, display_names):
             if vols.get(t, 0) >= max_vol * 0.95:
                 reasons.append("High volatility")
             reason = "; ".join(reasons) if reasons else "Suboptimal risk/return"
-        elif action == "HOLD" and abs(change) < 1.0:
-            reason = "Within rebalancing threshold"
-        elif action == "BUY":
-            reason = "Sentiment / diversification boost"
-        elif action == "SELL":
-            reason = "Reduce concentration / sentiment drag"
+        elif action == "UNCHANGED":
+            reason = "Within 1 percentage-point model threshold"
+        elif action == "INCREASE":
+            reason = "Sentiment or diversification increased target"
+        elif action == "DECREASE":
+            reason = "Sentiment or concentration reduced target"
 
         weights_rows.append(f"""
         <tr>
@@ -796,7 +794,7 @@ def generate_axiom_report(portfolio, results, display_names):
   <div class="panel animate-in">
     <div class="panel-header violet">
       <span class="panel-title violet">◫ Portfolio Composition</span>
-      <span class="panel-sub">OPTIMIZED WEIGHTS & ACTIONS</span>
+      <span class="panel-sub">QUANTITATIVE VS FINAL TARGETS</span>
     </div>
     <div class="panel-body">
       <table>
@@ -806,7 +804,7 @@ def generate_axiom_report(portfolio, results, display_names):
             <th style="text-align:right">OPTIMIZED</th>
             <th style="text-align:right">FINAL</th>
             <th style="text-align:right">CHANGE</th>
-            <th style="text-align:right">ACTION</th>
+            <th style="text-align:right">MODEL ADJUSTMENT</th>
             <th style="text-align:right">REASON</th>
           </tr>
         </thead>
