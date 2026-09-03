@@ -84,6 +84,26 @@ def test_report_source_contains_complete_news_pipeline():
     assert 'news_html = "\\n".join(news_parts)' in source
     assert "{optimizer_weight_pct}%%" not in source
 
+def test_report_frontier_displays_sharpe_labels():
+    source = Path(
+        "frontend/pages/report_generator.py"
+    ).read_text(encoding="utf-8")
+
+    assert "final_sharpe" in source
+    assert "baseline_sharpe" in source
+    assert "Sharpe {final_sharpe:.3f}" in source
+    assert "Sharpe {baseline_sharpe:.3f}" in source
+
+
+def test_report_identifies_var_amounts_as_usd():
+    source = Path(
+        "frontend/pages/report_generator.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'risk_currency_symbol = "$"' in source
+    assert "95% VaR · 1 DAY · USD" in source
+    assert "99% VaR · 1 DAY · USD" in source
+
 
 def test_live_and_report_consume_canonical_rebalance_plan():
     analysis_source = Path(

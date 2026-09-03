@@ -454,7 +454,15 @@ def generate_axiom_report(portfolio, results, display_names):
             "No ticker-specific news data is available."
             "</div>"
         )
+
     # ── Charts ────────────────────────────────────────────────
+
+    final_sharpe = float(
+        opt_result.get("sharpe_ratio", 0.0)
+    )
+    baseline_sharpe = float(
+        baseline.get("sharpe_ratio", 0.0)
+    )
     frontier_div = ""
     frontier_fig = None
     if not frontier_df.empty:
@@ -466,22 +474,72 @@ def generate_axiom_report(portfolio, results, display_names):
                 name="Frontier"
             ))
             fig.add_trace(go.Scatter(
-                x=[opt_result.get("volatility", 0)*100], y=[opt_result.get("expected_return", 0)*100],
-                mode='markers+text', marker=dict(color=C["accent"], size=14, symbol='star', line=dict(color='white', width=1)),
-                text=["OPTIMAL"], textposition="top center", name="Optimal"
+                x=[opt_result.get("volatility", 0) * 100],
+                y=[
+                    opt_result.get(
+                        "expected_return",
+                        0,
+                    ) * 100
+                ],
+                mode="markers+text",
+                marker=dict(
+                    color=C["accent"],
+                    size=14,
+                    symbol="star",
+                    line=dict(
+                        color="white",
+                        width=1,
+                    ),
+                ),
+                text=[
+                    f"FINAL<br>Sharpe {final_sharpe:.3f}"
+                ],
+                textposition="top center",
+                name=(
+                    f"Final "
+                    f"(Sharpe={final_sharpe:.3f})"
+                ),
             ))
             fig.add_trace(go.Scatter(
-                x=[baseline.get("volatility", 0)*100], y=[baseline.get("expected_return", 0)*100],
-                mode='markers+text', marker=dict(color=C["text_secondary"], size=10, symbol='diamond'),
-                text=["BASELINE"], textposition="bottom center", name="Baseline"
+                x=[
+                    baseline.get(
+                        "volatility",
+                        0,
+                    ) * 100
+                ],
+                y=[
+                    baseline.get(
+                        "expected_return",
+                        0,
+                    ) * 100
+                ],
+                mode="markers+text",
+                marker=dict(
+                    color=C["text_secondary"],
+                    size=10,
+                    symbol="diamond",
+                ),
+                text=[
+                    (
+                        "BASELINE"
+                        f"<br>Sharpe {baseline_sharpe:.3f}"
+                    )
+                ],
+                textposition="bottom center",
+                name=(
+                    f"Baseline "
+                    f"<br>Sharpe {baseline_sharpe:.3f}"
+                ),
             ))
             fig.update_layout(
                 title="EFFICIENT FRONTIER", xaxis_title="VOLATILITY (%)", yaxis_title="RETURN (%)",
                 height=400, paper_bgcolor=C["bg_elevated"], plot_bgcolor=C["bg_elevated"],
                 font=dict(family="JetBrains Mono, monospace", color=C["text_primary"], size=10),
-                margin=dict(l=50, r=20, t=50, b=40),
-                xaxis=dict(gridcolor=C["border_subtle"], linecolor=C["border_active"]),
-                yaxis=dict(gridcolor=C["border_subtle"], linecolor=C["border_active"]),
+                margin=dict(l=60, r=35, t=75, b=50),
+                uniformtext_minsize=8,
+                uniformtext_mode="show",
+                xaxis=dict(gridcolor=C["border_subtle"], linecolor=C["border_active"],automargin=True,),
+                yaxis=dict(gridcolor=C["border_subtle"], linecolor=C["border_active"],automargin=True,),
                 legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor=C["border_subtle"], borderwidth=1, font=dict(size=9))
             )
             frontier_fig = fig
@@ -624,6 +682,10 @@ def generate_axiom_report(portfolio, results, display_names):
     else:
         avg_sent_cls = "accent"
         avg_sent_text = f"{avg_sent:+.3f}"
+
+
+    risk_currency_symbol = "$"
+
 
     # ── HTML Assembly ─────────────────────────────────────────
     html = f"""<!DOCTYPE html>
@@ -799,12 +861,12 @@ def generate_axiom_report(portfolio, results, display_names):
           <div class="kpi-label">Volatility</div>
         </div>
         <div class="kpi-cell">
-          <div class="kpi-value neg">{currency_symbol}{var95.get("var_usd", 0):,.0f}</div>
-          <div class="kpi-label">95% VaR</div>
+          <div class="kpi-value neg">{risk_currency_symbol}{abs(var95.get("var_usd", 0)):,.0f}</div>
+          <div class="kpi-label">95% VaR · 1 DAY · USD</div>
         </div>
         <div class="kpi-cell">
-          <div class="kpi-value neg">{currency_symbol}{var99.get("var_usd", 0):,.0f}</div>
-          <div class="kpi-label">99% VaR</div>
+          <div class="kpi-value neg">{risk_currency_symbol}{abs(var99.get("var_usd", 0)):,.0f}</div>
+          <div class="kpi-label">99% VaR · 1 DAY · USD</div>
         </div>
         <div class="kpi-cell">
           <div class="kpi-value neg">{mdd.get("max_drawdown_pct", 0):.2f}%</div>

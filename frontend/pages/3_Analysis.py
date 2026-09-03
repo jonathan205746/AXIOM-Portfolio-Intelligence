@@ -11,6 +11,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import json
+import math
 from typing import Any, cast
 from src.data.market_data import get_fx_rate as fetch_fx_rate
 from src.database.db import (
@@ -821,10 +822,41 @@ with tab4:
     conc = risk_report["concentration"]
 
     glass_container(accent="red")
-    r1, r2, r3 = st.columns(3)
-    r1.metric("95% VaR (1-Day)", f"${var95['var_usd']:,.0f}", delta=f"{var95['var_pct']*100:.2f}%", delta_color="inverse")
-    r2.metric("99% VaR (1-Day)", f"${var99['var_usd']:,.0f}", delta=f"{var99['var_pct']*100:.2f}%", delta_color="inverse")
-    r3.metric("Max Drawdown", f"{mdd['max_drawdown_pct']:.2f}%", delta=conc["label"], delta_color="off")
+    r1, r2, r3, r4 = st.columns(4)
+
+    r1.metric(
+        "95% VaR (1-Day)",
+        f"${abs(var95['var_usd']):,.0f}",
+        delta=(
+            f"{abs(var95['var_pct']) * 100:.2f}% "
+            "potential loss"
+        ),
+        delta_color="off",
+    )
+
+    r2.metric(
+        "99% VaR (1-Day)",
+        f"${abs(var99['var_usd']):,.0f}",
+        delta=(
+            f"{abs(var99['var_pct']) * 100:.2f}% "
+            "potential loss"
+        ),
+        delta_color="off",
+    )
+
+    r3.metric(
+        "Max Drawdown",
+        f"{abs(mdd['max_drawdown_pct']):.2f}%",
+        delta="Peak-to-trough loss",
+        delta_color="off",
+    )
+
+    r4.metric(
+        "Concentration",
+        conc.get("label", "N/A"),
+        delta=f"HHI {conc.get('hhi', 0.0):.3f}",
+        delta_color="off",
+    )
 
     c1, c2 = st.columns(2)
     with c1:
@@ -853,62 +885,163 @@ with tab4:
         st.plotly_chart(fig_v, width='stretch')
 
     st.markdown("#### Risk Gauges")
+
+    def make_risk_gauge(
+        value: float,
+        title: str,
+        axis_max: float,
+        color: str,
+        threshold: float | None = None,
+        suffix: str = "",
+    ) -> go.Figure:
+        gauge = {
+            "axis": {
+                "range": [0, axis_max],
+                "tickcolor": "#8b8b9e",
+                "tickfont": {
+                    "color": "#8b8b9e",
+                    "size": 10,
+                },
+            },
+            "bar": {
+                "color": color,
+                "thickness": 0.7,
+            },
+            "bgcolor": "#0a0a0f",
+            "bordercolor": "rgba(255,255,255,0.06)",
+            "steps": [
+                {
+                    "range": [0, axis_max * 0.4],
+                    "color": "rgba(16,185,129,0.08)",
+                },
+                {
+                    "range": [
+                        axis_max * 0.4,
+                        axis_max * 0.7,
+                    ],
+                    "color": "rgba(255,107,53,0.08)",
+                },
+                {
+                    "range": [
+                        axis_max * 0.7,
+                        axis_max,
+                    ],
+                    "color": "rgba(244,63,94,0.08)",
+                },
+            ],
+        }
+
+        if threshold is not None:
+            gauge["threshold"] = {
+                "line": {
+                    "color": "#FF6B35",
+                    "width": 2,
+                },
+                "thickness": 0.8,
+                "value": threshold,
+            }
+
+        formatted_value = f"{value:.2f}{suffix}"
+
+        figure = go.Figure(
+            go.Indicator(
+                mode="gauge",
+                value=value,
+                domain={
+                    "x": [0.03, 0.97],
+                    "y": [0.18, 0.90],
+                },
+                title={
+                    "text": title,
+                    "font": {
+                        "color": "#f0f0f5",
+                        "size": 13,
+                    },
+                },
+                gauge=gauge,
+            )
+        )
+
+        figure.add_annotation(
+            x=0.5,
+            y=0.08,
+            xref="paper",
+            yref="paper",
+            text=formatted_value,
+            showarrow=False,
+            xanchor="center",
+            yanchor="middle",
+            font={
+                "family": "JetBrains Mono, monospace",
+                "color": "#f0f0f5",
+                "size": 24,
+            },
+        )
+
+        figure.update_layout(
+            height=245,
+            margin={
+                "l": 8,
+                "r": 8,
+                "t": 45,
+                "b": 8,
+            },
+        )
+
+        return apply_plotly_theme(figure)
+
+
+    sharpe_axis_max = max(
+        4.0,
+        math.ceil(max(0.0, sharpe) + 0.5),
+    )
+
+
     g1, g2, g3 = st.columns(3)
+
     with g1:
-        fig_g1 = go.Figure(go.Indicator(
-            mode="gauge+number", value=var95["var_pct"]*100,
-            title={"text": "95% VaR (%)", "font": {"color": "#f0f0f5", "size": 12}},
-            gauge={
-                "axis": {"range": [0, 5], "tickcolor": "#8b8b9e"},
-                "bar": {"color": "#F43F5E"}, "bgcolor": "#0a0a0f",
-                "bordercolor": "rgba(255,255,255,0.06)",
-                "steps": [
-                    {"range": [0, 2], "color": "rgba(255,255,255,0.02)"},
-                    {"range": [2, 4], "color": "rgba(255,255,255,0.03)"},
-                    {"range": [4, 5], "color": "rgba(255,255,255,0.04)"}
-                ],
-                "threshold": {"line": {"color": "#FF6B35", "width": 2}, "thickness": 0.8, "value": 2.5}
-            }
-        ))
-        fig_g1.update_layout(height=220)
-        fig_g1 = apply_plotly_theme(fig_g1)
-        st.plotly_chart(fig_g1, width='stretch')
+        fig_g1 = make_risk_gauge(
+            value=abs(var95["var_pct"]) * 100,
+            title="95% One-Day VaR",
+            axis_max=5.0,
+            color="#F43F5E",
+            threshold=2.5,
+            suffix="%",
+        )
+        st.plotly_chart(
+            fig_g1,
+            width="stretch",
+            key="risk_var95_gauge",
+        )
+
     with g2:
-        fig_g2 = go.Figure(go.Indicator(
-            mode="gauge+number", value=abs(mdd["max_drawdown_pct"]),
-            title={"text": "Max Drawdown (%)", "font": {"color": "#f0f0f5", "size": 12}},
-            gauge={
-                "axis": {"range": [0, 50], "tickcolor": "#8b8b9e"},
-                "bar": {"color": "#FF6B35"}, "bgcolor": "#0a0a0f",
-                "bordercolor": "rgba(255,255,255,0.06)",
-                "steps": [
-                    {"range": [0, 10], "color": "rgba(255,255,255,0.02)"},
-                    {"range": [10, 25], "color": "rgba(255,255,255,0.03)"},
-                    {"range": [25, 50], "color": "rgba(255,255,255,0.04)"}
-                ]
-            }
-        ))
-        fig_g2.update_layout(height=220)
-        fig_g2 = apply_plotly_theme(fig_g2)
-        st.plotly_chart(fig_g2, width='stretch')
+        fig_g2 = make_risk_gauge(
+            value=abs(mdd["max_drawdown_pct"]),
+            title="Maximum Drawdown",
+            axis_max=50.0,
+            color="#FF6B35",
+            threshold=20.0,
+            suffix="%",
+        )
+        st.plotly_chart(
+            fig_g2,
+            width="stretch",
+            key="risk_drawdown_gauge",
+        )
+
     with g3:
-        fig_g3 = go.Figure(go.Indicator(
-            mode="gauge+number", value=sharpe,
-            title={"text": "Sharpe Ratio", "font": {"color": "#f0f0f5", "size": 12}},
-            gauge={
-                "axis": {"range": [0, 4], "tickcolor": "#8b8b9e"},
-                "bar": {"color": "#10B981"}, "bgcolor": "#0a0a0f",
-                "bordercolor": "rgba(255,255,255,0.06)",
-                "steps": [
-                    {"range": [0, 1], "color": "rgba(255,255,255,0.04)"},
-                    {"range": [1, 2], "color": "rgba(255,255,255,0.03)"},
-                    {"range": [2, 4], "color": "rgba(255,255,255,0.02)"}
-                ]
-            }
-        ))
-        fig_g3.update_layout(height=220)
-        fig_g3 = apply_plotly_theme(fig_g3)
-        st.plotly_chart(fig_g3, width='stretch')
+        fig_g3 = make_risk_gauge(
+            value=max(0.0, sharpe),
+            title="Sharpe Ratio",
+            axis_max=sharpe_axis_max,
+            color="#10B981",
+            threshold=1.0,
+        )
+        st.plotly_chart(
+            fig_g3,
+            width="stretch",
+            key="risk_sharpe_gauge",
+        )
 
 with tab5:
     st.caption("Evidence-grounded research commentary from the configured Groq model")
@@ -951,20 +1084,187 @@ with tab5:
             )
 
 with tab6:
-    st.caption("Cumulative returns and rolling Sharpe")
+    st.caption(
+        "Historical cumulative returns and portfolio performance"
+    )
     glass_container(accent="green")
-    cum_returns = (1 + returns_df).cumprod()
-    fig = go.Figure()
-    colors = ["#FF6B35", "#00D9FF", "#8B5CF6", "#10B981", "#F43F5E", "#F59E0B", "#EC4899", "#6366F1"]
-    for i, t in enumerate(available):
-        fig.add_trace(go.Scatter(
-            x=cum_returns.index, y=cum_returns[t],
-            mode="lines", name=display_names.get(t, t),
-            line=dict(color=colors[i % len(colors)], width=1.5)
-        ))
-    fig.update_layout(title="Cumulative Returns by Ticker", xaxis_title="Date", yaxis_title="Growth", height=450)
-    fig = apply_plotly_theme(fig)
-    st.plotly_chart(fig, width='stretch')
+
+    cumulative_returns = (
+        (1.0 + returns_df)
+        .cumprod()
+        .sub(1.0)
+        .mul(100.0)
+    )
+
+    # Create an independent figure. Do not reuse the Efficient
+    # Frontier figure from the Optimization tab.
+    ticker_return_fig = go.Figure()
+
+    colors = [
+        "#FF6B35",
+        "#00D9FF",
+        "#8B5CF6",
+        "#10B981",
+        "#F43F5E",
+        "#F59E0B",
+        "#EC4899",
+        "#6366F1",
+    ]
+
+    for index, ticker in enumerate(
+        cumulative_returns.columns
+    ):
+        ticker_return_fig.add_trace(
+            go.Scatter(
+                x=cumulative_returns.index,
+                y=cumulative_returns[ticker],
+                mode="lines",
+                name=display_names.get(
+                    ticker,
+                    ticker,
+                ),
+                line={
+                    "color": colors[
+                        index % len(colors)
+                    ],
+                    "width": 1.7,
+                },
+                hovertemplate=(
+                    "%{x|%Y-%m-%d}"
+                    "<br>Cumulative return: %{y:+.2f}%"
+                    "<extra>%{fullData.name}</extra>"
+                ),
+            )
+        )
+
+    ticker_return_fig.update_layout(
+        title="Cumulative Return by Ticker",
+        xaxis_title="Date",
+        yaxis_title="Cumulative Return (%)",
+        hovermode="x unified",
+        height=450,
+        legend_title_text="Ticker",
+    )
+
+    ticker_return_fig.update_yaxes(
+        ticksuffix="%",
+        zeroline=True,
+        zerolinecolor="rgba(255,255,255,0.20)",
+    )
+
+    ticker_return_fig = apply_plotly_theme(
+        ticker_return_fig
+    )
+
+    st.plotly_chart(
+        ticker_return_fig,
+        width="stretch",
+        key="ticker_cumulative_returns",
+    )
+
+    st.caption(
+        "Each line represents one ticker's standalone historical "
+        "return. These lines do not apply portfolio weights."
+    )
+
+
+    st.markdown("#### Final Portfolio Cumulative Return")
+
+    aligned_weights = pd.Series(
+        {
+            ticker: float(
+                final_weights.get(ticker, 0.0)
+            )
+            for ticker in returns_df.columns
+        },
+        dtype=float,
+    )
+
+    aligned_weights = aligned_weights.reindex(
+        returns_df.columns
+    ).fillna(0.0)
+
+    weight_total = float(aligned_weights.sum())
+
+    if weight_total <= 0:
+        st.info(
+            "Portfolio performance is unavailable because "
+            "the final weights contain no usable values."
+        )
+    else:
+        aligned_weights = (
+            aligned_weights / weight_total
+        )
+
+        portfolio_daily_returns = returns_df.mul(
+            aligned_weights,
+            axis=1,
+        ).sum(axis=1)
+
+        portfolio_cumulative_return = (
+            (1.0 + portfolio_daily_returns)
+            .cumprod()
+            .sub(1.0)
+            .mul(100.0)
+        )
+
+        portfolio_return_fig = go.Figure()
+
+        portfolio_return_fig.add_trace(
+            go.Scatter(
+                x=portfolio_cumulative_return.index,
+                y=portfolio_cumulative_return,
+                mode="lines",
+                name="Final Portfolio",
+                line={
+                    "color": "#FF6B35",
+                    "width": 2.8,
+                },
+                hovertemplate=(
+                    "%{x|%Y-%m-%d}"
+                    "<br>Cumulative return: %{y:+.2f}%"
+                    "<extra>Final Portfolio</extra>"
+                ),
+            )
+        )
+
+        portfolio_return_fig.update_layout(
+            xaxis_title="Date",
+            yaxis_title="Cumulative Return (%)",
+            hovermode="x unified",
+            height=380,
+            showlegend=False,
+        )
+
+        portfolio_return_fig.update_yaxes(
+            ticksuffix="%",
+            zeroline=True,
+            zerolinecolor=(
+                "rgba(255,255,255,0.20)"
+            ),
+        )
+
+        portfolio_return_fig = apply_plotly_theme(
+            portfolio_return_fig
+        )
+
+        st.plotly_chart(
+            portfolio_return_fig,
+            width="stretch",
+            key="final_portfolio_cumulative_return",
+        )
+
+        ending_return = float(
+            portfolio_cumulative_return.iloc[-1]
+        )
+
+        st.caption(
+            f"Historical weighted cumulative return: "
+            f"{ending_return:+.2f}%. "
+            "Calculated using the current final target weights. "
+            "This is an in-sample illustration, not a live "
+            "trading track record."
+        )
 
 # ── Health Score Expander ───────────────────────────────────
 with st.expander("◈ AI Health Score v3 — Explain Score", expanded=False):
@@ -990,23 +1290,79 @@ with st.expander("◈ AI Health Score v3 — Explain Score", expanded=False):
         st.markdown("**Adaptive Cap Search**")
         cand_df = pd.DataFrame(results["adaptive_candidates"])
         if not cand_df.empty:
-            cand_df["max_weight_cap"] = cand_df["max_weight_cap"].map(
-                lambda x: f"{float(x) * 100:.1f}%" if pd.notna(x) else "N/A"
+            cand_df["max_weight_cap"] = (
+                cand_df["max_weight_cap"].map(
+                    lambda value: (
+                        f"{float(value) * 100:.1f}%"
+                        if pd.notna(value)
+                        else "N/A"
+                    )
+                )
             )
-            cand_df["health_score"] = cand_df["health_score"].map(
-                lambda x: round(float(x) * 100, 1) if pd.notna(x) else None
+
+            cand_df["health_score"] = (
+                cand_df["health_score"].map(
+                    lambda value: (
+                        round(float(value), 1)
+                        if pd.notna(value)
+                        else None
+                    )
+                )
             )
-            cand_df["sharpe_ratio"] = cand_df["sharpe_ratio"].map(
-                lambda x: round(float(x) * 100, 3) if pd.notna(x) else None
+
+            cand_df["sharpe_ratio"] = (
+                cand_df["sharpe_ratio"].map(
+                    lambda value: (
+                        round(float(value), 3)
+                        if pd.notna(value)
+                        else None
+                    )
+                )
             )
-            cand_df["volatility"] = cand_df["volatility"].map(
-                lambda x: f"{float(x) * 100:.1f}%" if pd.notna(x) else "N/A"
+
+            cand_df["volatility"] = (
+                cand_df["volatility"].map(
+                    lambda value: (
+                        f"{float(value) * 100:.1f}%"
+                        if pd.notna(value)
+                        else "N/A"
+                    )
+                )
             )
-            st.dataframe(cand_df, hide_index=True, width='stretch')
-        st.caption(
-            f'Selected max weight cap: {results.get("selected_cap", 0)*100:.1f}% | '
-            f'Potential score: {health.get("potential_score", ai_score):.1f}/100'
-        )
+
+            cand_df = cand_df.rename(
+                columns={
+                    "max_weight_cap": "Max Weight",
+                    "health_score": "Health",
+                    "sharpe_ratio": "Sharpe",
+                    "volatility": "Volatility",
+                    "max_drawdown_pct": "Max Drawdown",
+                }
+            )
+
+            if "Max Drawdown" in cand_df:
+                cand_df["Max Drawdown"] = (
+                    cand_df["Max Drawdown"].map(
+                        lambda value: (
+                            f"{float(value):.2f}%"
+                            if pd.notna(value)
+                            else "N/A"
+                        )
+                    )
+                )
+
+            st.dataframe(
+                cand_df,
+                hide_index=True,
+                width="stretch",
+            )
+
+
+    st.caption(
+        "Each line shows the standalone cumulative return of one "
+        "ticker. It does not apply portfolio weights or represent "
+        "the combined portfolio return."
+    )
 
 st.markdown("""
 <div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:32px;padding-top:16px;">
