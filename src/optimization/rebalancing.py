@@ -84,6 +84,7 @@ def classify_rebalance_action(
 
     return "HOLD"
 
+
 def calculate_current_allocation(
     holdings: Iterable[Mapping[str, Any]],
     latest_prices: Mapping[str, float],
@@ -170,4 +171,69 @@ def calculate_current_allocation(
         "current_weights": current_weights,
         "total_market_value": total_market_value,
         "excluded_tickers": excluded_tickers,
+        "is_complete": not excluded_tickers,
     }
+
+
+def build_rebalance_plan(
+    current_weights: Mapping[str, float],
+    target_weights: Mapping[str, float],
+    *,
+    allocation_complete: bool,
+    threshold: float = REBALANCE_THRESHOLD,
+) -> dict[str, dict[str, Any]]:
+    """
+    Build the canonical current-versus-target rebalance plan.
+
+    If any current holding is missing valid price or FX data, actions are
+    unavailable because the remaining weights would be incorrectly
+    normalized.
+    """
+    plan: dict[str, dict[str, Any]] = {}
+
+    for ticker, target_value in target_weights.items():
+        target_weight = float(target_value)
+        current_value = current_weights.get(ticker)
+
+        if (
+            not allocation_complete
+            or current_value is None
+        ):
+            plan[ticker] = {
+                "current_weight": None,
+                "target_weight": target_weight,
+                "gap": None,
+                "action": "UNAVAILABLE",
+                "reason": (
+                    "Current allocation is incomplete because price "
+                    "or FX data is unavailable"
+                ),
+            }
+            continue
+
+        current_weight = float(current_value)
+        gap = target_weight - current_weight
+        action = classify_rebalance_action(
+            current_weight,
+            target_weight,
+            threshold=threshold,
+        )
+
+        reason_by_action = {
+            "BUY": "Current allocation is below final target",
+            "SELL": "Current allocation is above final target",
+            "HOLD": (
+                "Current allocation is within the "
+                "1 percentage-point threshold"
+            ),
+        }
+
+        plan[ticker] = {
+            "current_weight": current_weight,
+            "target_weight": target_weight,
+            "gap": gap,
+            "action": action,
+            "reason": reason_by_action[action],
+        }
+
+    return plan

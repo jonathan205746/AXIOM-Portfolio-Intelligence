@@ -1,6 +1,7 @@
 import pytest
 
 from src.optimization.rebalancing import (
+    build_rebalance_plan,
     calculate_current_allocation,
     classify_model_adjustment,
     classify_rebalance_action,
@@ -168,3 +169,44 @@ def test_current_allocation_reports_missing_price():
 
     assert result["current_weights"] == {"AAPL": 1.0}
     assert "MSFT" in result["excluded_tickers"]
+
+
+def test_rebalance_plan_compares_current_to_target():
+    plan = build_rebalance_plan(
+        current_weights={
+            "GOOGL": 0.28,
+            "TCS.NS": 0.042,
+            "RELIANCE.NS": 0.138,
+        },
+        target_weights={
+            "GOOGL": 0.243,
+            "TCS.NS": 0.038,
+            "RELIANCE.NS": 0.138,
+        },
+        allocation_complete=True,
+    )
+
+    assert plan["GOOGL"]["gap"] == pytest.approx(-0.037)
+    assert plan["GOOGL"]["action"] == "SELL"
+
+    assert plan["TCS.NS"]["gap"] == pytest.approx(-0.004)
+    assert plan["TCS.NS"]["action"] == "HOLD"
+
+    assert plan["RELIANCE.NS"]["gap"] == pytest.approx(0.0)
+    assert plan["RELIANCE.NS"]["action"] == "HOLD"
+
+
+def test_incomplete_allocation_disables_all_actions():
+    plan = build_rebalance_plan(
+        current_weights={"AAPL": 1.0},
+        target_weights={
+            "AAPL": 0.60,
+            "MSFT": 0.40,
+        },
+        allocation_complete=False,
+    )
+
+    assert plan["AAPL"]["action"] == "UNAVAILABLE"
+    assert plan["MSFT"]["action"] == "UNAVAILABLE"
+    assert plan["AAPL"]["gap"] is None
+    assert plan["MSFT"]["current_weight"] is None

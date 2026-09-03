@@ -83,3 +83,32 @@ def test_report_source_contains_complete_news_pipeline():
     assert 'articles = all_news.get(ticker, [])' in source
     assert 'news_html = "\\n".join(news_parts)' in source
     assert "{optimizer_weight_pct}%%" not in source
+
+
+def test_live_and_report_consume_canonical_rebalance_plan():
+    analysis_source = Path(
+        "frontend/pages/3_Analysis.py"
+    ).read_text(encoding="utf-8")
+
+    report_source = Path(
+        "frontend/pages/report_generator.py"
+    ).read_text(encoding="utf-8")
+
+    expected_lookup = (
+        'plan_entry = rebalance_plan.get(ticker, {})'
+    )
+
+    assert expected_lookup in analysis_source
+    assert expected_lookup in report_source
+
+    assert (
+        'rebalance_plan = results.get("rebalance_plan", {})'
+        in analysis_source
+    )
+    assert (
+        'rebalance_plan = results.get("rebalance_plan", {})'
+        in report_source
+    )
+
+    assert "Rebalance Action" in analysis_source
+    assert "rebalance_action" in report_source

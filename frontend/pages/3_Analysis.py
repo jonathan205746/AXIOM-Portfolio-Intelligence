@@ -12,8 +12,15 @@ import plotly.express as px
 import plotly.graph_objects as go
 import json
 from typing import Any, cast
-from src.database.db import get_portfolio_holdings, save_optimization_run
-from pages.report_generator import generate_bloomberg_report
+from src.data.market_data import get_fx_rate as fetch_fx_rate
+from src.database.db import (
+    get_portfolio_holdings,
+    save_optimization_run,
+)
+from pages.report_generator import generate_axiom_report
+from src.data.market_data import (
+    get_fx_rate as fetch_fx_rate,
+)
 from src.optimization.health_score import HealthScoreEngine
 from src.optimization.adaptive_optimizer import AdaptiveHealthOptimizer
 from src.utils.sentiment import (
@@ -22,8 +29,12 @@ from src.utils.sentiment import (
 )
 
 from src.optimization.rebalancing import (
+    build_rebalance_plan,
+    calculate_current_allocation,
     classify_model_adjustment,
 )
+
+
 st.set_page_config(page_title="Analysis | Axiom", page_icon="▣", layout="wide")
 
 if not st.session_state.get("logged_in"):
@@ -37,6 +48,11 @@ if not portfolio:
     st.warning("Select a portfolio first")
     st.page_link("pages/2_Portfolio.py", label="◫ Go to Portfolio")
     st.stop()
+
+
+base_currency = str(
+    portfolio.get("currency") or "USD"
+).upper()
 
 # ── Design System ───────────────────────────────────────────
 from frontend.ui.theme import inject_theme, apply_plotly_theme
@@ -121,6 +137,19 @@ def _market_snapshot():
 
 market_data = _market_snapshot()
 
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_fx_rate(
+    source_currency: str,
+    target_currency: str,
+) -> float:
+    """Return a cached latest FX conversion rate."""
+    return fetch_fx_rate(
+        source_currency,
+        target_currency,
+    )
+
+
 # ── Sidebar & Command Bar ───────────────────────────────────
 page_sidebar("pages/3_Analysis.py", user=user, market_data=market_data)
 command_bar("AXIOM / ANALYSIS", f"PORTFOLIO: {portfolio['name'].upper()}")
@@ -195,7 +224,8 @@ with s1:
                       help="1.0 = Risk/Return first | 0.0 = Sentiment first")
     st.caption(f"Quant: {int(alpha*100)}% • Sentiment: {int((1-alpha)*100)}%")
 with s2:
-    portfolio_value = st.number_input("Portfolio Value (USD)", min_value=1000, max_value=10_000_000, value=100_000, step=10_000)
+    portfolio_value = st.number_input(
+        f"Risk Scenario Value ({base_currency})", min_value=1000, max_value=10_000_000, value=100_000, step=10_000)
     use_llm = st.checkbox("Enable AI Research Commentary", value=True)
 
 run_button = st.button("▶ Run Optimization", type="primary", use_container_width=True)
@@ -277,6 +307,51 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
         st.error(f"Price fetch failed: {exc}")
         return None
 
+
+    _set("Calculating current allocation...", 20, "prices")
+
+    latest_prices = {
+        ticker: float(
+            prices[ticker].dropna().iloc[-1]
+        )
+        for ticker in available
+        if not prices[ticker].dropna().empty
+    }
+
+    try:
+        current_allocation = calculate_current_allocation(
+            holdings=holdings,
+            latest_prices=latest_prices,
+            base_currency=base_currency,
+            fx_rate_provider=_cached_fx_rate,
+        )
+    except Exception as exc:
+        current_allocation = {
+            "base_currency": base_currency,
+            "market_values": {},
+            "current_weights": {},
+            "total_market_value": None,
+            "excluded_tickers": {
+                ticker: f"{type(exc).__name__}: {exc}"
+                for ticker in tickers
+            },
+            "is_complete": False,
+        }
+
+    results["current_allocation"] = current_allocation
+    results["base_currency"] = base_currency
+
+    excluded_tickers = current_allocation[
+        "excluded_tickers"
+    ]
+
+    if excluded_tickers:
+        st.warning(
+            "Actual rebalance actions are unavailable because "
+            "current price or FX data is missing for: "
+            + ", ".join(sorted(excluded_tickers))
+        )
+
     _set("Preparing optimizer...", 25, "optimizer")
     try:
         optimizer = PortfolioOptimizer(prices)
@@ -355,16 +430,29 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
         opt_result = selected["opt_result"]
         combined = selected["combined"]
         risk_report = selected["risk_report"]
+        final_weights = selected["final_weights"]
+
+        rebalance_plan = build_rebalance_plan(
+            current_weights=current_allocation[
+                "current_weights"
+            ],
+            target_weights=final_weights,
+            allocation_complete=bool(
+                current_allocation["is_complete"]
+            ),
+        )
+
         results.update({
             "opt_result": opt_result,
             "combined": combined,
-            "final_weights": selected["final_weights"],
+            "final_weights": final_weights,
             "final_stats": selected["final_stats"],
             "risk_report": risk_report,
             "health_score": selected["health_score"],
             "adaptive_candidates": selected["candidates"],
             "selected_cap": selected["selected_cap"],
             "tickers": available,
+            "rebalance_plan": rebalance_plan,
         })
     except Exception as exc:
         st.error(f"Adaptive optimization failed: {exc}")
@@ -483,6 +571,11 @@ sentiment_scores = results["sentiment_scores"]
 risk_report = results["risk_report"]
 recommendations = results.get("recommendations", [])
 combined = results["combined"]
+rebalance_plan = results.get("rebalance_plan", {})
+current_allocation = results.get(
+    "current_allocation",
+    {},
+)
 frontier_df = results["frontier_df"]
 prices = results["prices"]
 returns_df = results["returns"]
@@ -536,17 +629,50 @@ metric_grid(metrics, columns=5)
 
 # ── Exports ─────────────────────────────────────────────────
 st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
-weights_csv = pd.DataFrame([
-    {
-        "Ticker": display_names.get(t, t),
-        "Target Weight": f"{final_weights[t] * 100:.2f}%",
-        "Model Adjustment": classify_model_adjustment(
-            opt_result["weights"].get(t, 0.0),
-            final_weights.get(t, 0.0),
-        ),
 
-    } for t in available
-]).to_csv(index=False).encode("utf-8")
+
+weights_export_rows = []
+
+for ticker in available:
+    plan_entry = rebalance_plan.get(ticker, {})
+
+    weights_export_rows.append({
+        "Ticker": display_names.get(ticker, ticker),
+        "Current Weight": _safe_pct(
+            plan_entry.get("current_weight"),
+            2,
+        ),
+        "Quant Target": _safe_pct(
+            opt_result["weights"].get(ticker),
+            2,
+        ),
+        "Final Target": _safe_pct(
+            final_weights.get(ticker),
+            2,
+        ),
+        "Model Shift": _safe_pct(
+            combined["weight_changes"][ticker]["change"],
+            2,
+        ),
+        "Model Adjustment": classify_model_adjustment(
+            opt_result["weights"].get(ticker, 0.0),
+            final_weights.get(ticker, 0.0),
+        ),
+        "Rebalance Gap": _safe_pct(
+            plan_entry.get("gap"),
+            2,
+        ),
+        "Rebalance Action": plan_entry.get(
+            "action",
+            "UNAVAILABLE",
+        ),
+    })
+
+weights_csv = (
+    pd.DataFrame(weights_export_rows)
+    .to_csv(index=False)
+    .encode("utf-8")
+)
 
 risk_csv = pd.DataFrame([
     {"Metric": "Volatility", "Value": f"{risk_report['volatility']['portfolio_annualized']*100:.2f}%"},
@@ -564,7 +690,7 @@ with col_e3:
         st.code(f"Portfolio: {portfolio['name']} | Sharpe: {opt_result['sharpe_ratio']:.2f} | AI: {ai_score:.0f}/100", language=None)
 with col_e4:
     try:
-        report_html = generate_bloomberg_report(portfolio, results, display_names)
+        report_html = generate_axiom_report(portfolio, results, display_names)
         st.download_button(
             "◉ Full Report",
             report_html.encode("utf-8"),

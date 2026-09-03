@@ -92,7 +92,15 @@ def generate_axiom_report(portfolio, results, display_names):
     risk_report = results.get("risk_report", {})
     recommendations = results.get("recommendations", [])
     combined = results.get("combined", {})
-    frontier_df = results.get("frontier_df", pd.DataFrame())
+    rebalance_plan = results.get("rebalance_plan", {})
+    current_allocation = results.get(
+        "current_allocation",
+        {},
+    )
+    frontier_df = results.get(
+        "frontier_df",
+        pd.DataFrame(),
+    )
     returns_df = results.get("returns", pd.DataFrame())
     correlation_matrix = results.get("correlation_matrix")
     available = results.get("tickers", [])
@@ -103,7 +111,18 @@ def generate_axiom_report(portfolio, results, display_names):
     var99 = risk_report.get("value_at_risk", {}).get("historical_99", {})
     vol = risk_report.get("volatility", {}).get("portfolio_annualized", 0)
     mdd = risk_report.get("drawdown", {}).get("portfolio", {})
-    avg_sent = sum(sentiment_scores.values()) / len(sentiment_scores) if sentiment_scores else 0
+    available_sentiments = [
+        float(score)
+        for score in sentiment_scores.values()
+        if score is not None
+    ]
+
+    avg_sent = (
+        sum(available_sentiments)
+        / len(available_sentiments)
+        if available_sentiments
+        else None
+    )
 
     news_counts = {t: len(all_news.get(t, [])) for t in available}
     health = results.get("health_score") or HealthScoreEngine.calculate(
@@ -146,65 +165,88 @@ def generate_axiom_report(portfolio, results, display_names):
         "border_subtle": "rgba(255, 255, 255, 0.05)",
         "border_active": "rgba(255, 255, 255, 0.10)",
     }
-
-    # ── Weights Table ─────────────────────────────────────────
+    # ── Weights Table ────────────────────────────────────────
     weights_rows = []
-    vols = risk_report.get("volatility", {}).get("per_ticker_annualized", {})
-    max_vol = max(vols.values()) if vols else 0
 
-    for t in available:
+    for ticker in available:
         optimized_weight = float(
-            opt_result.get("weights", {}).get(t, 0.0)
+            opt_result
+            .get("weights", {})
+            .get(ticker, 0.0)
         )
-        final_weight = float(final_weights.get(t, 0.0))
+        final_weight = float(
+            final_weights.get(ticker, 0.0)
+        )
 
-        w_opt = optimized_weight * 100
-        w_final = final_weight * 100
+        optimized_pct = optimized_weight * 100
+        final_pct = final_weight * 100
+        model_change_pct = (
+            final_weight - optimized_weight
+        ) * 100
 
-        wc = combined.get("weight_changes", {}).get(t, {})
-        change = (final_weight - optimized_weight) * 100
-
-        action = classify_model_adjustment(
+        model_action = classify_model_adjustment(
             optimized_weight,
             final_weight,
         )
 
-        if action == "INCREASE":
+        plan_entry = rebalance_plan.get(ticker, {})
+        current_weight = plan_entry.get("current_weight")
+        rebalance_gap = plan_entry.get("gap")
+        rebalance_action = plan_entry.get(
+            "action",
+            "UNAVAILABLE",
+        )
+        reason = plan_entry.get(
+            "reason",
+            "Current allocation data is unavailable",
+        )
+
+        current_text = (
+            f"{float(current_weight) * 100:.2f}%"
+            if current_weight is not None
+            else "N/A"
+        )
+        gap_text = (
+            f"{float(rebalance_gap) * 100:+.2f}%"
+            if rebalance_gap is not None
+            else "N/A"
+        )
+
+        if rebalance_action == "BUY":
             action_color = C["green"]
-        elif action == "DECREASE":
+        elif rebalance_action == "SELL":
             action_color = C["red"]
         else:
             action_color = C["text_secondary"]
 
-        change_color = C["green"] if change >= 0 else C["red"]
+        if model_action == "INCREASE":
+            model_color = C["green"]
+        elif model_action == "DECREASE":
+            model_color = C["red"]
+        else:
+            model_color = C["text_secondary"]
 
-        reason = ""
-        if action == "EXCLUDE":
-            reasons = []
-            if w_opt < 0.1:
-                reasons.append("Low Sharpe contribution")
-            sent = sentiment_scores.get(t, 0)
-            if sent < -0.1:
-                reasons.append(f"Negative sentiment ({sent:+.2f})")
-            if vols.get(t, 0) >= max_vol * 0.95:
-                reasons.append("High volatility")
-            reason = "; ".join(reasons) if reasons else "Suboptimal risk/return"
-        elif action == "UNCHANGED":
-            reason = "Within 1 percentage-point model threshold"
-        elif action == "INCREASE":
-            reason = "Sentiment or diversification increased target"
-        elif action == "DECREASE":
-            reason = "Sentiment or concentration reduced target"
+        if rebalance_gap is None:
+            gap_color = C["text_secondary"]
+        elif float(rebalance_gap) >= 0:
+            gap_color = C["green"]
+        else:
+            gap_color = C["red"]
 
         weights_rows.append(f"""
         <tr>
-            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};color:{C['text_primary']};font-weight:600;font-family:'Inter',sans-serif;">{display_names.get(t, t)}</td>
-            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};color:{C['text_secondary']};text-align:right;font-family:'JetBrains Mono',monospace;">{w_opt:.2f}%</td>
-            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};color:{C['accent']};text-align:right;font-weight:700;font-family:'JetBrains Mono',monospace;">{w_final:.2f}%</td>
-            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{change_color};font-family:'JetBrains Mono',monospace;">{change:+.2f}%</td>
-            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{action_color};font-weight:700;font-family:'JetBrains Mono',monospace;">{action}</td>
-            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{C['text_tertiary']};font-size:0.72rem;">{reason}</td>
-        </tr>""")
+          <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};color:{C['text_primary']};font-weight:600;">{escape(str(display_names.get(ticker, ticker)))}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{C['text_primary']};font-family:'JetBrains Mono',monospace;">{current_text}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{C['text_secondary']};font-family:'JetBrains Mono',monospace;">{optimized_pct:.2f}%</td>
+          <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{C['accent']};font-weight:700;font-family:'JetBrains Mono',monospace;">{final_pct:.2f}%</td>
+          <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{model_color};font-family:'JetBrains Mono',monospace;">{model_change_pct:+.2f}%</td>
+          <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{model_color};font-weight:600;">{model_action}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{gap_color};font-family:'JetBrains Mono',monospace;">{gap_text}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{action_color};font-weight:700;">{rebalance_action}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};color:{C['text_tertiary']};font-size:0.70rem;">{escape(str(reason))}</td>
+        </tr>
+        """)
+
     weights_html = "\n".join(weights_rows)
 
     # ── Sentiment Rows ────────────────────────────────────────
@@ -229,6 +271,13 @@ def generate_axiom_report(portfolio, results, display_names):
     sentiment_html = "\n".join(sentiment_rows)
 
     # ── Risk Per Ticker ───────────────────────────────────────
+    vols = (
+        risk_report
+        .get("volatility", {})
+        .get("per_ticker_annualized", {})
+    )
+
+
     risk_rows = []
     for t in available:
         v = vols.get(t, 0) * 100
@@ -563,7 +612,18 @@ def generate_axiom_report(portfolio, results, display_names):
 
     exp_ret = opt_result.get("expected_return", 0)
     exp_ret_cls = "pos" if exp_ret > 0 else "neg"
-    avg_sent_cls = "pos" if avg_sent > 0.05 else ("neg" if avg_sent < -0.05 else "accent")
+    if avg_sent is None:
+        avg_sent_cls = "accent"
+        avg_sent_text = "N/A"
+    elif avg_sent > 0.05:
+        avg_sent_cls = "pos"
+        avg_sent_text = f"{avg_sent:+.3f}"
+    elif avg_sent < -0.05:
+        avg_sent_cls = "neg"
+        avg_sent_text = f"{avg_sent:+.3f}"
+    else:
+        avg_sent_cls = "accent"
+        avg_sent_text = f"{avg_sent:+.3f}"
 
     # ── HTML Assembly ─────────────────────────────────────────
     html = f"""<!DOCTYPE html>
@@ -751,7 +811,7 @@ def generate_axiom_report(portfolio, results, display_names):
           <div class="kpi-label">Max Drawdown</div>
         </div>
         <div class="kpi-cell">
-          <div class="kpi-value {avg_sent_cls}">{avg_sent:+.3f}</div>
+          <div class="kpi-value {avg_sent_cls}">{avg_sent_text}</div>
           <div class="kpi-label">Avg Sentiment</div>
         </div>
       </div>
@@ -794,20 +854,23 @@ def generate_axiom_report(portfolio, results, display_names):
   <div class="panel animate-in">
     <div class="panel-header violet">
       <span class="panel-title violet">◫ Portfolio Composition</span>
-      <span class="panel-sub">QUANTITATIVE VS FINAL TARGETS</span>
+      <span class="panel-sub">CURRENT VS QUANTITATIVE VS FINAL TARGETS</span>
     </div>
     <div class="panel-body">
       <table>
         <thead>
-          <tr>
-            <th>TICKER</th>
-            <th style="text-align:right">OPTIMIZED</th>
-            <th style="text-align:right">FINAL</th>
-            <th style="text-align:right">CHANGE</th>
-            <th style="text-align:right">MODEL ADJUSTMENT</th>
-            <th style="text-align:right">REASON</th>
-          </tr>
-        </thead>
+            <tr>
+                <th>TICKER</th>
+                    <th style="text-align:right">CURRENT</th>
+                    <th style="text-align:right">QUANT</th>
+                    <th style="text-align:right">FINAL</th>
+                    <th style="text-align:right">MODEL SHIFT</th>
+                    <th style="text-align:right">MODEL ADJUSTMENT</th>
+                    <th style="text-align:right">REBALANCE GAP</th>
+                    <th style="text-align:right">ACTION</th>
+                    <th>REASON</th>
+                </tr>
+            </thead>
         <tbody>{weights_html}</tbody>
       </table>
     </div>
