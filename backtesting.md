@@ -1,74 +1,120 @@
-# AXIOM Backtest Summary
+# AXIOM Backtesting Methodology
 
-Evaluation window: `2021-01-04` to `2025-12-31`  
-Assets: `AAPL, MSFT, GOOGL, AMZN, META`  
-Benchmark: `^GSPC`
+AXIOM includes a leakage-aware, price-only walk-forward backtest for the
+quantitative optimizer. It compares:
 
-| Metric | AXIOM combined | Quantitative only | Equal weight | Benchmark |
-| --- | ---: | ---: | ---: | ---: |
-| CAGR | Not measured* | 16.83% | 20.59% | 13.12% |
-| Annualized volatility | Not measured* | 26.51% | 26.76% | 16.96% |
-| Sharpe ratio | Not measured* | 0.531 | 0.648 | 0.519 |
-| Sortino ratio | Not measured* | 0.790 | 0.909 | 0.712 |
-| Maximum drawdown | Not measured* | -39.63% | -46.55% | -25.43% |
-| Annual turnover | Not measured* | 348.54% | 50.08% | N/A |
-| Transaction-cost drag | Not measured* | 3.84% | 0.55% | 0.00% |
+1. the quantitative-only optimizer;
+2. monthly rebalanced equal weight; and
+3. a buy-and-hold market benchmark.
 
+The sentiment-adjusted AXIOM strategy is not historically measured because the
+repository does not contain a point-in-time historical news and sentiment
+dataset. Current news must not be used to simulate past decisions.
 
-### Turnover methodology
+## Evaluation configuration
 
-Annual turnover uses the standard one-way definition:
+- Evaluation window: 2021-01-04 through 2025-12-31
+- Asset universe: AAPL, MSFT, GOOGL, AMZN, META
+- Benchmark: S&P 500 (`^GSPC`)
+- Rebalance frequency: monthly, on the first shared trading observation
+- Optimization lookback: 252 observations
+- Risk-free rate: 5% annually
+- Weight constraints: 2% minimum and 35% maximum per asset
+- Transaction-cost rate: 15 bps per traded notional
+- Initial capital: 100,000 currency units
 
-`turnover = 0.5 × Σ |target weight − pre-trade weight|`
+## Leakage controls
 
-Transaction costs use the complete traded notional across both purchases and
-sales:
+At each rebalance, the optimizer receives only observations strictly preceding
+the rebalance date. The selected weights are then used for subsequent strategy
+returns. No future price, current-period return, or current news is supplied to
+the optimizer.
 
-`traded notional = Σ |target weight − pre-trade weight|`
+All compared series use common dates. Missing benchmark observations are not
+forward-filled.
 
-`transaction cost = portfolio value × traded notional × cost rate`
+## Initial portfolio convention
 
+The first target portfolio is treated as the common initial establishment. It
+starts at the configured initial capital and is excluded from reported turnover
+and transaction costs. Turnover and modeled costs begin with the next monthly
+rebalance.
 
-## Results analysis
+## Turnover and transaction costs
 
-During the evaluation period from January 2021 through December 2025, the
-monthly rebalanced equal-weight strategy produced the highest CAGR and the
-highest Sharpe ratio among the tested portfolio strategies.
+Weights drift with individual asset returns between rebalances. Turnover is
+therefore calculated against the drifted pre-trade portfolio rather than the
+previous target weights.
 
-The quantitative-only optimizer generated a 16.83% CAGR compared with 20.59%
-for equal weight. Its Sharpe ratio was 0.531 compared with 0.648 for equal
-weight. This indicates that historical mean-variance optimization did not
-provide better risk-adjusted performance for this concentrated large-cap
-technology universe.
+Standard one-way turnover is:
 
-The quantitative optimizer did, however, reduce maximum drawdown relative to
-equal weight:
+```text
+0.5 * sum(abs(target weight - drifted pre-trade weight))
+```
 
-- Quantitative-only maximum drawdown: -39.63%
-- Equal-weight maximum drawdown: -46.55%
+Complete traded notional across purchases and sales is:
 
-The quantitative strategy's main weakness was turnover. Annual turnover reached
-348.54%, creating an estimated transaction-cost drag of 3.84%. Equal weight
-generated only 50.08% annual turnover and approximately 0.55% transaction-cost
-drag.
+```text
+sum(abs(target weight - drifted pre-trade weight))
+```
 
-The S&P 500 benchmark produced a lower CAGR of 13.12%, but it also had
-substantially lower volatility and drawdown. Its 16.96% annualized volatility
-and -25.43% maximum drawdown demonstrate the diversification advantage of the
-broader market index.
+Modeled transaction cost is deducted once on each rebalance:
 
-These findings do not establish that one strategy will perform better in the
-future. They show that:
+```text
+net portfolio value * complete traded notional * transaction-cost rate
+```
 
-1. simple baselines are essential when evaluating optimization systems;
-2. expected-return and covariance estimates can create unstable allocations;
-3. turnover and transaction costs can remove theoretical optimization benefits;
-4. higher returns must be evaluated alongside volatility and drawdown;
-5. a concentrated technology universe is not directly comparable with the
-   diversified S&P 500 without acknowledging the universe difference.
+The backtest records separate gross and net NAV series. Net performance is the
+primary result, while gross performance shows the effect before modeled costs.
 
+## Corrected results
 
+| Metric | Quantitative only | Equal weight | Benchmark |
+| --- | ---: | ---: | ---: |
+| Net CAGR | 16.83% | 20.59% | 13.12% |
+| Gross CAGR | 17.42% | 20.68% | 13.12% |
+| Net annualized volatility | 26.51% | 26.76% | 16.96% |
+| Net Sharpe ratio | 0.536 | 0.653 | 0.526 |
+| Net Sortino ratio | 0.787 | 0.942 | 0.749 |
+| Net maximum drawdown | -39.63% | -46.55% | -25.43% |
+| Annual one-way turnover | 167.46% | 25.03% | N/A |
+| CAGR cost drag | 0.59% | 0.09% | 0.00% |
+| Transaction costs / initial capital | 3.82% | 0.56% | 0.00% |
 
-*AXIOM combined is not measured because the repository does not yet contain a point-in-time historical news/sentiment dataset. Current news must not be used to simulate past decisions.*
+For this concentrated large-cap technology universe, equal weight produced the
+highest net CAGR and net Sharpe ratio. The quantitative optimizer reduced
+maximum drawdown relative to equal weight, but its higher turnover caused a
+larger modeled cost drag. The broader S&P 500 benchmark had lower return but
+substantially lower volatility and maximum drawdown.
 
-> Historical performance does not guarantee future results. This report is for research and educational use only.
+## Output files
+
+Running the backtest writes:
+
+- `daily_nav.csv`: gross and net daily NAV plus the benchmark;
+- `monthly_nav.csv`: month-end NAV observations;
+- `portfolio_weights.csv`: targets, turnover, traded notional, and costs;
+- `backtest_results.json`: configuration and structured metrics; and
+- `backtest_summary.md`: generated human-readable summary.
+
+## Reproduction
+
+```powershell
+python scripts\backtest.py --output-dir results\turnover-corrected
+python scripts\generate_backtest_report.py `
+  --input results\turnover-corrected\backtest_results.json `
+  --output results\turnover-corrected\backtest_summary.md
+```
+
+## Limitations
+
+- Results are historical simulations, not live or out-of-sample guarantees.
+- The asset universe is concentrated in US large-cap technology equities.
+- Taxes, slippage, bid-ask spread variation, market impact, and partial fills
+  are not modeled separately from the constant transaction-cost assumption.
+- Delisting and survivorship-bias controls are not implemented.
+- The benchmark is not matched to the portfolio's sector concentration.
+- Historical AI/sentiment performance is intentionally not claimed.
+
+Historical performance does not guarantee future results. This backtest is for
+research and educational use only.
