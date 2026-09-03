@@ -20,7 +20,12 @@ from frontend.ui.components import (
     glass_container, info_card, badge
 )
 
-st.set_page_config(page_title="Compare | Axiom", page_icon="⚖", layout="wide")
+st.set_page_config(
+    page_title="Portfolio | Axiom",
+    page_icon="◫",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 inject_theme()
 
 if not st.session_state.get("logged_in"):
@@ -31,9 +36,7 @@ if not st.session_state.get("logged_in"):
 user = st.session_state["user"]
 portfolio = st.session_state.get("current_portfolio")
 if not portfolio:
-    st.warning("Select a portfolio first")
-    st.page_link("pages/2_Portfolio.py", label="◫ Go to Portfolio")
-    st.stop()
+    st.switch_page("pages/2_Portfolio.py")
 
 results = st.session_state.get("results")
 if not results:

@@ -17,12 +17,15 @@ from src.data.market_data import (
 )
 
 
-st.set_page_config(page_title="Portfolio | Axiom", page_icon="◫", layout="wide")
+st.set_page_config(
+    page_title="Portfolio | Axiom",
+    page_icon="◫",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 if not st.session_state.get("logged_in"):
-    st.warning("Authentication required")
-    st.page_link("pages/1_Login.py", label="▶ Go to Login")
-    st.stop()
+    st.switch_page("pages/1_Login.py")
 
 user = st.session_state["user"]
 
@@ -180,47 +183,101 @@ st.markdown("""
 portfolios = get_user_portfolios(user["id"])
 
 # ── Layout ──────────────────────────────────────────────────
-col_left, col_right = st.columns([3, 1], gap="small")
+# ── Portfolio Creation ──────────────────────────────────────
+with st.expander(
+    "+ New Portfolio",
+    expanded=not portfolios,
+):
+    new_name = st.text_input(
+        "NAME",
+        placeholder="e.g. TECH_PICKS_INDIA",
+        key="new_pf_name",
+    )
+    new_desc = st.text_input(
+        "DESCRIPTION",
+        placeholder="Optional",
+        key="new_pf_desc",
+    )
+    new_curr = st.selectbox(
+        "CURRENCY",
+        ["USD", "INR"],
+        key="new_pf_curr",
+    )
 
-with col_right:
-    section_header("+ New Portfolio", "Create workspace", accent="green")
-    st.markdown("""
-    <div style="
-        background: rgba(18,18,26,0.72);
-        border: 1px solid rgba(255,255,255,0.06);
-        border-top: 2px solid #10B981;
-        border-radius: 12px;
-        backdrop-filter: blur(20px);
-        padding: 16px;
-    ">
-    """, unsafe_allow_html=True)
-    new_name = st.text_input("NAME", placeholder="e.g. TECH_PICKS_INDIA", key="new_pf_name")
-    new_desc = st.text_input("DESCRIPTION", placeholder="Optional", key="new_pf_desc")
-    new_curr = st.selectbox("CURRENCY", ["USD", "INR"], key="new_pf_curr")
-    if st.button("+ CREATE", use_container_width=True, type="primary"):
-        if new_name:
-            p = create_portfolio(user["id"], new_name, new_desc, new_curr)
-            if p:
-                st.success(f"Created: {new_name.upper()}")
-                st.rerun()
-        else:
+    if st.button(
+        "+ CREATE",
+        use_container_width=True,
+        type="primary",
+    ):
+        if not new_name.strip():
             st.error("Name required")
-    st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            created_portfolio = create_portfolio(
+                user["id"],
+                new_name.strip(),
+                new_desc.strip(),
+                new_curr,
+            )
 
-with col_left:
-    if not portfolios:
-        info_card(
-            "No Portfolios Found",
-            "Create a portfolio workspace to begin tracking holdings and running AI analysis.",
-            badge("START HERE", tone="positive"),
-            accent="cyan"
-        )
-        st.stop()
-    
-    portfolio_names = [p["name"] for p in portfolios]
-    selected_name = st.selectbox("SELECT PORTFOLIO", portfolio_names, key="sel_pf")
-    selected_portfolio = next(p for p in portfolios if p["name"] == selected_name)
-    st.session_state["current_portfolio"] = selected_portfolio
+            if created_portfolio:
+                st.session_state["current_portfolio"] = (
+                    created_portfolio
+                )
+                st.session_state.pop("results", None)
+                st.success(
+                    f"Created: {new_name.strip().upper()}"
+                )
+                st.rerun()
+            else:
+                st.error("Portfolio could not be created")
+
+
+# ── Portfolio Selection ─────────────────────────────────────
+if not portfolios:
+    info_card(
+        "No Portfolios Found",
+        "Create a portfolio workspace to begin tracking holdings "
+        "and running AI analysis.",
+        badge("START HERE", tone="positive"),
+        accent="cyan",
+    )
+    st.stop()
+
+portfolio_names = [p["name"] for p in portfolios]
+
+current_portfolio = st.session_state.get("current_portfolio")
+current_id = (
+    current_portfolio.get("id")
+    if isinstance(current_portfolio, dict)
+    else None
+)
+
+default_index = next(
+    (
+        index
+        for index, item in enumerate(portfolios)
+        if item.get("id") == current_id
+    ),
+    0,
+)
+
+selected_name = st.selectbox(
+    "SELECT PORTFOLIO",
+    portfolio_names,
+    index=default_index,
+    key="sel_pf",
+)
+
+selected_portfolio = next(
+    item
+    for item in portfolios
+    if item["name"] == selected_name
+)
+
+if selected_portfolio.get("id") != current_id:
+    st.session_state.pop("results", None)
+
+st.session_state["current_portfolio"] = selected_portfolio
 
 # ── Portfolio Header ────────────────────────────────────────
 st.markdown(f"""

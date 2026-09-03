@@ -10,7 +10,14 @@ import pandas as pd
 import plotly.graph_objects as go
 from typing import Any
 from src.database.db import get_portfolio_history
-st.set_page_config(page_title="History | Axiom", page_icon="◫", layout="wide")
+
+
+st.set_page_config(
+    page_title="Portfolio | Axiom",
+    page_icon="◫",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 
 if not st.session_state.get("logged_in"):
@@ -21,9 +28,7 @@ if not st.session_state.get("logged_in"):
 user = st.session_state["user"]
 portfolio = st.session_state.get("current_portfolio")
 if not portfolio:
-    st.warning("Select a portfolio first")
-    st.page_link("pages/2_Portfolio.py", label="◫ Go to Portfolio")
-    st.stop()
+    st.switch_page("pages/2_Portfolio.py")
 
 # ── Design System ───────────────────────────────────────────
 from frontend.ui.theme import inject_theme, apply_plotly_theme
@@ -79,6 +84,18 @@ st.markdown("""
 
 history = get_portfolio_history(portfolio["id"], limit=30)
 
+IST_TIMEZONE = "Asia/Kolkata"
+
+
+def _format_run_time_ist(value) -> str:
+    timestamp = pd.to_datetime(value, errors="coerce", utc=True)
+
+    if pd.isna(timestamp):
+        return "N/A"
+
+    return timestamp.tz_convert(IST_TIMEZONE).strftime(
+        "%Y-%m-%d %H:%M:%S IST"
+    )
 if not history:
     info_card(
         "No Optimization Runs",
@@ -93,7 +110,11 @@ if not history:
 # ── Summary Metrics ─────────────────────────────────────────
 latest = history[0] if history else None
 if latest:
-    section_header("Latest Run Summary", f"Recorded {latest.get('run_date', 'N/A')[:10]}", accent="green")
+    section_header(
+    "Latest Run Summary",
+    f"Recorded {_format_run_time_ist(latest.get('run_date'))}",
+    accent="green",
+)
     metrics = [
         {"label": "Sharpe Ratio", "value": f"{latest.get('sharpe_ratio', 0):.3f}", "tone": "cyan", "icon": "◉"},
         {"label": "Expected Return", "value": f"{latest.get('expected_return', 0)*100:.2f}%", "tone": "positive" if latest.get("expected_return", 0) > 0 else "negative", "icon": "▲"},
@@ -126,8 +147,7 @@ trend_df = pd.DataFrame(
     for run in comparable_runs
 )
 
-trend_df["date"] = pd.to_datetime(trend_df["date"], errors="coerce")
-trend_df["plot_date"] = trend_df["date"].dt.strftime("%Y-%m-%d")
+trend_df["date"] = pd.to_datetime(trend_df["date"], errors="coerce", utc=True).dt.tz_convert(IST_TIMEZONE)
 trend_df = (
     trend_df
     .dropna(
@@ -143,6 +163,7 @@ trend_df = (
 
 # Multiple reruns on one day otherwise create dense vertical clusters.
 trend_df["run_day"] = trend_df["date"].dt.normalize()
+trend_df["plot_date"] = trend_df["date"].dt.strftime("%Y-%m-%d")
 trend_df = (
     trend_df
     .groupby("run_day", as_index=False)
@@ -251,14 +272,14 @@ else:
 
 
 # ── All Past Runs Table ─────────────────────────────────────
-section_header("All Past Runs", f"{len(history)} records", accent="green")
+section_header("All Past Runs", f"{len(history)} records · Times shown in IST", accent="green")
 glass_container(accent="green")
 
 rows = []
 for run in history:
     tickers = run.get("tickers") or []
     rows.append({
-        "Date": run.get("run_date"),
+        "Date (IST)": _format_run_time_ist(run.get("run_date")),
         "Tickers": ", ".join(tickers[:4]) + ("..." if len(tickers) > 4 else ""),
         "Alpha": run.get("alpha_used"),
         "Sharpe": f"{run['sharpe_ratio']:.4f}" if run.get("sharpe_ratio") else "N/A",

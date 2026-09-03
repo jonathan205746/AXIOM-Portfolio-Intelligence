@@ -36,7 +36,12 @@ from src.optimization.rebalancing import (
 )
 
 
-st.set_page_config(page_title="Analysis | Axiom", page_icon="▣", layout="wide")
+st.set_page_config(
+    page_title="Portfolio | Axiom",
+    page_icon="◫",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 if not st.session_state.get("logged_in"):
     st.warning("Authentication required")
@@ -46,9 +51,7 @@ if not st.session_state.get("logged_in"):
 user = st.session_state["user"]
 portfolio = st.session_state.get("current_portfolio")
 if not portfolio:
-    st.warning("Select a portfolio first")
-    st.page_link("pages/2_Portfolio.py", label="◫ Go to Portfolio")
-    st.stop()
+    st.switch_page("pages/2_Portfolio.py")
 
 
 base_currency = str(

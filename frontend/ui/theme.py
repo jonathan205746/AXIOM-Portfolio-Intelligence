@@ -216,9 +216,37 @@ def generate_css() -> str:
 
     return f"""
 <style>
-/* Hide Streamlit native header so custom command_bar sits at top */
-header[data-testid="stHeader"] {{ display: none !important; }}
-.stApp {{ margin-top: 0 !important; }}
+
+
+/* Keep Streamlit's header because it owns the sidebar reopen control. */
+header[data-testid="stHeader"] {{
+  display: block !important;
+  background: transparent !important;
+  border-bottom: none !important;
+}}
+
+[data-testid="stSidebar"] {{
+  background: linear-gradient(
+    180deg,
+    var(--bg-secondary) 0%,
+    var(--bg-primary) 100%
+  ) !important;
+  border-right: 1px solid var(--border-subtle) !important;
+}}
+
+[data-testid="stSidebar"] > div:first-child {{
+  padding: 0 !important;
+  background: transparent !important;
+}}
+
+[data-testid="stSidebarNav"] {{
+  display: none !important;
+}}
+
+.stApp {{
+  margin-top: 0 !important;
+}}
+
 
 {font_import}
 
@@ -282,11 +310,20 @@ html, body, [class*="css"] {{
 
 /* ── Sidebar ─────────────────────────────────────────────── */
 [data-testid="stSidebar"] {{
-  background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%) !important;
+  background: linear-gradient(
+    180deg,
+    var(--bg-secondary) 0%,
+    var(--bg-primary) 100%
+  ) !important;
   border-right: 1px solid var(--border-subtle) !important;
+}}
+
+[data-testid="stSidebar"][aria-expanded="true"] {{
   min-width: 280px !important;
+  width: 280px !important;
   max-width: 320px !important;
 }}
+
 
 [data-testid="stSidebar"] > div:first-child {{
   padding: 0 !important;

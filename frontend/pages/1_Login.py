@@ -10,7 +10,12 @@ from src.database.db import create_user, get_user, create_portfolio, reset_passw
 
 init_db()
 
-st.set_page_config(page_title="Authenticate | Axiom", page_icon="🔐", layout="wide")
+st.set_page_config(
+    page_title="Portfolio | Axiom",
+    page_icon="◫",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 from frontend.ui.theme import inject_theme
 from frontend.ui.components import (
