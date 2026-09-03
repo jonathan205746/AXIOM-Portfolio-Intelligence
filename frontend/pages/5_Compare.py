@@ -86,7 +86,7 @@ st.markdown("""
         Benchmark Comparison
     </div>
     <div style="font-size:0.85rem;color:#8b8b9e;margin-top:6px;">
-        Optimized vs Equal-Weight vs S&P 500 (SPY)
+        Final Target vs Equal-Weight vs S&P 500 (SPY)
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -95,8 +95,6 @@ st.markdown("""
 available = results.get("tickers", [])
 final_weights = results.get("final_weights", {})
 returns_df = results.get("returns", pd.DataFrame())
-opt_result = results.get("opt_result", {})
-baseline = results.get("baseline", {})
 
 if returns_df.empty or not available:
     st.error("No return data — re-run analysis")
@@ -154,16 +152,44 @@ if not aligned_tickers:
     st.error("No overlapping tickers")
     st.stop()
 
-w_opt_raw = np.array([final_weights.get(t, 0.0) for t in aligned_tickers])
-w_eq_raw = np.array([1.0 / len(aligned_tickers)] * len(aligned_tickers))
-w_opt = w_opt_raw / w_opt_raw.sum() if w_opt_raw.sum() > 0 else w_eq_raw
-w_eq = w_eq_raw / w_eq_raw.sum()
-ret_matrix = aligned_returns[aligned_tickers].fillna(0).values
-opt_daily = pd.Series(ret_matrix @ w_opt, index=aligned_returns.index)
-eq_daily = pd.Series(ret_matrix @ w_eq, index=aligned_returns.index)
-cum_opt = (1 + opt_daily).cumprod()
+comparison_df = (
+    aligned_returns[aligned_tickers]
+    .join(aligned_spy.rename("SPY"), how="inner")
+    .dropna()
+)
+
+if len(comparison_df) < 10:
+    st.error("Insufficient complete overlapping history for comparison")
+    st.stop()
+
+w_final_raw = np.array(
+    [float(final_weights.get(t, 0.0)) for t in aligned_tickers],
+    dtype=float,
+)
+w_eq = np.full(len(aligned_tickers), 1.0 / len(aligned_tickers))
+
+w_final = (
+    w_final_raw / w_final_raw.sum()
+    if w_final_raw.sum() > 0
+    else w_eq
+)
+
+ret_matrix = comparison_df[aligned_tickers].to_numpy(dtype=float)
+final_daily = pd.Series(
+    ret_matrix @ w_final,
+    index=comparison_df.index,
+    name="Final Target",
+)
+eq_daily = pd.Series(
+    ret_matrix @ w_eq,
+    index=comparison_df.index,
+    name="Equal-Weight",
+)
+aligned_spy = comparison_df["SPY"].astype(float)
+
+cum_final = (1 + final_daily).cumprod()
 cum_eq = (1 + eq_daily).cumprod()
-cum_spy = (1 + aligned_spy.astype(float)).cumprod()
+cum_spy = (1 + aligned_spy).cumprod()
 
 TRADING_DAYS = 252
 
@@ -180,50 +206,86 @@ def max_drawdown_pct(cum_series: pd.Series) -> float:
     drawdown = (cum_series - rolling_max) / rolling_max
     return float(drawdown.min() * 100)
 
+opt_total_return = (cum_final.iloc[-1] - 1) * 100
+eq_total_return = (cum_eq.iloc[-1] - 1) * 100
+spy_total_return = (cum_spy.iloc[-1] - 1) * 100
+
+opt_ann_return = final_daily.mean() * TRADING_DAYS * 100
+eq_ann_return = eq_daily.mean() * TRADING_DAYS * 100
+spy_ann_return = aligned_spy.mean() * TRADING_DAYS * 100
+
+opt_ann_vol = final_daily.std() * np.sqrt(TRADING_DAYS) * 100
+eq_ann_vol = eq_daily.std() * np.sqrt(TRADING_DAYS) * 100
+spy_ann_vol = aligned_spy.std() * np.sqrt(TRADING_DAYS) * 100
+
+opt_sharpe = compute_sharpe(final_daily)
+eq_sharpe = compute_sharpe(eq_daily)
+spy_sharpe = compute_sharpe(aligned_spy)
+
+opt_max_dd = max_drawdown_pct(cum_final)
+eq_max_dd = max_drawdown_pct(cum_eq)
+spy_max_dd = max_drawdown_pct(cum_spy)
+
+
 # ── Performance Metrics Table ───────────────────────────────
 section_header("Performance Metrics", "Side-by-side comparison", accent="primary")
 glass_container(accent="primary")
 
 metrics_data = {
     "Metric": ["Total Return", "Ann Return", "Ann Vol", "Sharpe", "Max DD"],
-    "Optimized": [
-        f"{(cum_opt.iloc[-1] - 1) * 100:.2f}%",
-        f"{opt_daily.mean() * TRADING_DAYS * 100:.2f}%",
-        f"{opt_daily.std() * np.sqrt(TRADING_DAYS) * 100:.2f}%",
-        f"{compute_sharpe(opt_daily):.3f}",
-        f"{max_drawdown_pct(cum_opt):.2f}%"
+    "Final Target": [
+        f"{opt_total_return:.2f}%",
+        f"{opt_ann_return:.2f}%",
+        f"{opt_ann_vol:.2f}%",
+        f"{opt_sharpe:.3f}",
+        f"{opt_max_dd:.2f}%",
     ],
     "Equal-Weight": [
-        f"{(cum_eq.iloc[-1] - 1) * 100:.2f}%",
-        f"{eq_daily.mean() * TRADING_DAYS * 100:.2f}%",
-        f"{eq_daily.std() * np.sqrt(TRADING_DAYS) * 100:.2f}%",
-        f"{compute_sharpe(eq_daily):.3f}",
-        f"{max_drawdown_pct(cum_eq):.2f}%"
+        f"{eq_total_return:.2f}%",
+        f"{eq_ann_return:.2f}%",
+        f"{eq_ann_vol:.2f}%",
+        f"{eq_sharpe:.3f}",
+        f"{eq_max_dd:.2f}%",
     ],
     "SPY": [
-        f"{(cum_spy.iloc[-1] - 1) * 100:.2f}%",
-        f"{aligned_spy.mean() * TRADING_DAYS * 100:.2f}%",
-        f"{aligned_spy.std() * np.sqrt(TRADING_DAYS) * 100:.2f}%",
-        f"{compute_sharpe(aligned_spy):.3f}",
-        f"{max_drawdown_pct(cum_spy):.2f}%"
+        f"{spy_total_return:.2f}%",
+        f"{spy_ann_return:.2f}%",
+        f"{spy_ann_vol:.2f}%",
+        f"{spy_sharpe:.3f}",
+        f"{spy_max_dd:.2f}%"
     ]
 }
 st.dataframe(pd.DataFrame(metrics_data), hide_index=True, width='stretch')
+
+st.caption(
+    "In-sample historical illustration using the current final target weights. "
+    "All portfolios use the same complete overlapping dates. Weights are held "
+    "constant and transaction costs, taxes, slippage, and rebalancing are excluded."
+)
+
+
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ── KPI Summary ─────────────────────────────────────────────
-section_header("KPI Summary", "Optimized portfolio highlights", accent="green")
+section_header("KPI Summary", "Final target portfolio highlights", accent="green")
 k1, k2, k3 = st.columns(3)
 with k1:
-    st.metric("Opt Total Return", f"{(cum_opt.iloc[-1]-1)*100:.2f}%",
-              delta=f"{((cum_opt.iloc[-1]-1) - (cum_spy.iloc[-1]-1))*100:.2f}% vs SPY")
+    st.metric("Final Total Return", f"{(cum_final.iloc[-1]-1)*100:.2f}%",
+              delta=f"{((cum_final.iloc[-1]-1) - (cum_spy.iloc[-1]-1))*100:.2f}% vs SPY")
 with k2:
-    st.metric("Opt Sharpe", f"{compute_sharpe(opt_daily):.3f}",
-              delta=f"{compute_sharpe(opt_daily) - compute_sharpe(aligned_spy):.3f} vs SPY")
+    st.metric("Final Sharpe", f"{compute_sharpe(final_daily):.3f}",
+              delta=f"{compute_sharpe(final_daily) - compute_sharpe(aligned_spy):.3f} vs SPY")
+final_max_dd = max_drawdown_pct(cum_final)
+spy_max_dd = max_drawdown_pct(cum_spy)
+drawdown_gap = abs(final_max_dd) - abs(spy_max_dd)
+
 with k3:
-    st.metric("Opt Max DD", f"{max_drawdown_pct(cum_opt):.2f}%",
-              delta=f"{max_drawdown_pct(cum_opt) - max_drawdown_pct(cum_spy):.2f}% vs SPY",
-              delta_color="inverse")
+    st.metric(
+        "Final Max DD",
+        f"{final_max_dd:.2f}%",
+        delta=f"{drawdown_gap:+.2f} pp deeper than SPY",
+        delta_color="inverse",
+    )
 
 # ── Cumulative Returns Chart ────────────────────────────────
 section_header("Cumulative Returns vs Benchmark", "Growth trajectory", accent="cyan")
@@ -231,8 +293,8 @@ glass_container(accent="cyan")
 
 fig = go.Figure()
 fig.add_trace(go.Scatter(
-    x=cum_opt.index, y=(cum_opt - 1) * 100,
-    mode='lines', name="Optimized",
+    x=cum_final.index, y=(cum_final - 1) * 100,
+    mode='lines', name="Final Target",
     line=dict(color="#FF6B35", width=2.5)
 ))
 fig.add_trace(go.Scatter(
@@ -261,10 +323,10 @@ section_header("Rolling 60-Day Sharpe", "Risk-adjusted momentum", accent="violet
 glass_container(accent="violet")
 
 MIN_DAYS = 65
-if len(opt_daily) < MIN_DAYS:
+if len(final_daily) < MIN_DAYS:
     info_card(
         "Insufficient Data",
-        f"Need {MIN_DAYS} days of data for rolling Sharpe calculation. Current: {len(opt_daily)} days.",
+        f"Need {MIN_DAYS} days of data for rolling Sharpe calculation. Current: {len(final_daily)} days.",
         badge("NEED MORE DATA", "warning"),
         accent="amber"
     )
@@ -274,14 +336,14 @@ else:
         roll_std = series.rolling(window).std()
         return ((roll_mean - rf_daily) / roll_std * np.sqrt(252)).where(roll_std > 0)
 
-    roll_opt = rolling_sharpe(opt_daily)
+    roll_opt = rolling_sharpe(final_daily)
     roll_eq = rolling_sharpe(eq_daily)
     roll_spy = rolling_sharpe(aligned_spy)
 
     fig2 = go.Figure()
     fig2.add_trace(go.Scatter(
         x=roll_opt.index, y=roll_opt, mode='lines',
-        name="Optimized", line=dict(color="#FF6B35", width=2)
+        name="Final Target", line=dict(color="#FF6B35", width=2)
     ))
     fig2.add_trace(go.Scatter(
         x=roll_eq.index, y=roll_eq, mode='lines',
@@ -310,14 +372,14 @@ glass_container(accent="red")
 def drawdown_series(cum: pd.Series) -> pd.Series:
     return ((cum - cum.cummax()) / cum.cummax()) * 100
 
-dd_opt = drawdown_series(cum_opt)
+dd_opt = drawdown_series(cum_final)
 dd_eq = drawdown_series(cum_eq)
 dd_spy = drawdown_series(cum_spy)
 
 fig3 = go.Figure()
 fig3.add_trace(go.Scatter(
     x=dd_opt.index, y=dd_opt, mode='lines',
-    name="Optimized", line=dict(color="#FF6B35", width=1.5),
+    name="Final Target", line=dict(color="#FF6B35", width=1.5),
     fill='tozeroy', fillcolor="rgba(255,107,53,0.08)"
 ))
 fig3.add_trace(go.Scatter(
@@ -340,7 +402,7 @@ st.plotly_chart(fig3, width='stretch')
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ── Allocation Comparison ───────────────────────────────────
-section_header("Weight Allocation Comparison", "Optimized vs Equal-Weight", accent="amber")
+section_header("Weight Allocation Comparison", "Final Target vs Equal-Weight", accent="amber")
 display_names = {t: t for t in aligned_tickers}
 c1, c2 = st.columns(2)
 with c1:
@@ -351,7 +413,7 @@ with c1:
         labels=alloc_opt["Ticker"], values=alloc_opt["Weight"], hole=0.55,
         marker_colors=["#FF6B35", "#00D9FF", "#8B5CF6", "#10B981", "#F43F5E", "#F59E0B", "#EC4899", "#6366F1"]
     ))
-    fig_p1.update_layout(title="Optimized Weights", showlegend=True, height=320)
+    fig_p1.update_layout(title="Final Target Weights", showlegend=True, height=320)
     fig_p1 = apply_plotly_theme(fig_p1)
     st.plotly_chart(fig_p1, width='stretch')
     st.markdown("</div>", unsafe_allow_html=True)
