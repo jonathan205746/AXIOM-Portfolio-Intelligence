@@ -8,9 +8,14 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 import math
 import streamlit as st
 import yfinance as yf
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 import plotly.express as px
 from src.database.db import get_user_portfolios, create_portfolio, delete_portfolio, get_portfolio_holdings, add_holding, delete_holding
+from src.data.market_data import (
+    get_fx_rate as fetch_fx_rate,
+    market_currency,
+)
+
 
 st.set_page_config(page_title="Portfolio | Axiom", page_icon="◫", layout="wide")
 
@@ -54,12 +59,6 @@ def normalize_ticker(ticker: str):
         return t, t.rsplit(".", 1)[0], "IN"
     return t, t, "US"
 
-def market_currency(yf_ticker: str, exchange: str) -> str:
-    """Return the native quote currency used by the selected market."""
-    if exchange == "IN" or yf_ticker.upper().endswith((".NS", ".BO")):
-        return "INR"
-    return "USD"
-
 def validate_holding_input(
     ticker: str,
     quantity: float | None,
@@ -82,49 +81,30 @@ def validate_holding_input(
 def currency_symbol(currency: str) -> str:
     return {"INR": "₹", "USD": "$"}.get(currency, f"{currency} ")
 
-def parse_date(value) -> date:
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    return datetime.fromisoformat(str(value).replace("Z", "+00:00")).date()
-
 @st.cache_data(ttl=3600, show_spinner=False)
-def get_fx_rate(source_currency: str, target_currency: str, rate_date=None) -> float:
-    """Get USD/INR FX using buy-date data or the latest available close."""
-    source = source_currency.upper()
-    target = target_currency.upper()
-    if source == target:
-        return 1.0
-    if {source, target} != {"USD", "INR"}:
-        raise ValueError(f"Unsupported conversion: {source}/{target}")
+def get_fx_rate(
+    source_currency: str,
+    target_currency: str,
+    rate_date=None,
+) -> float:
+    """Return a cached shared USD/INR FX rate."""
+    return fetch_fx_rate(
+        source_currency,
+        target_currency,
+        rate_date,
+    )
 
-    pair = yf.Ticker("USDINR=X")
-    if rate_date is None:
-        history = pair.history(period="5d")
-    else:
-        requested = parse_date(rate_date)
-        history = pair.history(
-            start=requested - timedelta(days=5),
-            end=requested + timedelta(days=6),
-        )
-    closes = history["Close"].dropna() if not history.empty else []
-    if len(closes) == 0:
-        raise RuntimeError(f"FX rate unavailable for {source}/{target}")
-    if rate_date is None:
-        usd_to_inr = float(closes.iloc[-1])
-    else:
-        requested = parse_date(rate_date)
-        on_or_after = closes[[index.date() >= requested for index in closes.index]]
-        usd_to_inr = float(
-            on_or_after.iloc[0] if len(on_or_after) else closes.iloc[-1]
-        )
-    if not math.isfinite(usd_to_inr) or usd_to_inr <= 0:
-        raise RuntimeError("USD/INR provider returned an invalid rate")
-    return usd_to_inr if source == "USD" else 1.0 / usd_to_inr
-
-def convert_money(amount: float, source: str, target: str, rate_date=None) -> float:
-    return float(amount) * get_fx_rate(source, target, rate_date)
+def convert_money(
+    amount: float,
+    source: str,
+    target: str,
+    rate_date=None,
+) -> float:
+    return float(amount) * get_fx_rate(
+        source,
+        target,
+        rate_date,
+    )
 
 def get_current_price(yf_ticker: str):
     try:
@@ -305,16 +285,33 @@ with st.form("add_holding_form", clear_on_submit=True, enter_to_submit=False):
             if not valid:
                 st.error(err_msg)
             else:
-                yf_ticker, display, exchange = normalize_ticker(ticker_input)
-                quote_currency = market_currency(yf_ticker, exchange)
+                # Validation above guarantees both values are present.
+                assert quantity is not None
+                assert buy_price is not None
+
+                yf_ticker, display, exchange = normalize_ticker(
+                    ticker_input
+                )
+                quote_currency = market_currency(
+                    yf_ticker,
+                    exchange,
+                )
                 buy_currency = (
                     quote_currency if buy_currency_choice == "AUTO"
                     else buy_currency_choice
                 )
                 result = add_holding(
-                    selected_portfolio["id"], yf_ticker, display, exchange,
-                    float(quantity), float(buy_price), buy_currency,
-                    datetime.combine(buy_date_val, datetime.min.time())
+                    selected_portfolio["id"],
+                    yf_ticker,
+                    display,
+                    exchange,
+                    float(quantity),
+                    float(buy_price),
+                    buy_currency,
+                    datetime.combine(
+                        buy_date_val,
+                        datetime.min.time(),
+                    ),
                 )
                 if result:
                     st.success(f"Added {display} ({yf_ticker}) — {quantity} @ {buy_currency} {buy_price:.2f}")

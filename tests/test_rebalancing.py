@@ -1,6 +1,7 @@
 import pytest
 
 from src.optimization.rebalancing import (
+    calculate_current_allocation,
     classify_model_adjustment,
     classify_rebalance_action,
 )
@@ -64,3 +65,106 @@ def test_actual_rebalance_uses_current_weight(
 def test_negative_threshold_is_rejected(function):
     with pytest.raises(ValueError):
         function(0.20, 0.25, threshold=-0.01)
+
+
+def test_current_allocation_uses_quantity_and_price():
+    holdings = [
+        {
+            "ticker": "AAPL",
+            "exchange": "US",
+            "quantity": 2,
+        },
+        {
+            "ticker": "MSFT",
+            "exchange": "US",
+            "quantity": 1,
+        },
+    ]
+
+    result = calculate_current_allocation(
+        holdings=holdings,
+        latest_prices={
+            "AAPL": 300.0,
+            "MSFT": 400.0,
+        },
+        base_currency="USD",
+        fx_rate_provider=lambda source, target: 1.0,
+    )
+
+    assert result["total_market_value"] == 1000.0
+    assert result["current_weights"]["AAPL"] == pytest.approx(0.6)
+    assert result["current_weights"]["MSFT"] == pytest.approx(0.4)
+    assert sum(result["current_weights"].values()) == pytest.approx(1.0)
+
+
+def test_current_allocation_converts_mixed_currency():
+    holdings = [
+        {
+            "ticker": "GOOGL",
+            "exchange": "US",
+            "quantity": 3,
+        },
+        {
+            "ticker": "TCS.NS",
+            "exchange": "IN",
+            "quantity": 6,
+        },
+    ]
+
+    def fx_rate(source, target):
+        rates = {
+            ("USD", "INR"): 83.0,
+            ("INR", "INR"): 1.0,
+        }
+        return rates[(source, target)]
+
+    result = calculate_current_allocation(
+        holdings=holdings,
+        latest_prices={
+            "GOOGL": 337.12,
+            "TCS.NS": 2369.0,
+        },
+        base_currency="INR",
+        fx_rate_provider=fx_rate,
+    )
+
+    google_value = 3 * 337.12 * 83.0
+    tcs_value = 6 * 2369.0
+    total = google_value + tcs_value
+
+    assert result["market_values"]["GOOGL"] == pytest.approx(
+        google_value
+    )
+    assert result["market_values"]["TCS.NS"] == pytest.approx(
+        tcs_value
+    )
+    assert result["total_market_value"] == pytest.approx(total)
+    assert result["current_weights"]["GOOGL"] == pytest.approx(
+        google_value / total
+    )
+    assert sum(result["current_weights"].values()) == pytest.approx(1.0)
+
+
+def test_current_allocation_reports_missing_price():
+    holdings = [
+        {
+            "ticker": "AAPL",
+            "exchange": "US",
+            "quantity": 2,
+        },
+        {
+            "ticker": "MSFT",
+            "exchange": "US",
+            "quantity": 1,
+        },
+    ]
+
+    result = calculate_current_allocation(
+        holdings=holdings,
+        latest_prices={"AAPL": 300.0},
+        base_currency="USD",
+        fx_rate_provider=lambda source, target: 1.0,
+    )
+
+    assert result["current_weights"] == {"AAPL": 1.0}
+    assert "MSFT" in result["excluded_tickers"]
