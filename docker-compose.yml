@@ -4,6 +4,7 @@
 
 services:
   frontend:
+    image: ${FRONTEND_IMAGE:-portfolio-frontend:local}
     build:
       context: .
       dockerfile: Dockerfile
