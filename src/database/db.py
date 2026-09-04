@@ -257,12 +257,25 @@ def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
         return _row_to_dict(row)
 
 
-def _reset_code_hash(user_id: int, code: str, secret_key: Optional[str] = None) -> str:
-    key = secret_key or os.environ.get("SECRET_KEY", "")
-    if len(key) < 32:
-        raise ValueError("SECRET_KEY must contain at least 32 characters")
-    message = f"{user_id}:{code}".encode("utf-8")
-    return hmac.new(key.encode("utf-8"), message, hashlib.sha256).hexdigest()
+def _reset_code_payload(user_id: int, code: str) -> bytes:
+    return f"{user_id}:{code}".encode("utf-8")
+
+
+def _hash_reset_code(user_id: int, code: str) -> str:
+    return bcrypt.hashpw(
+        _reset_code_payload(user_id, code),
+        bcrypt.gensalt(),
+    ).decode("utf-8")
+
+
+def _verify_reset_code(user_id: int, code: str, stored_hash: str) -> bool:
+    try:
+        return bcrypt.checkpw(
+            _reset_code_payload(user_id, code),
+            stored_hash.encode("utf-8"),
+        )
+    except (TypeError, ValueError):
+        return False
 
 
 def create_password_reset_code(
@@ -313,7 +326,7 @@ def create_password_reset_code(
             """,
             (
                 row["id"],
-                _reset_code_hash(row["id"], code),
+                _hash_reset_code(row["id"], code),
                 expires_at.isoformat(),
                 now.isoformat(),
             ),
@@ -355,10 +368,18 @@ def reset_password_with_code(
         if now >= expires_at:
             return False
 
-        valid = hmac.compare_digest(row["code_hash"], _reset_code_hash(row["id"], code))
+        valid = _verify_reset_code(
+            row["id"],
+            code,
+            row["code_hash"],
+        )
         if not valid:
             conn.execute(
-                "UPDATE password_reset_codes SET attempts = attempts + 1 WHERE user_id = ?",
+                """
+                UPDATE password_reset_codes
+                SET attempts = attempts + 1
+                WHERE user_id = ?
+                """,
                 (row["id"],),
             )
             conn.commit()
