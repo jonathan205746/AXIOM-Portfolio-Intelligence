@@ -12,11 +12,10 @@ updates:
     labels:
       - "dependencies"
       - "security"
-    groups:
-      python-minor-and-patch:
+    ignore:
+      - dependency-name: "*"
         update-types:
-          - "minor"
-          - "patch"
+          - "version-update:semver-major"
 
   - package-ecosystem: "docker"
     directory: "/"
@@ -29,6 +28,10 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -41,3 +44,7 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
