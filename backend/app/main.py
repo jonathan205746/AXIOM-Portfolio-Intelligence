@@ -8,32 +8,37 @@ Endpoints: Auth, Portfolios, Holdings, Analysis, History, Benchmark
 import os
 import sys
 
-PROJECT_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "../..")
-)
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
 sys.path.insert(0, PROJECT_ROOT)
 
-from datetime import datetime, timedelta
-from typing import List, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Literal
 
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from backend.config import get_settings
 
 # ── Import your existing src modules ─────────────────────────────────────────
 try:
     from src.database.db import (
-        init_db, get_user_by_username, create_user, verify_password,
-        get_user_portfolios, create_portfolio, delete_portfolio,
-        get_portfolio_holdings, add_holding, delete_holding,
-        get_portfolio_history, save_optimization_run,
-        verify_identity, reset_password
+        init_db,
+        authenticate_user,
+        create_user,
+        get_user_by_id,
+        get_user_portfolios,
+        create_portfolio,
+        delete_portfolio,
+        get_portfolio_for_user,
+        get_portfolio_holdings,
+        add_holding,
+        delete_holding,
+        get_portfolio_history,
+        save_optimization_run,
     )
     from src.data.stock_fetcher import fetch_stock_data
     from src.models.sentiment import aggregate_sentiment
@@ -43,6 +48,7 @@ try:
     from src.optimization.health_score import HealthScoreEngine
     from src.optimization.adaptive_optimizer import AdaptiveHealthOptimizer
     from src.models.rag_pipeline import RAGPipeline
+
     SRC_AVAILABLE = True
 except Exception as e:
     print(f"Warning: src modules not available: {e}")
@@ -54,89 +60,121 @@ app = FastAPI(title=settings.APP_NAME, version=settings.VERSION)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer(auto_error=False)
 
 # ── DB init ──────────────────────────────────────────────────────────────────
 if SRC_AVAILABLE:
     init_db()
 
+
 # ── JWT helpers ──────────────────────────────────────────────────────────────
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=settings.ACCESS_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire})
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(days=settings.ACCESS_TOKEN_EXPIRE_DAYS)
+    to_encode.update({"iat": now, "exp": expire})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
 
 def decode_token(token: str) -> dict:
     return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
         payload = decode_token(credentials.credentials)
         user_id = payload.get("sub")
-        username = payload.get("username")
         if user_id is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-        return {"id": int(user_id), "username": username}
-    except JWTError:
+        user = get_user_by_id(int(user_id)) if SRC_AVAILABLE else None
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        return user
+    except (JWTError, TypeError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+
 
 # ── Pydantic Models ───────────────────────────────────────────────────────────
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=1, max_length=72)
+
 
 class RegisterRequest(BaseModel):
-    username: str = Field(..., min_length=3)
-    email: str
-    password: str = Field(..., min_length=6)
+    username: str = Field(
+        ..., min_length=3, max_length=50, pattern=r"^[A-Za-z0-9_.-]+$"
+    )
+    email: EmailStr
+    password: str = Field(..., min_length=12, max_length=72)
+
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: dict
 
+
 class PortfolioCreate(BaseModel):
-    name: str
-    description: str = ""
-    currency: str = "USD"
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str = Field("", max_length=500)
+    currency: Literal["USD", "INR"] = "USD"
+
 
 class HoldingCreate(BaseModel):
-    ticker: str
+    ticker: str = Field(..., min_length=1, max_length=20, pattern=r"^[A-Za-z0-9.^-]+$")
     quantity: float = Field(..., gt=0)
     buy_price: float = Field(..., gt=0)
-    buy_currency: str = "USD"
+    buy_currency: Literal["USD", "INR"] = "USD"
+
 
 class AnalysisRequest(BaseModel):
-    portfolio_id: int
+    portfolio_id: int = Field(..., gt=0)
     alpha: float = Field(0.6, ge=0.0, le=1.0)
     portfolio_value: float = Field(100000, ge=1000)
     use_llm: bool = True
 
-class ForgotPasswordRequest(BaseModel):
-    username: str
-    email: str
-    new_password: str = Field(..., min_length=6)
+
+def require_portfolio(portfolio_id: int, user_id: int) -> dict:
+    portfolio = get_portfolio_for_user(portfolio_id, user_id)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    return portfolio
+
 
 # ── INDIAN STOCKS MAP ─────────────────────────────────────────────────────────
 INDIAN_STOCKS = {
-    "TCS": "TCS.NS", "INFY": "INFY.NS", "RELIANCE": "RELIANCE.NS",
-    "WIPRO": "WIPRO.NS", "HDFCBANK": "HDFCBANK.NS", "ICICIBANK": "ICICIBANK.NS",
-    "TATAMOTORS": "TATAMOTORS.NS", "BAJFINANCE": "BAJFINANCE.NS",
-    "SBIN": "SBIN.NS", "AXISBANK": "AXISBANK.NS", "BHARTIARTL": "BHARTIARTL.NS",
-    "ITC": "ITC.NS", "LT": "LT.NS", "MARUTI": "MARUTI.NS",
-    "NESTLEIND": "NESTLEIND.NS", "TITAN": "TITAN.NS", "HINDUNILVR": "HINDUNILVR.NS",
-    "KOTAKBANK": "KOTAKBANK.NS", "ASIANPAINT": "ASIANPAINT.NS", "ULTRACEMCO": "ULTRACEMCO.NS"
+    "TCS": "TCS.NS",
+    "INFY": "INFY.NS",
+    "RELIANCE": "RELIANCE.NS",
+    "WIPRO": "WIPRO.NS",
+    "HDFCBANK": "HDFCBANK.NS",
+    "ICICIBANK": "ICICIBANK.NS",
+    "TATAMOTORS": "TATAMOTORS.NS",
+    "BAJFINANCE": "BAJFINANCE.NS",
+    "SBIN": "SBIN.NS",
+    "AXISBANK": "AXISBANK.NS",
+    "BHARTIARTL": "BHARTIARTL.NS",
+    "ITC": "ITC.NS",
+    "LT": "LT.NS",
+    "MARUTI": "MARUTI.NS",
+    "NESTLEIND": "NESTLEIND.NS",
+    "TITAN": "TITAN.NS",
+    "HINDUNILVR": "HINDUNILVR.NS",
+    "KOTAKBANK": "KOTAKBANK.NS",
+    "ASIANPAINT": "ASIANPAINT.NS",
+    "ULTRACEMCO": "ULTRACEMCO.NS",
 }
+
 
 def normalize_ticker(ticker: str) -> tuple:
     t = ticker.strip().upper()
@@ -146,29 +184,31 @@ def normalize_ticker(ticker: str) -> tuple:
         return t, t.replace(".NS", ""), "IN"
     return t, t, "US"
 
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # AUTH ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 @app.post("/auth/login", response_model=TokenResponse)
 def login(req: LoginRequest):
     if not SRC_AVAILABLE:
         raise HTTPException(status_code=503, detail="Backend modules not loaded")
-    
-    # FIXED: use get_user_by_username + verify_password
-    user = get_user_by_username(req.username)
-    if not user or not verify_password(req.password, user["password_hash"]):
+
+    user = authenticate_user(req.username, req.password)
+    if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password")
-    
+
     token = create_access_token({"sub": str(user["id"]), "username": user["username"]})
     return {
         "access_token": token,
         "user": {
             "id": user["id"],
             "username": user["username"],
-            "email": user.get("email", "")
-        }
+            "email": user.get("email", ""),
+        },
     }
+
 
 @app.post("/auth/register", response_model=TokenResponse)
 def register(req: RegisterRequest):
@@ -179,26 +219,21 @@ def register(req: RegisterRequest):
         raise HTTPException(status_code=400, detail="Username or email already exists")
     create_portfolio(user["id"], "My Portfolio", "Default portfolio", "USD")
     token = create_access_token({"sub": str(user["id"]), "username": user["username"]})
-    return {"access_token": token, "user": {"id": user["id"], "username": user["username"], "email": req.email}}
+    return {
+        "access_token": token,
+        "user": {"id": user["id"], "username": user["username"], "email": req.email},
+    }
 
-@app.post("/auth/forgot-password")
-def forgot_password(req: ForgotPasswordRequest):
-    if not SRC_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Backend modules not loaded")
-    if not verify_identity(req.username, req.email):
-        raise HTTPException(status_code=400, detail="No account matches that username and email")
-    ok = reset_password(req.username, req.email, req.new_password)
-    if not ok:
-        raise HTTPException(status_code=500, detail="Password reset failed")
-    return {"message": "Password reset successfully"}
 
 @app.get("/auth/me")
 def me(user: dict = Depends(get_current_user)):
     return user
 
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # PORTFOLIO ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 @app.get("/portfolios")
 def list_portfolios(user: dict = Depends(get_current_user)):
@@ -206,8 +241,11 @@ def list_portfolios(user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=503, detail="Backend modules not loaded")
     return get_user_portfolios(user["id"])
 
+
 @app.post("/portfolios")
-def create_portfolio_endpoint(req: PortfolioCreate, user: dict = Depends(get_current_user)):
+def create_portfolio_endpoint(
+    req: PortfolioCreate, user: dict = Depends(get_current_user)
+):
     if not SRC_AVAILABLE:
         raise HTTPException(status_code=503, detail="Backend modules not loaded")
     p = create_portfolio(user["id"], req.name, req.description, req.currency)
@@ -215,27 +253,38 @@ def create_portfolio_endpoint(req: PortfolioCreate, user: dict = Depends(get_cur
         raise HTTPException(status_code=400, detail="Failed to create portfolio")
     return p
 
+
 @app.delete("/portfolios/{portfolio_id}")
-def delete_portfolio_endpoint(portfolio_id: int, user: dict = Depends(get_current_user)):
+def delete_portfolio_endpoint(
+    portfolio_id: int, user: dict = Depends(get_current_user)
+):
     if not SRC_AVAILABLE:
         raise HTTPException(status_code=503, detail="Backend modules not loaded")
-    delete_portfolio(portfolio_id)
+    if not delete_portfolio(portfolio_id, user_id=user["id"]):
+        raise HTTPException(status_code=404, detail="Portfolio not found")
     return {"message": "Portfolio deleted"}
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # HOLDING ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 @app.get("/portfolios/{portfolio_id}/holdings")
 def list_holdings(portfolio_id: int, user: dict = Depends(get_current_user)):
     if not SRC_AVAILABLE:
         raise HTTPException(status_code=503, detail="Backend modules not loaded")
-    return get_portfolio_holdings(portfolio_id)
+    require_portfolio(portfolio_id, user["id"])
+    return get_portfolio_holdings(portfolio_id, user_id=user["id"])
+
 
 @app.post("/portfolios/{portfolio_id}/holdings")
-def add_holding_endpoint(portfolio_id: int, req: HoldingCreate, user: dict = Depends(get_current_user)):
+def add_holding_endpoint(
+    portfolio_id: int, req: HoldingCreate, user: dict = Depends(get_current_user)
+):
     if not SRC_AVAILABLE:
         raise HTTPException(status_code=503, detail="Backend modules not loaded")
+    require_portfolio(portfolio_id, user["id"])
     yf_ticker, display, exchange = normalize_ticker(req.ticker)
     result = add_holding(
         portfolio_id=portfolio_id,
@@ -245,22 +294,26 @@ def add_holding_endpoint(portfolio_id: int, req: HoldingCreate, user: dict = Dep
         quantity=req.quantity,
         buy_price=req.buy_price,
         buy_currency=req.buy_currency,
-        buy_date=datetime.now()
+        buy_date=datetime.now(),
     )
     if not result:
         raise HTTPException(status_code=400, detail="Failed to add holding")
     return result
 
+
 @app.delete("/holdings/{holding_id}")
 def remove_holding(holding_id: int, user: dict = Depends(get_current_user)):
     if not SRC_AVAILABLE:
         raise HTTPException(status_code=503, detail="Backend modules not loaded")
-    delete_holding(holding_id)
+    if not delete_holding(holding_id, user_id=user["id"]):
+        raise HTTPException(status_code=404, detail="Holding not found")
     return {"message": "Holding deleted"}
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ANALYSIS ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 @app.post("/analysis/run")
 def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
@@ -279,9 +332,9 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
     from src.optimization.health_score import HealthScoreEngine
     from src.optimization.adaptive_optimizer import AdaptiveHealthOptimizer
     from src.models.rag_pipeline import RAGPipeline
-    
 
-    holdings = get_portfolio_holdings(req.portfolio_id)
+    require_portfolio(req.portfolio_id, user["id"])
+    holdings = get_portfolio_holdings(req.portfolio_id, user_id=user["id"])
     if len(holdings) < 2:
         raise HTTPException(status_code=400, detail="Need at least 2 holdings")
 
@@ -302,7 +355,7 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
         prices = prices[available]
         if isinstance(prices, pd.Series):
             prices = prices.to_frame()
-        returns = prices.pct_change().dropna()
+        returns = prices.pct_change(fill_method=None).dropna()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Price fetch failed: {str(e)}")
 
@@ -312,7 +365,9 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
         baseline = optimizer.equal_weight_baseline()
         frontier_df = optimizer.efficient_frontier(n_points=200)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Optimization setup failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Optimization setup failed: {str(e)}"
+        )
 
     # Sentiment
     sentiment_scores = {}
@@ -320,10 +375,13 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
     for ticker in available:
         try:
             from src.data.news_fetcher import fetch_news
+
             news = fetch_news(ticker)
             all_news[ticker] = news
             headlines = [a.get("title", "") for a in news if a.get("title")]
-            sentiment_scores[ticker] = aggregate_sentiment(headlines) if headlines else 0.0
+            sentiment_scores[ticker] = (
+                aggregate_sentiment(headlines) if headlines else 0.0
+            )
         except Exception:
             sentiment_scores[ticker] = 0.0
             all_news[ticker] = []
@@ -332,7 +390,9 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
     try:
         risk_analyzer = RiskAnalyzer(prices)
         news_counts = {t: len(all_news.get(t, [])) for t in available}
-        adaptive = AdaptiveHealthOptimizer(optimizer, risk_analyzer, sentiment_scores, news_counts)
+        adaptive = AdaptiveHealthOptimizer(
+            optimizer, risk_analyzer, sentiment_scores, news_counts
+        )
         selected = adaptive.search(alpha=req.alpha, portfolio_value=req.portfolio_value)
         opt_result = selected["opt_result"]
         combined = selected["combined"]
@@ -343,7 +403,9 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
         adaptive_candidates = selected["candidates"]
         selected_cap = selected["selected_cap"]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Adaptive optimization failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Adaptive optimization failed: {str(e)}"
+        )
 
     # LLM
     recommendations = []
@@ -351,19 +413,26 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
         try:
             rag = RAGPipeline()
             for ticker in available:
-                articles_text = [a.get("title", "") for a in all_news.get(ticker, []) if a.get("title")]
+                articles_text = [
+                    a.get("title", "")
+                    for a in all_news.get(ticker, [])
+                    if a.get("title")
+                ]
                 rec = rag.generate_recommendation(
                     ticker=ticker,
                     sentiment_score=sentiment_scores.get(ticker, 0.0),
                     portfolio_weight=final_weights.get(ticker, 0.0),
-                    retrieved_articles=articles_text
+                    retrieved_articles=articles_text,
                 )
                 recommendations.append(rec)
         except Exception:
             pass
 
     # Save to history
-    safe_opt = {k: (v.tolist() if isinstance(v, np.ndarray) else v) for k, v in opt_result.items()}
+    safe_opt = {
+        k: (v.tolist() if isinstance(v, np.ndarray) else v)
+        for k, v in opt_result.items()
+    }
     safe_opt["baseline_sharpe"] = baseline["sharpe_ratio"]
     safe_opt["final_sharpe_ratio"] = final_stats["sharpe_ratio"]
     safe_opt["health_score"] = health_score["score"]
@@ -373,7 +442,7 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
         opt_result=safe_opt,
         sentiment_scores=sentiment_scores,
         recommendations=recommendations,
-        risk_report=risk_report
+        risk_report=risk_report,
     )
 
     return {
@@ -391,7 +460,10 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
             "volatility": float(baseline["volatility"]),
         },
         "final_weights": {k: float(v) for k, v in final_weights.items()},
-        "weight_changes": {k: {"change": float(v["change"])} for k, v in combined["weight_changes"].items()},
+        "weight_changes": {
+            k: {"change": float(v["change"])}
+            for k, v in combined["weight_changes"].items()
+        },
         "sentiment_scores": sentiment_scores,
         "risk_report": risk_report,
         "health_score": health_score,
@@ -402,18 +474,26 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
             "volatility": frontier_df["volatility"].tolist(),
             "return": frontier_df["return"].tolist(),
             "sharpe": frontier_df["sharpe"].tolist(),
-        }
+        },
     }
 
+
 @app.get("/portfolios/{portfolio_id}/history")
-def get_history(portfolio_id: int, limit: int = 30, user: dict = Depends(get_current_user)):
+def get_history(
+    portfolio_id: int,
+    limit: int = Query(30, ge=1, le=100),
+    user: dict = Depends(get_current_user),
+):
     if not SRC_AVAILABLE:
         raise HTTPException(status_code=503, detail="Backend modules not loaded")
-    return get_portfolio_history(portfolio_id, limit)
+    require_portfolio(portfolio_id, user["id"])
+    return get_portfolio_history(portfolio_id, limit, user_id=user["id"])
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # BENCHMARK ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 @app.get("/benchmark/spy")
 def benchmark_spy(portfolio_id: int, user: dict = Depends(get_current_user)):
@@ -424,7 +504,8 @@ def benchmark_spy(portfolio_id: int, user: dict = Depends(get_current_user)):
     import numpy as np
 
     results = {}  # In real impl, fetch from session or re-run analysis
-    holdings = get_portfolio_holdings(portfolio_id)
+    require_portfolio(portfolio_id, user["id"])
+    holdings = get_portfolio_holdings(portfolio_id, user_id=user["id"])
     tickers = [h["ticker"] for h in holdings]
 
     try:
@@ -432,9 +513,11 @@ def benchmark_spy(portfolio_id: int, user: dict = Depends(get_current_user)):
         if isinstance(prices.columns, pd.MultiIndex):
             prices = prices["Close"]
 
-        returns = prices.pct_change().dropna()
+        returns = prices.pct_change(fill_method=None).dropna()
         if isinstance(returns, pd.Series):
-            returns = returns.to_frame(name=prices.columns[0] if hasattr(prices, "columns") else "price")
+            returns = returns.to_frame(
+                name=prices.columns[0] if hasattr(prices, "columns") else "price"
+            )
 
         spy_returns = returns["SPY"] if "SPY" in returns.columns else None
         if spy_returns is None:
@@ -465,18 +548,28 @@ def benchmark_spy(portfolio_id: int, user: dict = Depends(get_current_user)):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Benchmark failed: {str(e)}")
-    
+
+
 @app.get("/")
 def root():
-    return {"message": "AI Portfolio Optimizer API", "docs": "/docs", "health": "/health"}
+    return {
+        "message": "AI Portfolio Optimizer API",
+        "docs": "/docs",
+        "health": "/health",
+    }
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # HEALTH CHECK
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 @app.get("/health")
 def health():
     return {"status": "ok", "version": settings.VERSION, "src_available": SRC_AVAILABLE}
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import json
 import os
 import sqlite3
@@ -8,13 +9,14 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
+import bcrypt
 
 # ── Docker-safe database path ───────────────────────────────────
 # Railway/Render: use /tmp/data (always writable)
 # Local dev: use ../../data (repo root)
 DB_DIR = os.environ.get(
     "DB_DIR",
-    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data")),
 )
 DB_PATH = os.path.join(DB_DIR, "portfolio_optimizer.db")
 os.makedirs(DB_DIR, exist_ok=True)
@@ -30,11 +32,28 @@ def _connect() -> sqlite3.Connection:
 
 
 def _hash_password(password: str) -> str:
+    """Return an adaptive bcrypt hash for newly stored passwords."""
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def _legacy_hash_password(password: str) -> str:
+    """Hash used by older installations; retained only for login migration."""
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Check a plain password against a stored SHA-256 hash."""
-    return _hash_password(plain_password) == hashed_password
+    """Verify bcrypt hashes and legacy SHA-256 hashes safely."""
+    if not plain_password or not hashed_password:
+        return False
+    if hashed_password.startswith(("$2a$", "$2b$", "$2y$")):
+        try:
+            return bcrypt.checkpw(
+                plain_password.encode("utf-8"), hashed_password.encode("utf-8")
+            )
+        except ValueError:
+            return False
+    return hmac.compare_digest(_legacy_hash_password(plain_password), hashed_password)
+
 
 def _normalize_date(value: Any) -> str:
     if isinstance(value, datetime):
@@ -148,7 +167,9 @@ def init_db() -> bool:
     return True
 
 
-def create_user(username: str, email: str = "", password: str = "") -> Optional[Dict[str, Any]]:
+def create_user(
+    username: str, email: str = "", password: str = ""
+) -> Optional[Dict[str, Any]]:
     username = (username or "").strip()
     email = (email or "").strip()
     if not username or not password:
@@ -172,29 +193,58 @@ def create_user(username: str, email: str = "", password: str = "") -> Optional[
 
 
 def get_user(username: str, password: str) -> Optional[Dict[str, Any]]:
+    return authenticate_user(username, password)
+
+
+def authenticate_user(username: str, password: str) -> Optional[Dict[str, Any]]:
+    """Authenticate a user and transparently upgrade legacy password hashes."""
     username = (username or "").strip()
     if not username or not password:
         return None
 
     with _connect() as conn:
         row = conn.execute(
-            "SELECT id, username, email, created_at FROM users WHERE username = ? AND password_hash = ?",
-            (username, _hash_password(password)),
+            "SELECT id, username, email, password_hash, created_at FROM users WHERE username = ?",
+            (username,),
         ).fetchone()
-        return _row_to_dict(row)
+        if row is None or not verify_password(password, row["password_hash"]):
+            return None
+        if not row["password_hash"].startswith(("$2a$", "$2b$", "$2y$")):
+            conn.execute(
+                "UPDATE users SET password_hash = ? WHERE id = ?",
+                (_hash_password(password), row["id"]),
+            )
+            conn.commit()
+        return {
+            "id": row["id"],
+            "username": row["username"],
+            "email": row["email"],
+            "created_at": row["created_at"],
+        }
+
 
 def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
     """Fetch a user by username only (no password check). Used for auth flows."""
     username = (username or "").strip()
-    if not username:    
+    if not username:
         return None
 
     with _connect() as conn:
         row = conn.execute(
             "SELECT id, username, email, created_at FROM users WHERE username = ?",
-            (username,)
+            (username,),
         ).fetchone()
         return _row_to_dict(row)
+
+
+def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT id, username, email, created_at FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        return _row_to_dict(row)
+
 
 def verify_identity(username: str, email: str) -> bool:
     """
@@ -238,7 +288,9 @@ def reset_password(username: str, email: str, new_password: str) -> bool:
         return cursor.rowcount > 0
 
 
-def create_portfolio(user_id: int, name: str, description: str = "", currency: str = "USD") -> Optional[Dict[str, Any]]:
+def create_portfolio(
+    user_id: int, name: str, description: str = "", currency: str = "USD"
+) -> Optional[Dict[str, Any]]:
     name = (name or "").strip()
     if not user_id or not name:
         return None
@@ -255,6 +307,7 @@ def create_portfolio(user_id: int, name: str, description: str = "", currency: s
         ).fetchone()
         return _row_to_dict(row)
 
+
 def update_portfolio_currency(portfolio_id: int, currency: str) -> bool:
     with _connect() as conn:
         cursor = conn.execute(
@@ -265,9 +318,29 @@ def update_portfolio_currency(portfolio_id: int, currency: str) -> bool:
         return cursor.rowcount > 0
 
 
-def delete_portfolio(portfolio_id: int) -> bool:
+def get_portfolio_for_user(portfolio_id: int, user_id: int) -> Optional[Dict[str, Any]]:
     with _connect() as conn:
-        cursor = conn.execute("DELETE FROM portfolios WHERE id = ?", (portfolio_id,))
+        row = conn.execute(
+            """
+            SELECT id, user_id, name, description, currency, created_at
+            FROM portfolios WHERE id = ? AND user_id = ?
+            """,
+            (portfolio_id, user_id),
+        ).fetchone()
+        return _row_to_dict(row)
+
+
+def delete_portfolio(portfolio_id: int, user_id: Optional[int] = None) -> bool:
+    with _connect() as conn:
+        if user_id is None:
+            cursor = conn.execute(
+                "DELETE FROM portfolios WHERE id = ?", (portfolio_id,)
+            )
+        else:
+            cursor = conn.execute(
+                "DELETE FROM portfolios WHERE id = ? AND user_id = ?",
+                (portfolio_id, user_id),
+            )
         conn.commit()
         return cursor.rowcount > 0
 
@@ -323,10 +396,7 @@ def add_holding(
             new_qty = old_qty + quantity
 
             # Weighted average buy price
-            avg_price = (
-                old_qty * old_price +
-                quantity * buy_price
-            ) / new_qty
+            avg_price = (old_qty * old_price + quantity * buy_price) / new_qty
 
             conn.execute(
                 """
@@ -404,12 +474,28 @@ def add_holding(
         return _row_to_dict(row)
 
 
-def get_portfolio_holdings(portfolio_id: int) -> List[Dict[str, Any]]:
+def get_portfolio_holdings(
+    portfolio_id: int, user_id: Optional[int] = None
+) -> List[Dict[str, Any]]:
     with _connect() as conn:
-        rows = conn.execute(
-            "SELECT id, portfolio_id, ticker, display_name, exchange, quantity, buy_price, buy_currency, buy_date, created_at FROM holdings WHERE portfolio_id = ? ORDER BY created_at DESC",
-            (portfolio_id,),
-        ).fetchall()
+        if user_id is None:
+            rows = conn.execute(
+                "SELECT id, portfolio_id, ticker, display_name, exchange, quantity, buy_price, buy_currency, buy_date, created_at FROM holdings WHERE portfolio_id = ? ORDER BY created_at DESC",
+                (portfolio_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT h.id, h.portfolio_id, h.ticker, h.display_name,
+                       h.exchange, h.quantity, h.buy_price, h.buy_currency,
+                       h.buy_date, h.created_at
+                FROM holdings h
+                JOIN portfolios p ON p.id = h.portfolio_id
+                WHERE h.portfolio_id = ? AND p.user_id = ?
+                ORDER BY h.created_at DESC
+                """,
+                (portfolio_id, user_id),
+            ).fetchall()
         result: List[Dict[str, Any]] = []
         for row in rows:
             row_dict = _row_to_dict(row)
@@ -418,9 +504,20 @@ def get_portfolio_holdings(portfolio_id: int) -> List[Dict[str, Any]]:
         return result
 
 
-def delete_holding(holding_id: int) -> bool:
+def delete_holding(holding_id: int, user_id: Optional[int] = None) -> bool:
     with _connect() as conn:
-        cursor = conn.execute("DELETE FROM holdings WHERE id = ?", (holding_id,))
+        if user_id is None:
+            cursor = conn.execute("DELETE FROM holdings WHERE id = ?", (holding_id,))
+        else:
+            cursor = conn.execute(
+                """
+                DELETE FROM holdings
+                WHERE id = ? AND portfolio_id IN (
+                    SELECT id FROM portfolios WHERE user_id = ?
+                )
+                """,
+                (holding_id, user_id),
+            )
         conn.commit()
         return cursor.rowcount > 0
 
@@ -429,7 +526,15 @@ def update_holding(holding_id: int, **kwargs: Any) -> Optional[Dict[str, Any]]:
     if not holding_id:
         return None
 
-    allowed_fields = {"ticker", "display_name", "exchange", "quantity", "buy_price", "buy_currency", "buy_date"}
+    allowed_fields = {
+        "ticker",
+        "display_name",
+        "exchange",
+        "quantity",
+        "buy_price",
+        "buy_currency",
+        "buy_date",
+    }
     updates = []
     values: List[Any] = []
     for key, value in kwargs.items():
@@ -456,7 +561,9 @@ def update_holding(holding_id: int, **kwargs: Any) -> Optional[Dict[str, Any]]:
 
 def clear_portfolio_holdings(portfolio_id: int) -> bool:
     with _connect() as conn:
-        cursor = conn.execute("DELETE FROM holdings WHERE portfolio_id = ?", (portfolio_id,))
+        cursor = conn.execute(
+            "DELETE FROM holdings WHERE portfolio_id = ?", (portfolio_id,)
+        )
         conn.commit()
         return cursor.rowcount >= 0
 
@@ -513,18 +620,29 @@ def save_optimization_run(
         return _row_to_dict(row)
 
 
-def get_portfolio_history(portfolio_id: int, limit: int = 30) -> List[Dict[str, Any]]:
+def get_portfolio_history(
+    portfolio_id: int, limit: int = 30, user_id: Optional[int] = None
+) -> List[Dict[str, Any]]:
     with _connect() as conn:
+        ownership_clause = ""
+        parameters: List[Any] = [portfolio_id]
+        if user_id is not None:
+            ownership_clause = (
+                "AND portfolio_id IN (SELECT id FROM portfolios WHERE user_id = ?)"
+            )
+            parameters.append(user_id)
+        parameters.append(max(1, min(int(limit), 100)))
         rows = conn.execute(
-            """
+            f"""
             SELECT id, portfolio_id, run_date, alpha_used, sharpe_ratio, expected_return, volatility,
                    tickers_json, opt_result_json, sentiment_scores_json, recommendations_json, risk_report_json
             FROM optimization_runs
             WHERE portfolio_id = ?
+              {ownership_clause}
             ORDER BY run_date DESC, id DESC
             LIMIT ?
             """,
-            (portfolio_id, limit),
+            parameters,
         ).fetchall()
 
     history: List[Dict[str, Any]] = []
