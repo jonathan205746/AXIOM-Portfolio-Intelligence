@@ -287,12 +287,37 @@ else:
     section_header("System Overview", "Capabilities & architecture", accent="cyan")
     
     feats = [
-        ("◫", "Real-Time", "Live yfinance feeds with sub-second refresh", "primary"),
-        ("◈", "Sentiment", "FinBERT NLP scoring on financial news", "cyan"),
-        ("▣", "Optimizer", "Mean-variance Sharpe maximization", "green"),
-        ("◉", "LLM Engine", "Groq Llama 3.3 70B reasoning", "violet"),
-        ("⚖", "Benchmark", "SPY & equal-weight comparison", "accent"),
-    ]
+    (
+        "◫",
+        "Market Data",
+        "Yahoo Finance prices with five-minute market caching",
+        "primary",
+    ),
+    (
+        "◈",
+        "Sentiment",
+        "FinBERT scoring on ticker-relevant financial news",
+        "cyan",
+    ),
+    (
+        "▣",
+        "Optimizer",
+        "Constrained mean-variance Sharpe optimization",
+        "green",
+    ),
+    (
+        "◉",
+        "LLM Engine",
+        "Groq-hosted AI reasoning and ticker guidance",
+        "violet",
+    ),
+    (
+        "⚖",
+        "Benchmark",
+        "Final target vs equal-weight and SPY comparison",
+        "accent",
+    ),
+]
     
     cols = st.columns(5)
     for col, (icon, title, desc, accent) in zip(cols, feats):
@@ -321,12 +346,32 @@ else:
     with left:
         section_header("Workflow", "Step-by-step pipeline", accent="primary")
         steps = [
-            ("01", "Add Holdings", "US or Indian tickers with quantity & basis"),
-            ("02", "Fetch Data", "Prices, news, and sentiment in one click"),
-            ("03", "Optimize", "Max Sharpe adjusted for sentiment signals"),
-            ("04", "LLM Reasoning", "Plain-English per-ticker guidance"),
-            ("05", "Track", "Every run saved vs SPY benchmark"),
-        ]
+    (
+        "01",
+        "Add Holdings",
+        "Add US or Indian equities with quantity and purchase basis",
+    ),
+    (
+        "02",
+        "Fetch Market Data",
+        "Retrieve historical prices and ticker-relevant news",
+    ),
+    (
+        "03",
+        "Optimize",
+        "Maximize historical Sharpe under allocation constraints",
+    ),
+    (
+        "04",
+        "Apply AI Signals",
+        "Adjust target weights and generate per-ticker guidance",
+    ),
+    (
+        "05",
+        "Track & Compare",
+        "Save each run and compare final targets with equal-weight and SPY",
+    ),
+]
         for num, title, desc in steps:
             st.markdown(f"""
             <div style="
@@ -356,22 +401,77 @@ else:
             """, unsafe_allow_html=True)
     
     with right:
-        section_header("Supported Tickers", "US & Indian equities", accent="green")
-        st.markdown("""
-        <div style="background:rgba(18,18,26,0.5);border:1px solid rgba(255,255,255,0.04);border-radius:10px;padding:14px;margin-bottom:10px;">
-            <div style="font-size:0.75rem;color:#8b8b9e;margin-bottom:6px;font-weight:600;">US LARGE-CAP</div>
-            <code style="background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:6px;display:block;color:#f0f0f5;font-size:0.75rem;font-family:'JetBrains Mono',monospace;border:1px solid rgba(255,255,255,0.04);">
-                AAPL MSFT GOOGL AMZN NVDA META TSLA NFLX
-            </code>
-        </div>
-        <div style="background:rgba(18,18,26,0.5);border:1px solid rgba(255,255,255,0.04);border-radius:10px;padding:14px;">
-            <div style="font-size:0.75rem;color:#8b8b9e;margin-bottom:6px;font-weight:600;">INDIAN NSE</div>
-            <code style="background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:6px;display:block;color:#f0f0f5;font-size:0.75rem;font-family:'JetBrains Mono',monospace;border:1px solid rgba(255,255,255,0.04);">
-                TCS INFY RELIANCE WIPRO HDFCBANK ICICIBANK
-            </code>
-        </div>
-        """, unsafe_allow_html=True)
-    
+        section_header(
+            "Example Tickers",
+            "Common US and Indian equity symbols",
+            accent="green",
+        )
+
+        outer_style = (
+            "background:rgba(18,18,26,0.5);"
+            "border:1px solid rgba(255,255,255,0.04);"
+            "border-radius:10px;"
+            "padding:14px;"
+            "margin-bottom:10px;"
+        )
+
+        title_style = (
+            "font-size:0.75rem;"
+            "color:#8b8b9e;"
+            "margin-bottom:6px;"
+            "font-weight:600;"
+        )
+
+        content_style = (
+            "background:rgba(255,255,255,0.03);"
+            "padding:6px 10px;"
+            "border-radius:6px;"
+            "display:flex;"
+            "align-items:center;"
+            "justify-content:center;"
+            "min-height:58px;"
+            "color:#f0f0f5;"
+            "font-size:0.75rem;"
+            "line-height:1.6;"
+            "text-align:center;"
+            "font-family:'JetBrains Mono',monospace;"
+            "border:1px solid rgba(255,255,255,0.04);"
+        )
+
+        cards = [
+            (
+                "US EQUITY EXAMPLES",
+                "AAPL · MSFT · GOOGL · AMZN · NVDA · META · TSLA · NFLX",
+            ),
+            (
+                "INDIAN NSE EXAMPLES",
+                "TCS · INFY · RELIANCE · WIPRO · HDFCBANK · ICICIBANK",
+            ),
+            (
+                "PORTFOLIO GUARDRAILS",
+                "Long-only allocation · Normalized weights · "
+                "Per-asset allocation caps · Common-date validation",
+            ),
+            (
+                "RISK &amp; REPORTING",
+                "VaR · Drawdown · Volatility · Sharpe ratio · "
+                "Benchmark comparison · Downloadable portfolio report",
+            ),
+        ]
+
+        cards_html = "".join(
+            (
+                f'<div style="{outer_style}">'
+                f'<div style="{title_style}">{title}</div>'
+                f'<div style="{content_style}">{content}</div>'
+                "</div>"
+            )
+            for title, content in cards
+        )
+
+        st.markdown(cards_html, unsafe_allow_html=True)
+
+
     st.markdown("<div style='height:20px;'></div>", unsafe_allow_html=True)
     cta1, cta2, _ = st.columns([1, 1, 2])
     with cta1:

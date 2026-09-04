@@ -11,13 +11,37 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import json
+import math
 from typing import Any, cast
-from src.database.db import get_portfolio_holdings, save_optimization_run
-from pages.report_generator import generate_bloomberg_report
+from src.data.market_data import get_fx_rate as fetch_fx_rate
+from src.database.db import (
+    get_portfolio_holdings,
+    save_optimization_run,
+)
+from pages.report_generator import generate_axiom_report
+from src.data.market_data import (
+    get_fx_rate as fetch_fx_rate,
+)
 from src.optimization.health_score import HealthScoreEngine
 from src.optimization.adaptive_optimizer import AdaptiveHealthOptimizer
+from src.utils.sentiment import (
+    SentimentLabel,
+    classify_sentiment,
+)
 
-st.set_page_config(page_title="Analysis | Axiom", page_icon="▣", layout="wide")
+from src.optimization.rebalancing import (
+    build_rebalance_plan,
+    calculate_current_allocation,
+    classify_model_adjustment,
+)
+
+
+st.set_page_config(
+    page_title="Portfolio | Axiom",
+    page_icon="◫",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 if not st.session_state.get("logged_in"):
     st.warning("Authentication required")
@@ -27,9 +51,12 @@ if not st.session_state.get("logged_in"):
 user = st.session_state["user"]
 portfolio = st.session_state.get("current_portfolio")
 if not portfolio:
-    st.warning("Select a portfolio first")
-    st.page_link("pages/2_Portfolio.py", label="◫ Go to Portfolio")
-    st.stop()
+    st.switch_page("pages/2_Portfolio.py")
+
+
+base_currency = str(
+    portfolio.get("currency") or "USD"
+).upper()
 
 # ── Design System ───────────────────────────────────────────
 from frontend.ui.theme import inject_theme, apply_plotly_theme
@@ -38,6 +65,53 @@ from frontend.ui.components import (
     glass_container, info_card, badge, loading_skeleton
 )
 inject_theme()
+
+SENTIMENT_VISUALS = {
+    SentimentLabel.POSITIVE: {
+        "label": "Positive",
+        "symbol": "▲",
+        "css": "positive",
+        "accent": "cyan",
+    },
+    SentimentLabel.NEGATIVE: {
+        "label": "Negative",
+        "symbol": "▼",
+        "css": "negative",
+        "accent": "red",
+    },
+    SentimentLabel.NEUTRAL: {
+        "label": "Neutral",
+        "symbol": "—",
+        "css": "neutral",
+        "accent": "primary",
+    },
+    SentimentLabel.INSUFFICIENT_EVIDENCE: {
+        "label": "Insufficient Evidence",
+        "symbol": "?",
+        "css": "neutral",
+        "accent": "amber",
+    },
+}
+
+
+def get_sentiment_visual(score: float | None) -> dict[str, str]:
+    sentiment = classify_sentiment(score)
+    return SENTIMENT_VISUALS[sentiment]
+
+
+def format_sentiment_score(score: float | None) -> str:
+    if score is None:
+        return "N/A"
+
+    return f"{score:+.3f}"
+
+
+def sentiment_progress_value(score: float | None) -> int:
+    if score is None:
+        return 50
+
+    progress_value = int((score + 1.0) / 2.0 * 100)
+    return max(0, min(100, progress_value))
 
 # ── Market Data ─────────────────────────────────────────────
 @st.cache_data(ttl=300)
@@ -67,6 +141,19 @@ def _market_snapshot():
 
 market_data = _market_snapshot()
 
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_fx_rate(
+    source_currency: str,
+    target_currency: str,
+) -> float:
+    """Return a cached latest FX conversion rate."""
+    return fetch_fx_rate(
+        source_currency,
+        target_currency,
+    )
+
+
 # ── Sidebar & Command Bar ───────────────────────────────────
 page_sidebar("pages/3_Analysis.py", user=user, market_data=market_data)
 command_bar("AXIOM / ANALYSIS", f"PORTFOLIO: {portfolio['name'].upper()}")
@@ -83,17 +170,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Action Helper ───────────────────────────────────────────
-def _get_action(ticker: str, final_weights: dict, weight_changes: dict) -> str:
-    final = final_weights.get(ticker, 0)
-    if final < 0.001:
-        return "EXCLUDE"
-    change = weight_changes.get(ticker, {}).get("change", 0)
-    if change > 0.001:
-        return "BUY"
-    if change < -0.001:
-        return "SELL"
-    return "HOLD"
 
 
 def _safe_float(value: Any, digits: int | None = None) -> float | None:
@@ -152,8 +228,9 @@ with s1:
                       help="1.0 = Risk/Return first | 0.0 = Sentiment first")
     st.caption(f"Quant: {int(alpha*100)}% • Sentiment: {int((1-alpha)*100)}%")
 with s2:
-    portfolio_value = st.number_input("Portfolio Value (USD)", min_value=1000, max_value=10_000_000, value=100_000, step=10_000)
-    use_llm = st.checkbox("Enable LLM Recommendations", value=True)
+    portfolio_value = st.number_input(
+        f"Risk Scenario Value ({base_currency})", min_value=1000, max_value=10_000_000, value=100_000, step=10_000)
+    use_llm = st.checkbox("Enable AI Research Commentary", value=True)
 
 run_button = st.button("▶ Run Optimization", type="primary", use_container_width=True)
 
@@ -234,6 +311,51 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
         st.error(f"Price fetch failed: {exc}")
         return None
 
+
+    _set("Calculating current allocation...", 20, "prices")
+
+    latest_prices = {
+        ticker: float(
+            prices[ticker].dropna().iloc[-1]
+        )
+        for ticker in available
+        if not prices[ticker].dropna().empty
+    }
+
+    try:
+        current_allocation = calculate_current_allocation(
+            holdings=holdings,
+            latest_prices=latest_prices,
+            base_currency=base_currency,
+            fx_rate_provider=_cached_fx_rate,
+        )
+    except Exception as exc:
+        current_allocation = {
+            "base_currency": base_currency,
+            "market_values": {},
+            "current_weights": {},
+            "total_market_value": None,
+            "excluded_tickers": {
+                ticker: f"{type(exc).__name__}: {exc}"
+                for ticker in tickers
+            },
+            "is_complete": False,
+        }
+
+    results["current_allocation"] = current_allocation
+    results["base_currency"] = base_currency
+
+    excluded_tickers = current_allocation[
+        "excluded_tickers"
+    ]
+
+    if excluded_tickers:
+        st.warning(
+            "Actual rebalance actions are unavailable because "
+            "current price or FX data is missing for: "
+            + ", ".join(sorted(excluded_tickers))
+        )
+
     _set("Preparing optimizer...", 25, "optimizer")
     try:
         optimizer = PortfolioOptimizer(prices)
@@ -259,75 +381,145 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
     results["all_news"] = all_news
 
     _set("Running FinBERT...", 55, "sentiment")
+
+    # Public/report values preserve missing evidence as None.
     sentiment_scores = {}
+
+    # The optimizer requires numeric values. A missing score receives
+    # 0.0 here only to mean "apply no sentiment adjustment."
+    optimization_sentiment_scores = {}
+
     for ticker in available:
         try:
-            headlines = [a.get("title", "") for a in all_news.get(ticker, []) if a.get("title")]
-            sentiment_scores[ticker] = aggregate_sentiment(headlines) if headlines else 0.0
+            headlines = [
+                article.get("title", "")
+                for article in all_news.get(ticker, [])
+                if article.get("title")
+            ]
+
+            if headlines:
+                score = float(aggregate_sentiment(headlines))
+                sentiment_scores[ticker] = score
+                optimization_sentiment_scores[ticker] = score
+            else:
+                sentiment_scores[ticker] = None
+                optimization_sentiment_scores[ticker] = 0.0
+
         except Exception as exc:
-            sentiment_scores[ticker] = 0.0
+            sentiment_scores[ticker] = None
+            optimization_sentiment_scores[ticker] = 0.0
             st.warning(
                 f"Sentiment analysis failed for {ticker}: "
                 f"{type(exc).__name__}: {exc}"
             )
+
     results["sentiment_scores"] = sentiment_scores
+    results["optimization_sentiment_scores"] = (
+        optimization_sentiment_scores
+    )
 
     _set("Searching health-aware portfolios...", 72, "adaptive")
     try:
         risk_analyzer = RiskAnalyzer(prices)
         news_counts = {t: len(all_news.get(t, [])) for t in available}
-        adaptive = AdaptiveHealthOptimizer(optimizer, risk_analyzer, sentiment_scores, news_counts)
+        adaptive = AdaptiveHealthOptimizer(
+           optimizer,
+           risk_analyzer,
+           optimization_sentiment_scores,
+           news_counts,
+        )
+
         selected = adaptive.search(alpha=alpha, portfolio_value=portfolio_value)
 
         opt_result = selected["opt_result"]
         combined = selected["combined"]
         risk_report = selected["risk_report"]
+        final_weights = selected["final_weights"]
+
+        rebalance_plan = build_rebalance_plan(
+            current_weights=current_allocation[
+                "current_weights"
+            ],
+            target_weights=final_weights,
+            allocation_complete=bool(
+                current_allocation["is_complete"]
+            ),
+        )
+
         results.update({
             "opt_result": opt_result,
             "combined": combined,
-            "final_weights": selected["final_weights"],
+            "final_weights": final_weights,
             "final_stats": selected["final_stats"],
             "risk_report": risk_report,
             "health_score": selected["health_score"],
             "adaptive_candidates": selected["candidates"],
             "selected_cap": selected["selected_cap"],
             "tickers": available,
+            "rebalance_plan": rebalance_plan,
         })
     except Exception as exc:
         st.error(f"Adaptive optimization failed: {exc}")
         return None
 
-    # ── LLM Recommendations (with visible diagnostics) ───────
-    _set("Generating LLM reasoning...", 92, "llm")
+    # ── Evidence-grounded AI research commentary ─────
+    _set("Generating AI research commentary...", 92, "llm")
     recommendations = []
     llm_error = None
 
     if use_llm:
         rag = None
+
         try:
             rag = RAGPipeline()
         except Exception as exc:
-            llm_error = f"LLM init failed: {exc}"
+            llm_error = f"LLM initialization failed: {exc}"
             st.warning(llm_error)
 
         if rag is not None:
             for ticker in available:
+                articles_text = [
+                    article.get("title", "")
+                    for article in all_news.get(ticker, [])
+                    if article.get("title")
+                ]
+                sentiment_score = sentiment_scores.get(ticker)
+
+                # Do not ask the LLM to interpret nonexistent evidence.
+                if sentiment_score is None or not articles_text:
+                    continue
+
                 try:
-                    articles_text = [a.get("title", "") for a in all_news.get(ticker, []) if a.get("title")]
                     rec = rag.generate_recommendation(
                         ticker=ticker,
-                        sentiment_score=sentiment_scores.get(ticker, 0.0),
-                        portfolio_weight=combined["final_weights"].get(ticker, 0.0),
-                        retrieved_articles=articles_text
+                        sentiment_score=sentiment_score,
+                        portfolio_weight=opt_result[
+                            "weights"
+                        ].get(ticker, 0.0),
+                        retrieved_articles=articles_text,
                     )
+
                     if rec:
                         recommendations.append(rec)
+
                 except Exception as exc:
-                    st.warning(f"LLM failed for {display_names.get(ticker, ticker)}: {exc}")
+                    st.warning(
+                        "AI commentary failed for "
+                        f"{display_names.get(ticker, ticker)}: "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+
         if not recommendations and not llm_error:
-            st.info("LLM returned no recommendations. Check that your API key and model endpoint are configured.")
+            st.info(
+                "No evidence-grounded AI commentary was returned. "
+                "Quantitative results remain available."
+            )
+
     else:
-        st.info("LLM Recommendations are disabled. Enable the checkbox above to run AI reasoning.")
+        st.info(
+            "AI research commentary is disabled. "
+            "Quantitative analysis remains available."
+        )
 
     results["recommendations"] = recommendations
     status_placeholder.empty()
@@ -383,6 +575,11 @@ sentiment_scores = results["sentiment_scores"]
 risk_report = results["risk_report"]
 recommendations = results.get("recommendations", [])
 combined = results["combined"]
+rebalance_plan = results.get("rebalance_plan", {})
+current_allocation = results.get(
+    "current_allocation",
+    {},
+)
 frontier_df = results["frontier_df"]
 prices = results["prices"]
 returns_df = results["returns"]
@@ -392,13 +589,32 @@ vol = risk_report.get("volatility", {}).get("portfolio_annualized", 0)
 health = results.get("health_score") or HealthScoreEngine.calculate(
     sharpe=sharpe,
     volatility=vol,
-    var95=risk_report.get("value_at_risk", {}).get("historical_95", {}).get("var_pct", 0.0),
-    max_drawdown_pct=risk_report.get("drawdown", {}).get("portfolio", {}).get("max_drawdown_pct", 0.0),
-    sentiment_scores=sentiment_scores,
+    var95=(
+        risk_report
+        .get("value_at_risk", {})
+        .get("historical_95", {})
+        .get("var_pct", 0.0)
+    ),
+    max_drawdown_pct=(
+        risk_report
+        .get("drawdown", {})
+        .get("portfolio", {})
+        .get("max_drawdown_pct", 0.0)
+    ),
+    sentiment_scores={
+        ticker: score
+        for ticker, score in sentiment_scores.items()
+        if score is not None
+    },
     final_weights=final_weights,
     risk_report=risk_report,
     baseline_sharpe=baseline.get("sharpe_ratio"),
-    news_counts={t: len(results.get("all_news", {}).get(t, [])) for t in available},
+    news_counts={
+        ticker: len(
+            results.get("all_news", {}).get(ticker, [])
+        )
+        for ticker in available
+    },
 )
 ai_score = health["score"]
 score_label = f'{health["label"]} · {health["grade"]}'
@@ -417,13 +633,50 @@ metric_grid(metrics, columns=5)
 
 # ── Exports ─────────────────────────────────────────────────
 st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
-weights_csv = pd.DataFrame([
-    {
-        "Ticker": display_names.get(t, t),
-        "Weight": f"{final_weights[t] * 100:.2f}%",
-        "Action": _get_action(t, final_weights, combined["weight_changes"])
-    } for t in available
-]).to_csv(index=False).encode("utf-8")
+
+
+weights_export_rows = []
+
+for ticker in available:
+    plan_entry = rebalance_plan.get(ticker, {})
+
+    weights_export_rows.append({
+        "Ticker": display_names.get(ticker, ticker),
+        "Current Weight": _safe_pct(
+            plan_entry.get("current_weight"),
+            2,
+        ),
+        "Quant Target": _safe_pct(
+            opt_result["weights"].get(ticker),
+            2,
+        ),
+        "Final Target": _safe_pct(
+            final_weights.get(ticker),
+            2,
+        ),
+        "Model Shift": _safe_pct(
+            combined["weight_changes"][ticker]["change"],
+            2,
+        ),
+        "Model Adjustment": classify_model_adjustment(
+            opt_result["weights"].get(ticker, 0.0),
+            final_weights.get(ticker, 0.0),
+        ),
+        "Rebalance Gap": _safe_pct(
+            plan_entry.get("gap"),
+            2,
+        ),
+        "Rebalance Action": plan_entry.get(
+            "action",
+            "UNAVAILABLE",
+        ),
+    })
+
+weights_csv = (
+    pd.DataFrame(weights_export_rows)
+    .to_csv(index=False)
+    .encode("utf-8")
+)
 
 risk_csv = pd.DataFrame([
     {"Metric": "Volatility", "Value": f"{risk_report['volatility']['portfolio_annualized']*100:.2f}%"},
@@ -441,7 +694,7 @@ with col_e3:
         st.code(f"Portfolio: {portfolio['name']} | Sharpe: {opt_result['sharpe_ratio']:.2f} | AI: {ai_score:.0f}/100", language=None)
 with col_e4:
     try:
-        report_html = generate_bloomberg_report(portfolio, results, display_names)
+        report_html = generate_axiom_report(portfolio, results, display_names)
         st.download_button(
             "◉ Full Report",
             report_html.encode("utf-8"),
@@ -486,13 +739,22 @@ with tab1:
 
     glass_container(accent="primary")
     df_weights = pd.DataFrame([
-        {
-            "Ticker": display_names.get(t, t),
-            "Optimized": f"{opt_result['weights'][t]*100:.1f}%",
-            "Final": f"{final_weights[t]*100:.1f}%",
-            "Change": f"{combined['weight_changes'][t]['change']*100:+.1f}%",
-            "Action": _get_action(t, final_weights, combined["weight_changes"])
-        } for t in available
+    {
+        "Ticker": display_names.get(t, t),
+        "Quant Target": (
+            f"{opt_result['weights'][t] * 100:.1f}%"
+        ),
+        "Final Target": (
+            f"{final_weights[t] * 100:.1f}%"
+        ),
+        "Model Shift": (
+            f"{combined['weight_changes'][t]['change'] * 100:+.1f}%"
+        ),
+        "Model Adjustment": classify_model_adjustment(
+            opt_result["weights"].get(t, 0.0),
+            final_weights.get(t, 0.0),
+        ),
+} for t in available
     ])
     st.dataframe(df_weights, hide_index=True, width='stretch')
 
@@ -529,14 +791,23 @@ with tab3:
     st.caption("FinBERT sentiment scores")
     for t in available:
         score = sentiment_scores[t]
-        label = "Positive" if score >= 0.3 else ("Negative" if score <= -0.3 else "Neutral")
-        emoji = "▲" if score >= 0.3 else ("▼" if score <= -0.3 else "—")
-        pct = int((score + 1) / 2 * 100)
+        visual = get_sentiment_visual(score)
+
+        progress_value = sentiment_progress_value(score)
+        score_text = format_sentiment_score(score)
+
         ca, cb, cc = st.columns([1.5, 4, 1.5])
-        ca.markdown(f"**{emoji} {display_names.get(t, t)}**")
-        cb.progress(pct)
-        css = "positive" if score >= 0.3 else ("negative" if score <= -0.3 else "neutral")
-        cc.markdown(f'<span class="{css}">{score:+.3f} ({label})</span>', unsafe_allow_html=True)
+
+        ca.markdown(
+            f"**{visual['symbol']} {display_names.get(t, t)}**"
+        )
+        cb.progress(progress_value)
+        cc.markdown(
+            f'<span class="{visual["css"]}">'
+            f'{score_text} ({visual["label"]})'
+            "</span>",
+            unsafe_allow_html=True,
+        )
 
     all_news = results.get("all_news", {})
     st.markdown("---")
@@ -554,10 +825,41 @@ with tab4:
     conc = risk_report["concentration"]
 
     glass_container(accent="red")
-    r1, r2, r3 = st.columns(3)
-    r1.metric("95% VaR (1-Day)", f"${var95['var_usd']:,.0f}", delta=f"{var95['var_pct']*100:.2f}%", delta_color="inverse")
-    r2.metric("99% VaR (1-Day)", f"${var99['var_usd']:,.0f}", delta=f"{var99['var_pct']*100:.2f}%", delta_color="inverse")
-    r3.metric("Max Drawdown", f"{mdd['max_drawdown_pct']:.2f}%", delta=conc["label"], delta_color="off")
+    r1, r2, r3, r4 = st.columns(4)
+
+    r1.metric(
+        "95% VaR (1-Day)",
+        f"${abs(var95['var_usd']):,.0f}",
+        delta=(
+            f"{abs(var95['var_pct']) * 100:.2f}% "
+            "potential loss"
+        ),
+        delta_color="off",
+    )
+
+    r2.metric(
+        "99% VaR (1-Day)",
+        f"${abs(var99['var_usd']):,.0f}",
+        delta=(
+            f"{abs(var99['var_pct']) * 100:.2f}% "
+            "potential loss"
+        ),
+        delta_color="off",
+    )
+
+    r3.metric(
+        "Max Drawdown",
+        f"{abs(mdd['max_drawdown_pct']):.2f}%",
+        delta="Peak-to-trough loss",
+        delta_color="off",
+    )
+
+    r4.metric(
+        "Concentration",
+        conc.get("label", "N/A"),
+        delta=f"HHI {conc.get('hhi', 0.0):.3f}",
+        delta_color="off",
+    )
 
     c1, c2 = st.columns(2)
     with c1:
@@ -586,98 +888,386 @@ with tab4:
         st.plotly_chart(fig_v, width='stretch')
 
     st.markdown("#### Risk Gauges")
+
+    def make_risk_gauge(
+        value: float,
+        title: str,
+        axis_max: float,
+        color: str,
+        threshold: float | None = None,
+        suffix: str = "",
+    ) -> go.Figure:
+        gauge = {
+            "axis": {
+                "range": [0, axis_max],
+                "tickcolor": "#8b8b9e",
+                "tickfont": {
+                    "color": "#8b8b9e",
+                    "size": 10,
+                },
+            },
+            "bar": {
+                "color": color,
+                "thickness": 0.7,
+            },
+            "bgcolor": "#0a0a0f",
+            "bordercolor": "rgba(255,255,255,0.06)",
+            "steps": [
+                {
+                    "range": [0, axis_max * 0.4],
+                    "color": "rgba(16,185,129,0.08)",
+                },
+                {
+                    "range": [
+                        axis_max * 0.4,
+                        axis_max * 0.7,
+                    ],
+                    "color": "rgba(255,107,53,0.08)",
+                },
+                {
+                    "range": [
+                        axis_max * 0.7,
+                        axis_max,
+                    ],
+                    "color": "rgba(244,63,94,0.08)",
+                },
+            ],
+        }
+
+        if threshold is not None:
+            gauge["threshold"] = {
+                "line": {
+                    "color": "#FF6B35",
+                    "width": 2,
+                },
+                "thickness": 0.8,
+                "value": threshold,
+            }
+
+        formatted_value = f"{value:.2f}{suffix}"
+
+        figure = go.Figure(
+            go.Indicator(
+                mode="gauge",
+                value=value,
+                domain={
+                    "x": [0.03, 0.97],
+                    "y": [0.18, 0.90],
+                },
+                title={
+                    "text": title,
+                    "font": {
+                        "color": "#f0f0f5",
+                        "size": 13,
+                    },
+                },
+                gauge=gauge,
+            )
+        )
+
+        figure.add_annotation(
+            x=0.5,
+            y=0.08,
+            xref="paper",
+            yref="paper",
+            text=formatted_value,
+            showarrow=False,
+            xanchor="center",
+            yanchor="middle",
+            font={
+                "family": "JetBrains Mono, monospace",
+                "color": "#f0f0f5",
+                "size": 24,
+            },
+        )
+
+        figure.update_layout(
+            height=245,
+            margin={
+                "l": 8,
+                "r": 8,
+                "t": 45,
+                "b": 8,
+            },
+        )
+
+        return apply_plotly_theme(figure)
+
+
+    sharpe_axis_max = max(
+        4.0,
+        math.ceil(max(0.0, sharpe) + 0.5),
+    )
+
+
     g1, g2, g3 = st.columns(3)
+
     with g1:
-        fig_g1 = go.Figure(go.Indicator(
-            mode="gauge+number", value=var95["var_pct"]*100,
-            title={"text": "95% VaR (%)", "font": {"color": "#f0f0f5", "size": 12}},
-            gauge={
-                "axis": {"range": [0, 5], "tickcolor": "#8b8b9e"},
-                "bar": {"color": "#F43F5E"}, "bgcolor": "#0a0a0f",
-                "bordercolor": "rgba(255,255,255,0.06)",
-                "steps": [
-                    {"range": [0, 2], "color": "rgba(255,255,255,0.02)"},
-                    {"range": [2, 4], "color": "rgba(255,255,255,0.03)"},
-                    {"range": [4, 5], "color": "rgba(255,255,255,0.04)"}
-                ],
-                "threshold": {"line": {"color": "#FF6B35", "width": 2}, "thickness": 0.8, "value": 2.5}
-            }
-        ))
-        fig_g1.update_layout(height=220)
-        fig_g1 = apply_plotly_theme(fig_g1)
-        st.plotly_chart(fig_g1, width='stretch')
+        fig_g1 = make_risk_gauge(
+            value=abs(var95["var_pct"]) * 100,
+            title="95% One-Day VaR",
+            axis_max=5.0,
+            color="#F43F5E",
+            threshold=2.5,
+            suffix="%",
+        )
+        st.plotly_chart(
+            fig_g1,
+            width="stretch",
+            key="risk_var95_gauge",
+        )
+
     with g2:
-        fig_g2 = go.Figure(go.Indicator(
-            mode="gauge+number", value=abs(mdd["max_drawdown_pct"]),
-            title={"text": "Max Drawdown (%)", "font": {"color": "#f0f0f5", "size": 12}},
-            gauge={
-                "axis": {"range": [0, 50], "tickcolor": "#8b8b9e"},
-                "bar": {"color": "#FF6B35"}, "bgcolor": "#0a0a0f",
-                "bordercolor": "rgba(255,255,255,0.06)",
-                "steps": [
-                    {"range": [0, 10], "color": "rgba(255,255,255,0.02)"},
-                    {"range": [10, 25], "color": "rgba(255,255,255,0.03)"},
-                    {"range": [25, 50], "color": "rgba(255,255,255,0.04)"}
-                ]
-            }
-        ))
-        fig_g2.update_layout(height=220)
-        fig_g2 = apply_plotly_theme(fig_g2)
-        st.plotly_chart(fig_g2, width='stretch')
+        fig_g2 = make_risk_gauge(
+            value=abs(mdd["max_drawdown_pct"]),
+            title="Maximum Drawdown",
+            axis_max=50.0,
+            color="#FF6B35",
+            threshold=20.0,
+            suffix="%",
+        )
+        st.plotly_chart(
+            fig_g2,
+            width="stretch",
+            key="risk_drawdown_gauge",
+        )
+
     with g3:
-        fig_g3 = go.Figure(go.Indicator(
-            mode="gauge+number", value=sharpe,
-            title={"text": "Sharpe Ratio", "font": {"color": "#f0f0f5", "size": 12}},
-            gauge={
-                "axis": {"range": [0, 4], "tickcolor": "#8b8b9e"},
-                "bar": {"color": "#10B981"}, "bgcolor": "#0a0a0f",
-                "bordercolor": "rgba(255,255,255,0.06)",
-                "steps": [
-                    {"range": [0, 1], "color": "rgba(255,255,255,0.04)"},
-                    {"range": [1, 2], "color": "rgba(255,255,255,0.03)"},
-                    {"range": [2, 4], "color": "rgba(255,255,255,0.02)"}
-                ]
-            }
-        ))
-        fig_g3.update_layout(height=220)
-        fig_g3 = apply_plotly_theme(fig_g3)
-        st.plotly_chart(fig_g3, width='stretch')
+        fig_g3 = make_risk_gauge(
+            value=max(0.0, sharpe),
+            title="Sharpe Ratio",
+            axis_max=sharpe_axis_max,
+            color="#10B981",
+            threshold=1.0,
+        )
+        st.plotly_chart(
+            fig_g3,
+            width="stretch",
+            key="risk_sharpe_gauge",
+        )
 
 with tab5:
-    st.caption("AI-generated guidance from Groq Llama 3.3 70B")
+    st.caption("Evidence-grounded research commentary from the configured Groq model")
     if not recommendations:
         info_card(
-            "LLM Recommendations Unavailable",
-            "Enable LLM in settings and re-run the optimization pipeline. Check API keys if enabled.",
-            badge("SETTINGS", "warning"),
-            accent="amber"
+            "AI Research Commentary Unavailable",
+            (
+                "The quantitative analysis remains available. "
+                "Enable AI commentary and re-run the pipeline if needed."
+            ),
+            badge("OPTIONAL", "warning"),
+            accent="amber",
         )
     else:
         for rec in recommendations:
-            t = rec.get("ticker", "")
-            score = rec.get("sentiment_score", 0)
-            label = rec.get("sentiment_label", "Neutral")
-            weight_pct = rec.get("portfolio_weight_pct", "0")
-            glass_container(accent="cyan" if score >= 0.3 else ("red" if score <= -0.3 else "primary"))
-            st.markdown(f"**{display_names.get(t, t)}** — Sentiment: {score:+.3f} ({label}) | Weight: {weight_pct}%")
-            st.markdown(rec.get("recommendation", ""))
-            st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+            ticker = rec.get("ticker", "")
+            score = rec.get("sentiment_score")
+            visual = get_sentiment_visual(score)
+            score_text = format_sentiment_score(score)
+            optimizer_weight_pct = rec.get(
+                "portfolio_weight_pct",
+                "N/A",
+            )
+            commentary = rec.get(
+                "recommendation",
+                "AI research commentary is unavailable.",
+            )
+
+            glass_container(accent=visual["accent"])
+
+            st.markdown(
+                f"**{display_names.get(ticker, ticker)}**"
+                f" — Sentiment: {score_text} ({visual['label']})"
+                f" | Optimizer target: {optimizer_weight_pct}%"
+            )
+            st.markdown(commentary)
+            st.markdown(
+                "<div style='height:8px;'></div>",
+                unsafe_allow_html=True,
+            )
 
 with tab6:
-    st.caption("Cumulative returns and rolling Sharpe")
+    st.caption(
+        "Historical cumulative returns and portfolio performance"
+    )
     glass_container(accent="green")
-    cum_returns = (1 + returns_df).cumprod()
-    fig = go.Figure()
-    colors = ["#FF6B35", "#00D9FF", "#8B5CF6", "#10B981", "#F43F5E", "#F59E0B", "#EC4899", "#6366F1"]
-    for i, t in enumerate(available):
-        fig.add_trace(go.Scatter(
-            x=cum_returns.index, y=cum_returns[t],
-            mode="lines", name=display_names.get(t, t),
-            line=dict(color=colors[i % len(colors)], width=1.5)
-        ))
-    fig.update_layout(title="Cumulative Returns by Ticker", xaxis_title="Date", yaxis_title="Growth", height=450)
-    fig = apply_plotly_theme(fig)
-    st.plotly_chart(fig, width='stretch')
+
+    cumulative_returns = (
+        (1.0 + returns_df)
+        .cumprod()
+        .sub(1.0)
+        .mul(100.0)
+    )
+
+    # Create an independent figure. Do not reuse the Efficient
+    # Frontier figure from the Optimization tab.
+    ticker_return_fig = go.Figure()
+
+    colors = [
+        "#FF6B35",
+        "#00D9FF",
+        "#8B5CF6",
+        "#10B981",
+        "#F43F5E",
+        "#F59E0B",
+        "#EC4899",
+        "#6366F1",
+    ]
+
+    for index, ticker in enumerate(
+        cumulative_returns.columns
+    ):
+        ticker_return_fig.add_trace(
+            go.Scatter(
+                x=cumulative_returns.index,
+                y=cumulative_returns[ticker],
+                mode="lines",
+                name=display_names.get(
+                    ticker,
+                    ticker,
+                ),
+                line={
+                    "color": colors[
+                        index % len(colors)
+                    ],
+                    "width": 1.7,
+                },
+                hovertemplate=(
+                    "%{x|%Y-%m-%d}"
+                    "<br>Cumulative return: %{y:+.2f}%"
+                    "<extra>%{fullData.name}</extra>"
+                ),
+            )
+        )
+
+    ticker_return_fig.update_layout(
+        title="Cumulative Return by Ticker",
+        xaxis_title="Date",
+        yaxis_title="Cumulative Return (%)",
+        hovermode="x unified",
+        height=450,
+        legend_title_text="Ticker",
+    )
+
+    ticker_return_fig.update_yaxes(
+        ticksuffix="%",
+        zeroline=True,
+        zerolinecolor="rgba(255,255,255,0.20)",
+    )
+
+    ticker_return_fig = apply_plotly_theme(
+        ticker_return_fig
+    )
+
+    st.plotly_chart(
+        ticker_return_fig,
+        width="stretch",
+        key="ticker_cumulative_returns",
+    )
+
+    st.caption(
+        "Each line represents one ticker's standalone historical "
+        "return. These lines do not apply portfolio weights."
+    )
+
+
+    st.markdown("#### Final Portfolio Cumulative Return")
+
+    aligned_weights = pd.Series(
+        {
+            ticker: float(
+                final_weights.get(ticker, 0.0)
+            )
+            for ticker in returns_df.columns
+        },
+        dtype=float,
+    )
+
+    aligned_weights = aligned_weights.reindex(
+        returns_df.columns
+    ).fillna(0.0)
+
+    weight_total = float(aligned_weights.sum())
+
+    if weight_total <= 0:
+        st.info(
+            "Portfolio performance is unavailable because "
+            "the final weights contain no usable values."
+        )
+    else:
+        aligned_weights = (
+            aligned_weights / weight_total
+        )
+
+        portfolio_daily_returns = returns_df.mul(
+            aligned_weights,
+            axis=1,
+        ).sum(axis=1)
+
+        portfolio_cumulative_return = (
+            (1.0 + portfolio_daily_returns)
+            .cumprod()
+            .sub(1.0)
+            .mul(100.0)
+        )
+
+        portfolio_return_fig = go.Figure()
+
+        portfolio_return_fig.add_trace(
+            go.Scatter(
+                x=portfolio_cumulative_return.index,
+                y=portfolio_cumulative_return,
+                mode="lines",
+                name="Final Portfolio",
+                line={
+                    "color": "#FF6B35",
+                    "width": 2.8,
+                },
+                hovertemplate=(
+                    "%{x|%Y-%m-%d}"
+                    "<br>Cumulative return: %{y:+.2f}%"
+                    "<extra>Final Portfolio</extra>"
+                ),
+            )
+        )
+
+        portfolio_return_fig.update_layout(
+            xaxis_title="Date",
+            yaxis_title="Cumulative Return (%)",
+            hovermode="x unified",
+            height=380,
+            showlegend=False,
+        )
+
+        portfolio_return_fig.update_yaxes(
+            ticksuffix="%",
+            zeroline=True,
+            zerolinecolor=(
+                "rgba(255,255,255,0.20)"
+            ),
+        )
+
+        portfolio_return_fig = apply_plotly_theme(
+            portfolio_return_fig
+        )
+
+        st.plotly_chart(
+            portfolio_return_fig,
+            width="stretch",
+            key="final_portfolio_cumulative_return",
+        )
+
+        ending_return = float(
+            portfolio_cumulative_return.iloc[-1]
+        )
+
+        st.caption(
+            f"Historical weighted cumulative return: "
+            f"{ending_return:+.2f}%. "
+            "Calculated using the current final target weights. "
+            "This is an in-sample illustration, not a live "
+            "trading track record."
+        )
 
 # ── Health Score Expander ───────────────────────────────────
 with st.expander("◈ AI Health Score v3 — Explain Score", expanded=False):
@@ -703,23 +1293,79 @@ with st.expander("◈ AI Health Score v3 — Explain Score", expanded=False):
         st.markdown("**Adaptive Cap Search**")
         cand_df = pd.DataFrame(results["adaptive_candidates"])
         if not cand_df.empty:
-            cand_df["max_weight_cap"] = cand_df["max_weight_cap"].map(
-                lambda x: f"{float(x) * 100:.1f}%" if pd.notna(x) else "N/A"
+            cand_df["max_weight_cap"] = (
+                cand_df["max_weight_cap"].map(
+                    lambda value: (
+                        f"{float(value) * 100:.1f}%"
+                        if pd.notna(value)
+                        else "N/A"
+                    )
+                )
             )
-            cand_df["health_score"] = cand_df["health_score"].map(
-                lambda x: round(float(x) * 100, 1) if pd.notna(x) else None
+
+            cand_df["health_score"] = (
+                cand_df["health_score"].map(
+                    lambda value: (
+                        round(float(value), 1)
+                        if pd.notna(value)
+                        else None
+                    )
+                )
             )
-            cand_df["sharpe_ratio"] = cand_df["sharpe_ratio"].map(
-                lambda x: round(float(x) * 100, 3) if pd.notna(x) else None
+
+            cand_df["sharpe_ratio"] = (
+                cand_df["sharpe_ratio"].map(
+                    lambda value: (
+                        round(float(value), 3)
+                        if pd.notna(value)
+                        else None
+                    )
+                )
             )
-            cand_df["volatility"] = cand_df["volatility"].map(
-                lambda x: f"{float(x) * 100:.1f}%" if pd.notna(x) else "N/A"
+
+            cand_df["volatility"] = (
+                cand_df["volatility"].map(
+                    lambda value: (
+                        f"{float(value) * 100:.1f}%"
+                        if pd.notna(value)
+                        else "N/A"
+                    )
+                )
             )
-            st.dataframe(cand_df, hide_index=True, width='stretch')
-        st.caption(
-            f'Selected max weight cap: {results.get("selected_cap", 0)*100:.1f}% | '
-            f'Potential score: {health.get("potential_score", ai_score):.1f}/100'
-        )
+
+            cand_df = cand_df.rename(
+                columns={
+                    "max_weight_cap": "Max Weight",
+                    "health_score": "Health",
+                    "sharpe_ratio": "Sharpe",
+                    "volatility": "Volatility",
+                    "max_drawdown_pct": "Max Drawdown",
+                }
+            )
+
+            if "Max Drawdown" in cand_df:
+                cand_df["Max Drawdown"] = (
+                    cand_df["Max Drawdown"].map(
+                        lambda value: (
+                            f"{float(value):.2f}%"
+                            if pd.notna(value)
+                            else "N/A"
+                        )
+                    )
+                )
+
+            st.dataframe(
+                cand_df,
+                hide_index=True,
+                width="stretch",
+            )
+
+
+    st.caption(
+        "Each line shows the standalone cumulative return of one "
+        "ticker. It does not apply portfolio weights or represent "
+        "the combined portfolio return."
+    )
 
 st.markdown("""
 <div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:32px;padding-top:16px;">

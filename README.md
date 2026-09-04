@@ -406,13 +406,13 @@ pip install -r requirements-frontend.txt
 Windows PowerShell:
 
 ```powershell
-Copy-Item .env.example .env
+Copy-Item backend\.env.example .env
 ```
 
 macOS or Linux:
 
 ```bash
-cp .env.example .env
+cp backend/.env.example .env
 ```
 
 Add the required API keys and configuration values to `.env`.
@@ -438,7 +438,8 @@ The application uses environment variables for external integrations and runtime
 | `NEWS_API_KEY` | For news features | Retrieves recent financial-news articles |
 | `GROQ_API_KEY` | For LLM features | Generates AI-powered portfolio recommendations |
 | `GROQ_MODEL` | Optional | Selects the Groq-hosted model |
-| `SECRET_KEY` | Recommended | Supports authentication/session security where used |
+| `SECRET_KEY` | Required for FastAPI | Signs JWT access tokens; must be non-placeholder and at least 32 characters |
+| `CORS_ORIGINS` | Required for FastAPI | Comma-separated browser origins allowed to call the API |
 | `DB_DIR` | Optional | Directory containing the SQLite database |
 | `FAISS_INDEX_PATH` | Optional | Location of the persisted FAISS index |
 | `DEMO_MODE` | Optional | Enables simplified demonstration behavior where supported |
@@ -450,6 +451,7 @@ NEWS_API_KEY=replace_with_your_newsapi_key
 GROQ_API_KEY=replace_with_your_groq_key
 GROQ_MODEL=openai/gpt-oss-120b
 SECRET_KEY=replace_with_a_long_random_value
+CORS_ORIGINS=http://localhost:8501
 DB_DIR=/data
 FAISS_INDEX_PATH=/data/faiss_index
 ```
@@ -686,13 +688,15 @@ Configuration:
 
 | Metric | AXIOM combined | Quantitative only | Equal weight | Benchmark |
 | --- | ---: | ---: | ---: | ---: |
-| CAGR | Not measured* | 16.83% | 20.59% | 13.12% |
-| Annualized volatility | Not measured* | 26.51% | 26.76% | 16.96% |
-| Sharpe ratio | Not measured* | 0.531 | 0.648 | 0.519 |
-| Sortino ratio | Not measured* | 0.790 | 0.909 | 0.712 |
+| Net CAGR | Not measured* | 16.83% | 20.59% | 13.12% |
+| Gross CAGR | Not measured* | 17.42% | 20.68% | 13.12% |
+| Net annualized volatility | Not measured* | 26.51% | 26.76% | 16.96% |
+| Net Sharpe ratio | Not measured* | 0.536 | 0.653 | 0.526 |
+| Net Sortino ratio | Not measured* | 0.787 | 0.942 | 0.749 |
 | Maximum drawdown | Not measured* | -39.63% | -46.55% | -25.43% |
-| Annual turnover | Not measured* | 174.27% | 25.04% | N/A |
-| Transaction-cost drag | Not measured* | 3.84% | 0.55% | 0.00% |
+| Annual one-way turnover | Not measured* | 167.46% | 25.03% | N/A |
+| CAGR cost drag | Not measured* | 0.59% | 0.09% | 0.00% |
+| Transaction costs / initial capital | Not measured* | 3.82% | 0.56% | 0.00% |
 
 *AXIOM combined is not measured because the repository does not yet contain a point-in-time historical news and sentiment dataset. Current news must not be used to simulate past decisions.*
 
@@ -714,7 +718,9 @@ Transaction costs use the complete traded notional across purchases and sales. S
 - Use an IAM role instead of long-lived AWS access keys on EC2.
 - Restrict ports `22` and `8501` to trusted CIDR ranges during development.
 - Use HTTPS and a stable domain before treating the dashboard as a public service.
-- Use Argon2id or bcrypt for password hashing rather than general-purpose hashing.
+- New passwords use bcrypt. A successful login transparently upgrades legacy SHA-256 hashes to bcrypt.
+- FastAPI verifies that portfolio, holding, history, analysis, and benchmark resources belong to the authenticated user.
+- Password reset by username and email alone is intentionally disabled until a signed, expiring email-token flow is available.
 - Treat retrieved news as untrusted input and escape article content in HTML reports.
 - RAG reduces unsupported output but does not eliminate hallucination.
 
@@ -737,7 +743,7 @@ Transaction costs use the complete traded notional across purchases and sales. S
 - [ ] Store secrets in AWS Secrets Manager or SSM Parameter Store
 - [ ] Add CloudWatch logs, metrics, dashboards, and alarms
 - [ ] Pin and continuously test dependency versions
-- [ ] Add walk-forward backtesting with transaction costs
+- [x] Add leakage-aware walk-forward backtesting with turnover and transaction costs
 - [ ] Add covariance shrinkage and robust allocation objectives
 - [ ] Add PostgreSQL migrations and managed backups
 - [ ] Add RAG retrieval and groundedness evaluation

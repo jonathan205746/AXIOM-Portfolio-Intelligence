@@ -179,7 +179,20 @@ def calculate_health_score(
     ])
     correlation_score -= min(12.0, len(high_corr_pairs) * 2.0)
 
-    sent_vals = [float(v) for v in sentiment_scores.values()] if sentiment_scores else []
+    if news_counts is None:
+        sent_vals = [
+            float(value)
+            for value in sentiment_scores.values()
+            if value is not None
+        ]
+    else:
+        sent_vals = [
+            float(sentiment_scores[ticker])
+            for ticker in final_weights
+            if sentiment_scores.get(ticker) is not None
+            and news_counts.get(ticker, 0) > 0
+        ]
+
     avg_sent = sum(sent_vals) / len(sent_vals) if sent_vals else 0.0
     coverage = (len(sent_vals) / n) if n else 0.0
     directional = _piecewise(avg_sent, [

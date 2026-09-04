@@ -13,6 +13,7 @@ import time
 from typing import Any, Dict, List, Optional, TypedDict
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from torch.nn.functional import softmax
+from src.utils.sentiment import classify_sentiment
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -156,13 +157,9 @@ class SentimentAnalyzer:
         score = sum(r["positive"] - r["negative"] for r in results) / len(results)
         score = round(score, 4)
 
-        # Thresholds: >0.1 = positive, <-0.1 = negative, else neutral
-        if score > 0.1:
-            label = "positive"
-        elif score < -0.1:
-            label = "negative"
-        else:
-            label = "neutral"
+        # Use the shared AXIOM sentiment classification policy.
+        # Keep the model-service response lowercase for backward compatibility.
+        label = classify_sentiment(score).value.lower()
 
         return {
             "score": score,

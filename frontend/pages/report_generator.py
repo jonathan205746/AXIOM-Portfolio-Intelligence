@@ -2,25 +2,86 @@
 Axiom Report Generator v2.1
 Self-contained HTML reports in institutional glassmorphic aesthetic.
 """
-import pandas as pd
-import plotly.graph_objects as go
-import plotly.express as px
 from datetime import datetime
+from html import escape
+
+import bleach
+import markdown
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+
 from src.optimization.health_score import HealthScoreEngine
+from src.utils.sentiment import (
+    SentimentLabel,
+    classify_sentiment,
+)
+from src.optimization.rebalancing import (
+    classify_model_adjustment,
+)
 
 
-def _get_action(ticker: str, final_weights: dict, weight_changes: dict) -> str:
-    """Determine action label for a ticker."""
-    final = final_weights.get(ticker, 0)
-    if final < 0.001:
-        return "EXCLUDE"
-    change = weight_changes.get(ticker, {}).get("change", 0)
-    if change > 0.001:
-        return "BUY"
-    if change < -0.001:
-        return "SELL"
-    return "HOLD"
+ALLOWED_AI_HTML_TAGS = [
+    "p",
+    "strong",
+    "em",
+    "ul",
+    "ol",
+    "li",
+    "br",
+]
 
+
+def render_ai_commentary(commentary: str) -> str:
+    """Convert AI Markdown to a small, sanitized HTML subset."""
+
+    converted = markdown.markdown(
+        commentary or "",
+        extensions=[],
+    )
+
+    return bleach.clean(
+        converted,
+        tags=ALLOWED_AI_HTML_TAGS,
+        attributes={},
+        protocols=[],
+        strip=True,
+    )
+
+
+def get_report_sentiment(
+    score: float | None,
+    colors: dict,
+) -> tuple[str, str, str, int]:
+    """Return canonical label, color, display score and bar width."""
+
+    sentiment = classify_sentiment(score)
+
+    color_by_label = {
+        SentimentLabel.POSITIVE: colors["green"],
+        SentimentLabel.NEGATIVE: colors["red"],
+        SentimentLabel.NEUTRAL: colors["text_secondary"],
+        SentimentLabel.INSUFFICIENT_EVIDENCE: colors["amber"],
+    }
+
+    if score is None:
+        return (
+            sentiment.value,
+            color_by_label[sentiment],
+            "N/A",
+            50,
+        )
+
+    numeric_score = float(score)
+    bar_width = int((numeric_score + 1.0) / 2.0 * 100)
+    bar_width = max(0, min(100, bar_width))
+
+    return (
+        sentiment.value,
+        color_by_label[sentiment],
+        f"{numeric_score:+.3f}",
+        bar_width,
+    )
 
 def generate_axiom_report(portfolio, results, display_names):
     """Generate a self-contained HTML report in Axiom glassmorphic style."""
@@ -31,7 +92,15 @@ def generate_axiom_report(portfolio, results, display_names):
     risk_report = results.get("risk_report", {})
     recommendations = results.get("recommendations", [])
     combined = results.get("combined", {})
-    frontier_df = results.get("frontier_df", pd.DataFrame())
+    rebalance_plan = results.get("rebalance_plan", {})
+    current_allocation = results.get(
+        "current_allocation",
+        {},
+    )
+    frontier_df = results.get(
+        "frontier_df",
+        pd.DataFrame(),
+    )
     returns_df = results.get("returns", pd.DataFrame())
     correlation_matrix = results.get("correlation_matrix")
     available = results.get("tickers", [])
@@ -42,7 +111,18 @@ def generate_axiom_report(portfolio, results, display_names):
     var99 = risk_report.get("value_at_risk", {}).get("historical_99", {})
     vol = risk_report.get("volatility", {}).get("portfolio_annualized", 0)
     mdd = risk_report.get("drawdown", {}).get("portfolio", {})
-    avg_sent = sum(sentiment_scores.values()) / len(sentiment_scores) if sentiment_scores else 0
+    available_sentiments = [
+        float(score)
+        for score in sentiment_scores.values()
+        if score is not None
+    ]
+
+    avg_sent = (
+        sum(available_sentiments)
+        / len(available_sentiments)
+        if available_sentiments
+        else None
+    )
 
     news_counts = {t: len(all_news.get(t, [])) for t in available}
     health = results.get("health_score") or HealthScoreEngine.calculate(
@@ -85,66 +165,98 @@ def generate_axiom_report(portfolio, results, display_names):
         "border_subtle": "rgba(255, 255, 255, 0.05)",
         "border_active": "rgba(255, 255, 255, 0.10)",
     }
-
-    # ── Weights Table ─────────────────────────────────────────
+    # ── Weights Table ────────────────────────────────────────
     weights_rows = []
-    vols = risk_report.get("volatility", {}).get("per_ticker_annualized", {})
-    max_vol = max(vols.values()) if vols else 0
 
-    for t in available:
-        w_opt = opt_result.get("weights", {}).get(t, 0) * 100
-        w_final = final_weights.get(t, 0) * 100
-        wc = combined.get("weight_changes", {}).get(t, {})
-        change = wc.get("change", 0) * 100
+    for ticker in available:
+        optimized_weight = float(
+            opt_result
+            .get("weights", {})
+            .get(ticker, 0.0)
+        )
+        final_weight = float(
+            final_weights.get(ticker, 0.0)
+        )
 
-        if w_opt < 0.1 and w_final < 0.1:
-            action = "EXCLUDE"
-            action_color = C["text_secondary"]
-        elif abs(change) < 1.0:
-            action = "HOLD"
-            action_color = C["text_secondary"]
+        optimized_pct = optimized_weight * 100
+        final_pct = final_weight * 100
+        model_change_pct = (
+            final_weight - optimized_weight
+        ) * 100
+
+        model_action = classify_model_adjustment(
+            optimized_weight,
+            final_weight,
+        )
+
+        plan_entry = rebalance_plan.get(ticker, {})
+        current_weight = plan_entry.get("current_weight")
+        rebalance_gap = plan_entry.get("gap")
+        rebalance_action = plan_entry.get(
+            "action",
+            "UNAVAILABLE",
+        )
+        reason = plan_entry.get(
+            "reason",
+            "Current allocation data is unavailable",
+        )
+
+        current_text = (
+            f"{float(current_weight) * 100:.2f}%"
+            if current_weight is not None
+            else "N/A"
+        )
+        gap_text = (
+            f"{float(rebalance_gap) * 100:+.2f}%"
+            if rebalance_gap is not None
+            else "N/A"
+        )
+
+        if rebalance_action == "BUY":
+            action_color = C["green"]
+        elif rebalance_action == "SELL":
+            action_color = C["red"]
         else:
-            action = wc.get("action", "HOLD")
-            action_color = C["green"] if action == "BUY" else (C["red"] if action == "SELL" else C["text_secondary"])
+            action_color = C["text_secondary"]
 
-        change_color = C["green"] if change >= 0 else C["red"]
+        if model_action == "INCREASE":
+            model_color = C["green"]
+        elif model_action == "DECREASE":
+            model_color = C["red"]
+        else:
+            model_color = C["text_secondary"]
 
-        reason = ""
-        if action == "EXCLUDE":
-            reasons = []
-            if w_opt < 0.1:
-                reasons.append("Low Sharpe contribution")
-            sent = sentiment_scores.get(t, 0)
-            if sent < -0.1:
-                reasons.append(f"Negative sentiment ({sent:+.2f})")
-            if vols.get(t, 0) >= max_vol * 0.95:
-                reasons.append("High volatility")
-            reason = "; ".join(reasons) if reasons else "Suboptimal risk/return"
-        elif action == "HOLD" and abs(change) < 1.0:
-            reason = "Within rebalancing threshold"
-        elif action == "BUY":
-            reason = "Sentiment / diversification boost"
-        elif action == "SELL":
-            reason = "Reduce concentration / sentiment drag"
+        if rebalance_gap is None:
+            gap_color = C["text_secondary"]
+        elif float(rebalance_gap) >= 0:
+            gap_color = C["green"]
+        else:
+            gap_color = C["red"]
 
         weights_rows.append(f"""
         <tr>
-            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};color:{C['text_primary']};font-weight:600;font-family:'Inter',sans-serif;">{display_names.get(t, t)}</td>
-            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};color:{C['text_secondary']};text-align:right;font-family:'JetBrains Mono',monospace;">{w_opt:.2f}%</td>
-            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};color:{C['accent']};text-align:right;font-weight:700;font-family:'JetBrains Mono',monospace;">{w_final:.2f}%</td>
-            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{change_color};font-family:'JetBrains Mono',monospace;">{change:+.2f}%</td>
-            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{action_color};font-weight:700;font-family:'JetBrains Mono',monospace;">{action}</td>
-            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{C['text_tertiary']};font-size:0.72rem;">{reason}</td>
-        </tr>""")
+          <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};color:{C['text_primary']};font-weight:600;">{escape(str(display_names.get(ticker, ticker)))}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{C['text_primary']};font-family:'JetBrains Mono',monospace;">{current_text}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{C['text_secondary']};font-family:'JetBrains Mono',monospace;">{optimized_pct:.2f}%</td>
+          <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{C['accent']};font-weight:700;font-family:'JetBrains Mono',monospace;">{final_pct:.2f}%</td>
+          <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{model_color};font-family:'JetBrains Mono',monospace;">{model_change_pct:+.2f}%</td>
+          <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{model_color};font-weight:600;">{model_action}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{gap_color};font-family:'JetBrains Mono',monospace;">{gap_text}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{action_color};font-weight:700;">{rebalance_action}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};color:{C['text_tertiary']};font-size:0.70rem;">{escape(str(reason))}</td>
+        </tr>
+        """)
+
     weights_html = "\n".join(weights_rows)
 
     # ── Sentiment Rows ────────────────────────────────────────
     sentiment_rows = []
     for t in available:
-        score = sentiment_scores.get(t, 0)
-        label = "POSITIVE" if score >= 0.05 else ("NEGATIVE" if score <= -0.05 else "NEUTRAL")
-        color = C["green"] if score >= 0.05 else (C["red"] if score <= -0.05 else C["text_secondary"])
-        bar_width = int((score + 1) / 2 * 100)
+        score = sentiment_scores.get(t)
+        label, color, score_text, bar_width = get_report_sentiment(
+          score,
+          C,
+        )
         sentiment_rows.append(f"""
         <tr>
             <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};color:{C['text_primary']};font-weight:600;font-family:'Inter',sans-serif;">{display_names.get(t, t)}</td>
@@ -153,12 +265,19 @@ def generate_axiom_report(portfolio, results, display_names):
                     <div style="background:linear-gradient(90deg, {color}, {color}80);height:100%;width:{bar_width}%;border-radius:3px;box-shadow:0 0 8px {color}40;"></div>
                 </div>
             </td>
-            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{color};font-weight:700;font-family:'JetBrains Mono',monospace;">{score:+.3f}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{color};font-weight:700;font-family:'JetBrains Mono',monospace;">{score_text}</td>
             <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{color};font-size:0.75rem;font-weight:600;">{label}</td>
         </tr>""")
     sentiment_html = "\n".join(sentiment_rows)
 
     # ── Risk Per Ticker ───────────────────────────────────────
+    vols = (
+        risk_report
+        .get("volatility", {})
+        .get("per_ticker_annualized", {})
+    )
+
+
     risk_rows = []
     for t in available:
         v = vols.get(t, 0) * 100
@@ -171,43 +290,179 @@ def generate_axiom_report(portfolio, results, display_names):
     risk_html = "\n".join(risk_rows)
 
     # ── Recommendations ───────────────────────────────────────
+        # ── AI Research Commentary ─────────────────────────────────
     rec_parts = []
+
     if recommendations:
         for rec in recommendations:
-            t = rec.get("ticker", "")
-            score = rec.get("sentiment_score", 0)
-            label = rec.get("sentiment_label", "NEUTRAL")
-            weight_pct = rec.get("portfolio_weight_pct", "0")
-            text = rec.get("recommendation", "")
-            color = C["green"] if score >= 0.05 else (C["red"] if score <= -0.05 else C["text_secondary"])
-            glow = "rgba(16,185,129,0.08)" if score >= 0.05 else ("rgba(244,63,94,0.08)" if score <= -0.05 else "rgba(255,255,255,0.02)")
-            rec_parts.append(f"""
-            <div style="margin-bottom:12px;padding:14px;background:{glow};border:1px solid {C['border_subtle']};border-left:3px solid {color};border-radius:0 12px 12px 0;transition:all 0.2s ease;"
-            >
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                    <span style="font-size:0.85rem;font-weight:700;color:{C['text_primary']};font-family:'Inter',sans-serif;">{display_names.get(t, t)}</span>
-                    <span style="background:{color}15;color:{color};padding:2px 8px;border-radius:6px;font-size:0.65rem;font-weight:700;letter-spacing:0.04em;">{label}</span>
+            ticker = rec.get("ticker", "")
+            score = rec.get("sentiment_score")
+
+            label, color, score_text, _ = get_report_sentiment(
+                score,
+                C,
+            )
+
+            optimizer_weight_pct = escape(
+                str(rec.get("portfolio_weight_pct", "N/A"))
+            )
+            commentary_html = render_ai_commentary(
+                str(rec.get("recommendation", ""))
+            )
+
+            glow_by_label = {
+                SentimentLabel.POSITIVE.value: (
+                    "rgba(16,185,129,0.08)"
+                ),
+                SentimentLabel.NEGATIVE.value: (
+                    "rgba(244,63,94,0.08)"
+                ),
+                SentimentLabel.NEUTRAL.value: (
+                    "rgba(255,255,255,0.02)"
+                ),
+                SentimentLabel.INSUFFICIENT_EVIDENCE.value: (
+                    "rgba(245,158,11,0.08)"
+                ),
+            }
+            glow = glow_by_label[label]
+
+            ticker_name = escape(
+                str(display_names.get(ticker, ticker))
+            )
+
+            rec_parts.append(
+                f"""
+                <div style="
+                    margin-bottom:12px;
+                    padding:14px;
+                    background:{glow};
+                    border:1px solid {C['border_subtle']};
+                    border-left:3px solid {color};
+                    border-radius:0 12px 12px 0;
+                ">
+                    <div style="
+                        display:flex;
+                        justify-content:space-between;
+                        align-items:center;
+                        margin-bottom:6px;
+                    ">
+                        <span style="
+                            font-size:0.85rem;
+                            font-weight:700;
+                            color:{C['text_primary']};
+                            font-family:'Inter',sans-serif;
+                        ">
+                            {ticker_name}
+                        </span>
+                        <span style="
+                            background:{color}15;
+                            color:{color};
+                            padding:2px 8px;
+                            border-radius:6px;
+                            font-size:0.65rem;
+                            font-weight:700;
+                        ">
+                            {label}
+                        </span>
+                    </div>
+                    <div style="
+                        font-size:0.75rem;
+                        color:{C['text_secondary']};
+                        margin-bottom:4px;
+                    ">
+                        Optimizer target:
+                        <strong style="
+                            color:{C['text_primary']};
+                            font-family:'JetBrains Mono',monospace;
+                        ">
+                            {optimizer_weight_pct}%
+                        </strong>
+                        · Sentiment:
+                        <strong style="
+                            color:{color};
+                            font-family:'JetBrains Mono',monospace;
+                        ">
+                            {score_text}
+                        </strong>
+                    </div>
+                    <div style="
+                        font-size:0.78rem;
+                        color:{C['text_secondary']};
+                        line-height:1.6;
+                    ">
+                        {commentary_html}
+                    </div>
                 </div>
-                <div style="font-size:0.75rem;color:{C['text_secondary']};margin-bottom:4px;">
-                    Weight: <strong style="color:{C['text_primary']};font-family:'JetBrains Mono',monospace;">{weight_pct}%</strong> · 
-                    Sentiment: <strong style="color:{color};font-family:'JetBrains Mono',monospace;">{score:+.3f}</strong>
-                </div>
-                <div style="font-size:0.78rem;color:{C['text_secondary']};line-height:1.6;">{text}</div>
-            </div>""")
-    rec_html = "\n".join(rec_parts) if rec_parts else f'<div style="color:{C["text_tertiary"]};font-size:0.8rem;padding:12px;">No LLM recommendations generated</div>'
+                """
+            )
+
+    if rec_parts:
+        rec_html = "\n".join(rec_parts)
+    else:
+        rec_html = (
+            f'<div style="color:{C["text_tertiary"]};'
+            'font-size:0.8rem;padding:12px;">'
+            "AI research commentary was not generated. "
+            "Quantitative results remain available."
+            "</div>"
+        )
 
     # ── News ──────────────────────────────────────────────────
     news_parts = []
-    for t in available:
-        articles = all_news.get(t, [])
-        if articles:
-            news_parts.append(f'<div style="margin-bottom:14px;"><div style="font-size:0.78rem;font-weight:700;color:{C["accent"]};margin-bottom:6px;font-family:\'Inter\',sans-serif;">{display_names.get(t, t)} — {len(articles)} articles</div>')
-            for a in articles[:5]:
-                news_parts.append(f'<div style="font-size:0.74rem;color:{C["text_secondary"]};padding:3px 0;border-bottom:1px solid {C["border_subtle"]};">• {a.get("title", "")}</div>')
-            news_parts.append('</div>')
-    news_html = "\n".join(news_parts) if news_parts else f'<div style="color:{C["text_tertiary"]};font-size:0.75rem;">No news data</div>'
+
+    for ticker in available:
+        articles = all_news.get(ticker, [])
+
+        if not articles:
+            continue
+
+        ticker_name = escape(
+            str(display_names.get(ticker, ticker))
+        )
+
+        news_parts.append(
+            f'<div style="margin-bottom:14px;">'
+            f'<div style="font-size:0.78rem;font-weight:700;'
+            f'color:{C["accent"]};margin-bottom:6px;'
+            f'font-family:\'Inter\',sans-serif;">'
+            f"{ticker_name} — {len(articles)} articles"
+            "</div>"
+        )
+
+        for article in articles[:5]:
+            title = escape(
+                str(article.get("title", ""))
+            )
+
+            news_parts.append(
+                f'<div style="font-size:0.74rem;'
+                f'color:{C["text_secondary"]};padding:3px 0;'
+                f'border-bottom:1px solid '
+                f'{C["border_subtle"]};">'
+                f"• {title}"
+                "</div>"
+            )
+
+        news_parts.append("</div>")
+
+    if news_parts:
+        news_html = "\n".join(news_parts)
+    else:
+        news_html = (
+            f'<div style="color:{C["text_tertiary"]};'
+            'font-size:0.75rem;">'
+            "No ticker-specific news data is available."
+            "</div>"
+        )
 
     # ── Charts ────────────────────────────────────────────────
+
+    final_sharpe = float(
+        opt_result.get("sharpe_ratio", 0.0)
+    )
+    baseline_sharpe = float(
+        baseline.get("sharpe_ratio", 0.0)
+    )
     frontier_div = ""
     frontier_fig = None
     if not frontier_df.empty:
@@ -219,22 +474,72 @@ def generate_axiom_report(portfolio, results, display_names):
                 name="Frontier"
             ))
             fig.add_trace(go.Scatter(
-                x=[opt_result.get("volatility", 0)*100], y=[opt_result.get("expected_return", 0)*100],
-                mode='markers+text', marker=dict(color=C["accent"], size=14, symbol='star', line=dict(color='white', width=1)),
-                text=["OPTIMAL"], textposition="top center", name="Optimal"
+                x=[opt_result.get("volatility", 0) * 100],
+                y=[
+                    opt_result.get(
+                        "expected_return",
+                        0,
+                    ) * 100
+                ],
+                mode="markers+text",
+                marker=dict(
+                    color=C["accent"],
+                    size=14,
+                    symbol="star",
+                    line=dict(
+                        color="white",
+                        width=1,
+                    ),
+                ),
+                text=[
+                    f"FINAL<br>Sharpe {final_sharpe:.3f}"
+                ],
+                textposition="top center",
+                name=(
+                    f"Final "
+                    f"(Sharpe={final_sharpe:.3f})"
+                ),
             ))
             fig.add_trace(go.Scatter(
-                x=[baseline.get("volatility", 0)*100], y=[baseline.get("expected_return", 0)*100],
-                mode='markers+text', marker=dict(color=C["text_secondary"], size=10, symbol='diamond'),
-                text=["BASELINE"], textposition="bottom center", name="Baseline"
+                x=[
+                    baseline.get(
+                        "volatility",
+                        0,
+                    ) * 100
+                ],
+                y=[
+                    baseline.get(
+                        "expected_return",
+                        0,
+                    ) * 100
+                ],
+                mode="markers+text",
+                marker=dict(
+                    color=C["text_secondary"],
+                    size=10,
+                    symbol="diamond",
+                ),
+                text=[
+                    (
+                        "BASELINE"
+                        f"<br>Sharpe {baseline_sharpe:.3f}"
+                    )
+                ],
+                textposition="bottom center",
+                name=(
+                    f"Baseline "
+                    f"<br>Sharpe {baseline_sharpe:.3f}"
+                ),
             ))
             fig.update_layout(
                 title="EFFICIENT FRONTIER", xaxis_title="VOLATILITY (%)", yaxis_title="RETURN (%)",
                 height=400, paper_bgcolor=C["bg_elevated"], plot_bgcolor=C["bg_elevated"],
                 font=dict(family="JetBrains Mono, monospace", color=C["text_primary"], size=10),
-                margin=dict(l=50, r=20, t=50, b=40),
-                xaxis=dict(gridcolor=C["border_subtle"], linecolor=C["border_active"]),
-                yaxis=dict(gridcolor=C["border_subtle"], linecolor=C["border_active"]),
+                margin=dict(l=60, r=35, t=75, b=50),
+                uniformtext_minsize=8,
+                uniformtext_mode="show",
+                xaxis=dict(gridcolor=C["border_subtle"], linecolor=C["border_active"],automargin=True,),
+                yaxis=dict(gridcolor=C["border_subtle"], linecolor=C["border_active"],automargin=True,),
                 legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor=C["border_subtle"], borderwidth=1, font=dict(size=9))
             )
             frontier_fig = fig
@@ -365,7 +670,22 @@ def generate_axiom_report(portfolio, results, display_names):
 
     exp_ret = opt_result.get("expected_return", 0)
     exp_ret_cls = "pos" if exp_ret > 0 else "neg"
-    avg_sent_cls = "pos" if avg_sent > 0.05 else ("neg" if avg_sent < -0.05 else "accent")
+    if avg_sent is None:
+        avg_sent_cls = "accent"
+        avg_sent_text = "N/A"
+    elif avg_sent > 0.05:
+        avg_sent_cls = "pos"
+        avg_sent_text = f"{avg_sent:+.3f}"
+    elif avg_sent < -0.05:
+        avg_sent_cls = "neg"
+        avg_sent_text = f"{avg_sent:+.3f}"
+    else:
+        avg_sent_cls = "accent"
+        avg_sent_text = f"{avg_sent:+.3f}"
+
+
+    risk_currency_symbol = "$"
+
 
     # ── HTML Assembly ─────────────────────────────────────────
     html = f"""<!DOCTYPE html>
@@ -541,19 +861,19 @@ def generate_axiom_report(portfolio, results, display_names):
           <div class="kpi-label">Volatility</div>
         </div>
         <div class="kpi-cell">
-          <div class="kpi-value neg">{currency_symbol}{var95.get("var_usd", 0):,.0f}</div>
-          <div class="kpi-label">95% VaR</div>
+          <div class="kpi-value neg">{risk_currency_symbol}{abs(var95.get("var_usd", 0)):,.0f}</div>
+          <div class="kpi-label">95% VaR · 1 DAY · USD</div>
         </div>
         <div class="kpi-cell">
-          <div class="kpi-value neg">{currency_symbol}{var99.get("var_usd", 0):,.0f}</div>
-          <div class="kpi-label">99% VaR</div>
+          <div class="kpi-value neg">{risk_currency_symbol}{abs(var99.get("var_usd", 0)):,.0f}</div>
+          <div class="kpi-label">99% VaR · 1 DAY · USD</div>
         </div>
         <div class="kpi-cell">
           <div class="kpi-value neg">{mdd.get("max_drawdown_pct", 0):.2f}%</div>
           <div class="kpi-label">Max Drawdown</div>
         </div>
         <div class="kpi-cell">
-          <div class="kpi-value {avg_sent_cls}">{avg_sent:+.3f}</div>
+          <div class="kpi-value {avg_sent_cls}">{avg_sent_text}</div>
           <div class="kpi-label">Avg Sentiment</div>
         </div>
       </div>
@@ -596,20 +916,23 @@ def generate_axiom_report(portfolio, results, display_names):
   <div class="panel animate-in">
     <div class="panel-header violet">
       <span class="panel-title violet">◫ Portfolio Composition</span>
-      <span class="panel-sub">OPTIMIZED WEIGHTS & ACTIONS</span>
+      <span class="panel-sub">CURRENT VS QUANTITATIVE VS FINAL TARGETS</span>
     </div>
     <div class="panel-body">
       <table>
         <thead>
-          <tr>
-            <th>TICKER</th>
-            <th style="text-align:right">OPTIMIZED</th>
-            <th style="text-align:right">FINAL</th>
-            <th style="text-align:right">CHANGE</th>
-            <th style="text-align:right">ACTION</th>
-            <th style="text-align:right">REASON</th>
-          </tr>
-        </thead>
+            <tr>
+                <th>TICKER</th>
+                    <th style="text-align:right">CURRENT</th>
+                    <th style="text-align:right">QUANT</th>
+                    <th style="text-align:right">FINAL</th>
+                    <th style="text-align:right">MODEL SHIFT</th>
+                    <th style="text-align:right">MODEL ADJUSTMENT</th>
+                    <th style="text-align:right">REBALANCE GAP</th>
+                    <th style="text-align:right">ACTION</th>
+                    <th>REASON</th>
+                </tr>
+            </thead>
         <tbody>{weights_html}</tbody>
       </table>
     </div>
@@ -678,20 +1001,24 @@ def generate_axiom_report(portfolio, results, display_names):
     <div class="panel-body">{news_html}</div>
   </div>
 
-  <!-- AI Recommendations -->
+  <!-- AI Research Commentary  -->
   <div class="panel animate-in">
     <div class="panel-header violet">
-      <span class="panel-title violet">◉ AI Recommendations</span>
-      <span class="panel-sub">GROQ LLAMA 3.3 70B</span>
+      <span class="panel-title violet">◉ AI Research Commentary</span>
+      <span class="panel-sub">CONFIGURED GROQ MODEL</span>
     </div>
     <div class="panel-body">{rec_html}</div>
   </div>
 
   <!-- Disclaimer -->
   <div class="disclaimer animate-in">
-    <strong>DISCLAIMER:</strong> This report is generated by an AI-powered portfolio optimization system for informational purposes only. 
-    It does not constitute investment advice. Past performance does not guarantee future results. 
-    All metrics are based on historical data and statistical models. Consult a qualified financial advisor before making investment decisions.<br><br>
+    <strong>DISCLAIMER:</strong>
+      AXIOM is provided for research and educational purposes only and
+      does not constitute financial, investment, tax, or legal advice.
+      Market data, news, sentiment, model outputs, and generated commentary
+      may be incomplete, delayed, or inaccurate. Historical performance
+      does not guarantee future results. Consult a qualified professional
+      before making financial decisions.<br><br>
     <span style="color:{C['text_tertiary']};font-family:'JetBrains Mono',monospace;">
       AXIOM Portfolio Intelligence v2.1 · Generated {gen_str}
     </span>

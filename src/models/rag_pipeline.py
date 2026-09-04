@@ -3,8 +3,7 @@ rag_pipeline.py
 ---------------
 Compatible with LangChain 1.3.0+ (no LLMChain — it was removed)
 Uses: prompt | llm pattern (modern LangChain syntax)
-
-LLM: llama-3.3-70b-versatile via Groq (free, no daily quota)
+LLM: Groq-hosted model configured through GROQ_MODEL.
 """
 
 import os
@@ -14,39 +13,52 @@ from typing import Any
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 
+from src.utils.sentiment import classify_sentiment
+
+
 load_dotenv()
 
 # ── Prompt Template ───────────────────────────────────────────────────────────
 
 RECOMMENDATION_PROMPT = ChatPromptTemplate.from_template("""
-You are a rigorous, skeptical financial analyst AI. Do NOT simply agree with the data — challenge it.
+You are the research-explanation layer of AXIOM Portfolio Intelligence.
 
-Stock: {ticker}
-FinBERT Sentiment: {sentiment_score} (range: -1.0 to +1.0)
-Sentiment Label: {sentiment_label}
-Optimizer Recommended Weight: {portfolio_weight}%
+The quantitative optimizer is the only component allowed to calculate
+or modify portfolio target weights. You explain its output; you do not
+replace it.
 
-Recent News Articles:
+Asset: {ticker}
+FinBERT aggregate score: {sentiment_score}
+Canonical sentiment label: {sentiment_label}
+Quantitative optimizer target: {portfolio_weight}%
+
+Retrieved news evidence:
 {articles}
 
-Instructions:
-1. One-line verdict: STRONG BUY / BUY / HOLD / REDUCE / SELL with confidence (High/Medium/Low).
-2. 2-3 bullet points of critical analysis. If the weight seems too concentrated, say so. If news contradicts the sentiment score, highlight it.
-3. One specific risk factor to monitor.
-4. If you disagree with the optimizer weight, suggest a revised weight and explain why. Do not blindly agree.
+Rules:
+1. Do not produce BUY, SELL, STRONG BUY, or STRONG SELL advice.
+2. Do not invent or recommend a revised portfolio weight.
+3. Do not override the quantitative optimizer target.
+4. Do not claim that an article is relevant unless its supplied text
+   directly concerns the asset or company.
+5. Do not invent prices, financial results, catalysts, risks, sources,
+   dates, or company facts.
+6. If the supplied articles are missing, irrelevant, or insufficient,
+   explicitly state: "Insufficient ticker-specific news evidence."
+7. Treat sentiment as supporting evidence, not as proof of future returns.
+8. Clearly distinguish supplied evidence from a general risk hypothesis.
 
-Keep under 150 words. Use plain English, no jargon.
+Return no more than 130 words using this structure:
+
+Evidence quality: Sufficient / Limited / Insufficient
+Model observation: one concise sentence
+- Two evidence-based bullet points
+Risk scenario to test: one sentence
+Quantitative next step: suggest a constraint or stress test, without
+providing a new target weight
 """)
 
 # ── Helper Functions ──────────────────────────────────────────────────────────
-
-def score_to_label(score: float) -> str:
-    if score >= 0.3:
-        return "Positive"
-    elif score <= -0.3:
-        return "Negative"
-    return "Neutral"
-
 
 def format_articles(articles: list) -> str:
     if not articles:
@@ -64,7 +76,7 @@ def weight_to_percent(weight: float) -> str:
 
 class RAGPipeline:
     """
-    RAG Pipeline using Groq (Llama 3.3 70B) + LangChain 1.3.0
+    RAG pipeline using a Groq-hosted LLM and LangChain 1.3.0.
     Uses prompt | llm chain syntax (replaces deprecated LLMChain)
     """
 
@@ -110,7 +122,7 @@ class RAGPipeline:
         retrieved_articles: list
     ) -> dict:
         """
-        Generate a plain English investment recommendation.
+        Generate evidence-grounded research commentary.
 
         Args:
             ticker:             e.g. "AAPL"
@@ -119,10 +131,12 @@ class RAGPipeline:
             retrieved_articles: News strings from FAISS vector store
 
         Returns:
-            dict: ticker, sentiment_score, sentiment_label,
-                  portfolio_weight_pct, recommendation
+            Dictionary containing the ticker, sentiment score,
+            canonical label, optimizer weight, and evidence-grounded
+            research commentary under the compatibility key
+            ``recommendation``.
         """
-        sentiment_label = score_to_label(sentiment_score)
+        sentiment_label = classify_sentiment(sentiment_score).value
         formatted_articles = format_articles(retrieved_articles)
         weight_pct = weight_to_percent(portfolio_weight)
 
@@ -156,18 +170,19 @@ class RAGPipeline:
         except Exception as e:
             print(f"[RAGPipeline] LLM call failed for {ticker}: {e}")
             recommendation_text = (
-                f"HOLD — Medium confidence (LLM unavailable).\n"
-                f"- Sentiment: {sentiment_label} ({round(sentiment_score, 3)})\n"
-                f"- Weight: {weight_pct}%\n"
-                f"- Note: Check GROQ_API_KEY in .env\n"
-            )
+                "AI research commentary is temporarily unavailable.\n"
+                f"- Sentiment: {sentiment_label} "
+                f"({round(sentiment_score, 3)})\n"
+                f"- Quantitative optimizer target: {weight_pct}%\n"
+                "- The optimizer result remains available without AI commentary."
+      )
 
         return {
             "ticker": ticker,
             "sentiment_score": round(sentiment_score, 3),
             "sentiment_label": sentiment_label,
             "portfolio_weight_pct": weight_pct,
-            "recommendation": recommendation_text
+            "recommendation": recommendation_text,
         }
 
     def generate_portfolio_summary(self, recommendations: list) -> str:
@@ -182,10 +197,14 @@ class RAGPipeline:
         ]
 
         prompt = (
-            "You are a portfolio manager AI. Here is the portfolio summary:\n\n"
+            "You are the research-explanation layer of AXIOM. "
+            "Here is the quantitative portfolio summary:\n\n"
             + "\n".join(lines)
-            + "\n\nIn 3-4 sentences give an overall health assessment. "
-            "Cover: diversification, sentiment bias, and one key risk. Plain English only."
+            + "\n\nIn 3-4 sentences, explain the portfolio's "
+            "diversification and sentiment distribution. Identify one "
+            "scenario for quantitative stress testing. Do not provide "
+            "investment advice, invent facts, or modify any portfolio "
+            "weight. Use plain English."
         )
 
         try:
@@ -257,7 +276,7 @@ if __name__ == "__main__":
         )
         if result:
             all_recommendations.append(result)
-            print(f"\n📊 {result['ticker']} RECOMMENDATION:")
+            print(f"\n📊 {result['ticker']} RESEARCH COMMENTARY:")
             print(result["recommendation"])
         time.sleep(1)
 

@@ -9,9 +9,16 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from typing import Any
-from src.database.db import get_portfolio_history, get_sharpe_trend
+from src.database.db import get_portfolio_history
 
-st.set_page_config(page_title="History | Axiom", page_icon="◫", layout="wide")
+
+st.set_page_config(
+    page_title="Portfolio | Axiom",
+    page_icon="◫",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 
 if not st.session_state.get("logged_in"):
     st.warning("Authentication required")
@@ -21,9 +28,7 @@ if not st.session_state.get("logged_in"):
 user = st.session_state["user"]
 portfolio = st.session_state.get("current_portfolio")
 if not portfolio:
-    st.warning("Select a portfolio first")
-    st.page_link("pages/2_Portfolio.py", label="◫ Go to Portfolio")
-    st.stop()
+    st.switch_page("pages/2_Portfolio.py")
 
 # ── Design System ───────────────────────────────────────────
 from frontend.ui.theme import inject_theme, apply_plotly_theme
@@ -79,6 +84,18 @@ st.markdown("""
 
 history = get_portfolio_history(portfolio["id"], limit=30)
 
+IST_TIMEZONE = "Asia/Kolkata"
+
+
+def _format_run_time_ist(value) -> str:
+    timestamp = pd.to_datetime(value, errors="coerce", utc=True)
+
+    if pd.isna(timestamp):
+        return "N/A"
+
+    return timestamp.tz_convert(IST_TIMEZONE).strftime(
+        "%Y-%m-%d %H:%M:%S IST"
+    )
 if not history:
     info_card(
         "No Optimization Runs",
@@ -93,7 +110,11 @@ if not history:
 # ── Summary Metrics ─────────────────────────────────────────
 latest = history[0] if history else None
 if latest:
-    section_header("Latest Run Summary", f"Recorded {latest.get('run_date', 'N/A')[:10]}", accent="green")
+    section_header(
+    "Latest Run Summary",
+    f"Recorded {_format_run_time_ist(latest.get('run_date'))}",
+    accent="green",
+)
     metrics = [
         {"label": "Sharpe Ratio", "value": f"{latest.get('sharpe_ratio', 0):.3f}", "tone": "cyan", "icon": "◉"},
         {"label": "Expected Return", "value": f"{latest.get('expected_return', 0)*100:.2f}%", "tone": "positive" if latest.get("expected_return", 0) > 0 else "negative", "icon": "▲"},
@@ -106,69 +127,97 @@ if latest:
 section_header("Sharpe Ratio Over Time", "Performance trajectory", accent="primary")
 glass_container(accent="primary")
 
-trend = get_sharpe_trend(portfolio["id"])
-if len(trend) >= 2:
-    trend_df = pd.DataFrame(trend)
-    trend_df["date"] = pd.to_datetime(trend_df["date"], errors="coerce")
-    trend_df = trend_df.dropna(subset=["date"]).sort_values("date")
+def _ticker_universe(run):
+    return tuple(sorted(str(t) for t in (run.get("tickers") or [])))
 
-    base_sharpe = trend_df["sharpe_ratio"].iloc[0]
-    base_return = trend_df["expected_return"].iloc[0]
-    base_vol = trend_df["volatility"].iloc[0]
 
-    sharpe_pct = (trend_df["sharpe_ratio"] / base_sharpe - 1) * 100
-    return_pct = (trend_df["expected_return"] / base_return - 1) * 100
-    vol_pct = (trend_df["volatility"] / base_vol - 1) * 100
+latest_universe = _ticker_universe(history[0])
+comparable_runs = [
+    run for run in history
+    if _ticker_universe(run) == latest_universe
+]
 
+trend_df = pd.DataFrame(
+    {
+        "date": run.get("run_date"),
+        "sharpe_ratio": run.get("sharpe_ratio"),
+        "expected_return": run.get("expected_return"),
+        "volatility": run.get("volatility"),
+    }
+    for run in comparable_runs
+)
+
+trend_df["date"] = pd.to_datetime(trend_df["date"], errors="coerce", utc=True).dt.tz_convert(IST_TIMEZONE)
+trend_df = (
+    trend_df
+    .dropna(
+        subset=[
+            "date",
+            "sharpe_ratio",
+            "expected_return",
+            "volatility",
+        ]
+    )
+    .sort_values("date")
+)
+
+# Multiple reruns on one day otherwise create dense vertical clusters.
+trend_df["run_day"] = trend_df["date"].dt.normalize()
+trend_df["plot_date"] = trend_df["date"].dt.strftime("%Y-%m-%d")
+trend_df = (
+    trend_df
+    .groupby("run_day", as_index=False)
+    .tail(1)
+)
+
+if len(trend_df) >= 2:
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=trend_df["date"], y=sharpe_pct, mode='lines+markers',
-        name="Sharpe", line=dict(color='#FF6B35', width=2.5),
-        marker=dict(size=6, color='#FF6B35', line=dict(color='#fff', width=1))
-    ))
-    fig.add_trace(go.Scatter(
-        x=trend_df["date"], y=return_pct, mode='lines+markers',
-        name="Return", line=dict(color='#10B981', width=2),
-        marker=dict(size=5, color='#10B981')
-    ))
-    fig.add_trace(go.Scatter(
-        x=trend_df["date"], y=vol_pct, mode='lines+markers',
-        name="Volatility", line=dict(color='#F43F5E', width=2),
-        marker=dict(size=5, color='#F43F5E')
-    ))
-    fig.add_hline(y=0, line_color="rgba(255,255,255,0.1)", line_width=1)
-    fig.update_layout(
-        title="Relative Change from First Run (%)",
-        xaxis_title="Date", yaxis_title="Change (%)",
-        height=420, hovermode="x unified"
+
+    fig.add_trace(
+        go.Scatter(
+            x=trend_df["plot_date"],
+            y=trend_df["sharpe_ratio"],
+            mode="lines+markers",
+            name="Sharpe",
+            line=dict(color="#00D9FF", width=2.5),
+        )
     )
-    fig = apply_plotly_theme(fig)
-    st.plotly_chart(fig, width='stretch')
-else:
-    snapshot = pd.DataFrame({
-        "Metric": ["Sharpe Ratio", "Expected Return (%)", "Volatility (%)"],
-        "Value": [
-            latest.get("sharpe_ratio", 0) if latest else 0,
-            latest.get("expected_return", 0) * 100 if latest else 0,
-            latest.get("volatility", 0) * 100 if latest else 0,
-        ],
-        "Color": ["#00D9FF", "#10B981", "#F43F5E"],
-    })
-    fig = go.Figure(go.Bar(
-        x=snapshot["Metric"], y=snapshot["Value"],
-        marker_color=snapshot["Color"], text=snapshot["Value"].map(lambda value: f"{value:.2f}"),
-        textposition="outside",
-    ))
+
     fig.update_layout(
-        title="Latest Run Performance Snapshot",
-        yaxis_title="Metric Value",
+        title="Comparable Sharpe by Run Date",
+        xaxis_title="Date",
+        xaxis=dict(type="category"),
+        yaxis_title="Sharpe Ratio",
         height=420,
-        showlegend=False,
+        hovermode="x unified",
     )
-    st.plotly_chart(apply_plotly_theme(fig), width="stretch")
+
+    st.plotly_chart(
+        apply_plotly_theme(fig),
+        width="stretch",
+    )
+
+    st.caption(
+        "Shows the latest run per day for the current ticker universe only: "
+        + ", ".join(latest_universe)
+        + "."
+    )
+else:
+    st.info(
+        "At least two comparable run dates using the current ticker universe "
+        "are required to display a trend."
+    )
 
 # ── Recommendation Changes ──────────────────────────────────
-section_header("Recommendation Changes", "AI guidance evolution", accent="violet")
+section_header(
+    "AI Commentary Comparison",
+    "Comparison with the immediately preceding run",
+    accent="violet",
+)
+st.caption(
+    "UPDATED means the generated commentary text changed. "
+    "It does not necessarily indicate a target-weight or trading-action change."
+)
 glass_container(accent="violet")
 
 def _normalize_recommendations(items):
@@ -194,7 +243,7 @@ if len(history) >= 2:
         curr = latest_recs.get(ticker, "") or "N/A"
         prev = previous_recs.get(ticker, "") or "N/A"
         changed = str(curr).strip() != str(prev).strip()
-        badge_html = badge("CHANGED", "warning") if changed else badge("UNCHANGED", "positive")
+        badge_html = badge("UPDATED", "warning") if changed else badge("UNCHANGED", "positive")
 
         st.markdown(f'''
         <div style="
@@ -223,14 +272,14 @@ else:
 
 
 # ── All Past Runs Table ─────────────────────────────────────
-section_header("All Past Runs", f"{len(history)} records", accent="green")
+section_header("All Past Runs", f"{len(history)} records · Times shown in IST", accent="green")
 glass_container(accent="green")
 
 rows = []
 for run in history:
     tickers = run.get("tickers") or []
     rows.append({
-        "Date": run.get("run_date"),
+        "Date (IST)": _format_run_time_ist(run.get("run_date")),
         "Tickers": ", ".join(tickers[:4]) + ("..." if len(tickers) > 4 else ""),
         "Alpha": run.get("alpha_used"),
         "Sharpe": f"{run['sharpe_ratio']:.4f}" if run.get("sharpe_ratio") else "N/A",

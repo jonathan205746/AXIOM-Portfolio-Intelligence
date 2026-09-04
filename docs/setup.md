@@ -65,13 +65,13 @@ Copy the example file:
 Windows PowerShell:
 
 ```powershell
-Copy-Item .env.example .env
+Copy-Item backend\.env.example .env
 ```
 
 macOS or Linux:
 
 ```bash
-cp .env.example .env
+cp backend/.env.example .env
 ```
 
 Example:
@@ -81,6 +81,7 @@ NEWS_API_KEY=replace_with_one_valid_newsapi_key
 GROQ_API_KEY=replace_with_your_groq_key
 GROQ_MODEL=openai/gpt-oss-120b
 SECRET_KEY=replace_with_a_long_random_value
+CORS_ORIGINS=http://localhost:8501
 DB_DIR=./data
 FAISS_INDEX_PATH=./data/faiss_index
 ```
@@ -91,8 +92,27 @@ Rules:
 - do not separate multiple keys with commas
 - do not add Markdown quotes or links around values
 - do not commit `.env`
+- `SECRET_KEY` is mandatory for FastAPI, must be at least 32 characters, and must not use an example placeholder
+- `CORS_ORIGINS` is a comma-separated allow-list such as `http://localhost:8501`
 - rotate any key exposed in logs, screenshots, or commit history
 - use AWS Secrets Manager or SSM for a production deployment
+
+Generate a local secret in Windows PowerShell without printing or committing it:
+
+```powershell
+$bytes = New-Object byte[] 48
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($bytes)
+$secret = [Convert]::ToBase64String($bytes)
+$rng.Dispose()
+$env:SECRET_KEY = $secret
+$env:CORS_ORIGINS = "http://localhost:8501"
+```
+
+Persist the generated value in the ignored project-root `.env` file. Environment
+lines such as `SECRET_KEY=...` belong inside `.env`; they are not PowerShell
+commands. If a secret appears in a terminal transcript, screenshot, or message,
+rotate it before deployment.
 
 ## Run the Streamlit application
 
@@ -212,6 +232,11 @@ uvicorn backend.app.main:app --reload --port 8000
 ```
 
 Always compare `docs/api_reference.md` with the running `/openapi.json` schema.
+
+The optional API requires `SECRET_KEY` and rejects empty, short, or placeholder
+values during startup. Existing application accounts do not need a schema
+migration: their password hashes are upgraded to bcrypt at the next successful
+login.
 
 ## Code quality and tests
 
@@ -431,7 +456,8 @@ Replace raw inline handlers with CSS pseudo-classes or supported Streamlit compo
 - use an EC2 IAM role instead of embedded AWS credentials
 - add CloudWatch logs, metrics, dashboards, and alarms
 - migrate SQLite to PostgreSQL for multi-user scale
-- use Argon2id or bcrypt for password hashing
+- retain bcrypt password hashing and remove legacy-hash compatibility after all active accounts have migrated
+- implement password recovery only with signed, single-use, expiring tokens delivered to a verified address
 - add backups and restore testing
 - build immutable container images in CI
 - add health-gated deployment and rollback

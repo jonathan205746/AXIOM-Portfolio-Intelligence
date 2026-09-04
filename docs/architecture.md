@@ -83,6 +83,12 @@ The `frontend/` package provides:
 
 Streamlit session state coordinates the current user and analysis workflow. Durable data must be stored in SQLite rather than relying only on session state.
 
+Local identities are stored with bcrypt password hashes. Accounts created by an
+older build may contain SHA-256 hashes; these are accepted once and upgraded to
+bcrypt after a successful login. Password hashes are never returned in user
+records. The former username-and-email-only password reset is disabled because
+it did not prove control of the email account.
+
 ### Market-data layer
 
 The market-data modules under `src/data/` are responsible for:
@@ -129,7 +135,7 @@ Variance        = w.T @ Sigma @ w
 Sharpe ratio    = (expected return - risk-free rate) / volatility
 ```
 
-The optimizer applies full-investment and no-short/concentration constraints. AXIOM also evaluates an equal-weight baseline and adaptive blend settings rather than displaying one unexplained weight vector.
+The optimizer applies full-investment and no-short/concentration constraints. AXIOM also evaluates an equal-weight baseline and adaptive blend settings rather than displaying one unexplained weight vector. The repository includes a leakage-aware walk-forward evaluation with drift-adjusted turnover, complete traded notional, transaction costs, and separate gross and net NAV.
 
 MPT outputs are sensitive to historical estimates. Recommended future improvements include covariance shrinkage, turnover penalties, transaction costs, robust optimization, and walk-forward evaluation.
 
@@ -228,6 +234,12 @@ API client → FastAPI :8000 → shared src modules → SQLite/external provider
 
 The public Streamlit deployment should not be documented as requiring this API unless the compose file and runtime actually route Streamlit through it. Generated OpenAPI documentation is the authoritative route contract.
 
+FastAPI uses bearer JWTs signed by the required `SECRET_KEY`. Token subjects are
+resolved against the current database user on every protected request. Portfolio
+lookups and mutations are scoped by both resource ID and authenticated user ID;
+an inaccessible resource returns `404` to avoid disclosing another user's data.
+Browser origins are restricted through `CORS_ORIGINS` rather than a wildcard.
+
 ## Failure behavior
 
 | Failure | Expected behavior |
@@ -248,7 +260,7 @@ The public Streamlit deployment should not be documented as requiring this API u
 - administrator to EC2 through SSH
 - CI/deployment identity to AWS
 
-Use TLS, strong authentication, least-privilege IAM, secret management, rate limits, output escaping, and structured logs. Passwords should use Argon2id or bcrypt rather than general-purpose hashing.
+Use TLS, least-privilege IAM, managed secrets, rate limits, output escaping, and structured logs. Passwords currently use bcrypt, and legacy SHA-256 hashes are upgraded after successful authentication.
 
 ## Production evolution
 

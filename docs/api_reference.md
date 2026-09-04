@@ -2,247 +2,221 @@
 
 ## Status
 
-The public AWS deployment currently runs the **Streamlit frontend service** on port `8501`. The FastAPI service is an optional local/development interface and is not required for the deployed dashboard workflow.
+The public AWS deployment currently runs Streamlit on port `8501`. FastAPI is
+an optional local or Docker-profile interface. Start it and inspect its schema:
 
-Before relying on this document, start the API and verify its generated OpenAPI schema:
-
-```bash
-docker compose --profile api up --build -d
+```powershell
+uvicorn backend.app.main:app --reload --port 8000
 ```
-
-Then open:
 
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
 - OpenAPI JSON: `http://localhost:8000/openapi.json`
 
-The running OpenAPI schema is the authoritative contract. Routes described below should be published only when they exist in the current backend build.
+The running OpenAPI document is the authoritative contract.
 
-## Base URLs
+## Configuration
 
-| Environment | Base URL |
-| --- | --- |
-| Local FastAPI | `http://localhost:8000` |
-| Docker API profile | `http://localhost:8000` |
-| Public Streamlit demo | `http://13.207.84.157:8501` |
+FastAPI rejects an empty, short, or placeholder signing key.
 
-## Authentication and security
-
-Do not expose an unauthenticated development API directly to the public internet.
-
-For a production API, add:
-
-- HTTPS
-- authenticated users or service credentials
-- authorization for user-owned portfolios
-- rate limiting
-- input-size limits
-- CORS allow-listing
-- secret management through AWS Secrets Manager or SSM
-- structured audit logs without API keys or sensitive holdings
-
-## Health endpoint
-
-### `GET /health`
-
-Returns service availability and safe configuration status.
-
-Example:
-
-```bash
-curl -fsS http://localhost:8000/health
+```env
+SECRET_KEY=replace_with_a_random_value_of_at_least_32_characters
+CORS_ORIGINS=http://localhost:8501
 ```
 
-Example response:
+`CORS_ORIGINS` accepts a comma-separated list. Never commit `.env` or expose
+the signing key.
+
+## Authentication
+
+Except for `/`, `/health`, `/auth/register`, and `/auth/login`, routes require:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+JWT subjects are checked against the current database user on each protected
+request. A missing, invalid, expired, or deleted-user token returns `401`.
+
+New passwords use bcrypt. Successful login transparently replaces a legacy
+SHA-256 password hash with bcrypt. Password hashes never appear in responses.
+
+### `POST /auth/register`
+
+Creates a user and default portfolio.
 
 ```json
 {
-  "status": "ok",
-  "service": "axiom-api",
-  "version": "1.0.0"
+  "username": "parmod01",
+  "email": "user@example.com",
+  "password": "a-long-password"
 }
 ```
 
-Health responses must not include secret values.
+- username: 3–50 characters; letters, numbers, `_`, `.`, and `-`
+- email: syntactically valid
+- password: 12–72 characters
 
-## Portfolio optimization
+Duplicate registration returns `400`; validation failures return `422`.
 
-### `POST /optimize`
-
-Runs the quantitative analysis and, when enabled, news sentiment and grounded recommendation stages.
-
-Example request:
+### `POST /auth/login`
 
 ```json
 {
-  "tickers": ["AAPL", "MSFT", "GOOGL"],
-  "current_weights": {
-    "AAPL": 0.4,
-    "MSFT": 0.35,
-    "GOOGL": 0.25
-  },
-  "period": "1y",
-  "risk_free_rate": 0.05,
-  "use_news": true,
-  "use_llm": true
+  "username": "parmod01",
+  "password": "a-long-password"
 }
 ```
 
-Suggested validation rules:
-
-| Field | Type | Required | Rule |
-| --- | --- | --- | --- |
-| `tickers` | `string[]` | Yes | Normalized, unique symbols; enforce a safe maximum |
-| `current_weights` | object | No | Non-negative values that sum approximately to `1.0` |
-| `period` | string | No | Supported historical window such as `6mo` or `1y` |
-| `risk_free_rate` | number | No | Annual decimal rate within an allowed range |
-| `use_news` | boolean | No | Enables external news retrieval |
-| `use_llm` | boolean | No | Enables Groq recommendation generation |
-
-Example response shape:
+Successful response:
 
 ```json
 {
-  "tickers": ["AAPL", "MSFT", "GOOGL"],
-  "optimal_weights": {
-    "AAPL": 0.32,
-    "MSFT": 0.38,
-    "GOOGL": 0.3
-  },
-  "expected_annual_return": 0.14,
-  "annual_volatility": 0.19,
-  "sharpe_ratio": 0.74,
-  "sentiment_scores": {
-    "AAPL": 0.18,
-    "MSFT": 0.11,
-    "GOOGL": -0.04
-  },
-  "recommendations": {},
-  "risk_report": {
-    "value_at_risk_95": -0.021,
-    "maximum_drawdown": -0.24,
-    "correlation_matrix": {}
-  },
-  "warnings": []
+  "access_token": "<jwt>",
+  "token_type": "bearer",
+  "user": {
+    "id": 1,
+    "username": "parmod01",
+    "email": "user@example.com"
+  }
 }
 ```
 
-The numeric values above illustrate the schema only. They are not expected returns or investment recommendations.
+Invalid credentials return a generic `401`. Password reset by username and
+email alone is disabled. A future recovery flow must use signed, single-use,
+expiring tokens delivered to a verified address.
 
-Python example:
+### `GET /auth/me`
 
-```python
-import requests
+Returns the current safe user record.
 
-payload = {
-    "tickers": ["AAPL", "MSFT", "GOOGL"],
-    "period": "1y",
-    "risk_free_rate": 0.05,
-    "use_news": True,
-    "use_llm": False,
+## Portfolios
+
+Portfolio access is restricted to the authenticated owner. An unknown or
+inaccessible resource returns `404` to avoid disclosing its existence.
+
+### `GET /portfolios`
+
+Returns the current user's portfolios.
+
+### `POST /portfolios`
+
+```json
+{
+  "name": "Long Term",
+  "description": "Core holdings",
+  "currency": "USD"
 }
-
-response = requests.post(
-    "http://localhost:8000/optimize",
-    json=payload,
-    timeout=120,
-)
-response.raise_for_status()
-print(response.json())
 ```
 
-## Sentiment endpoint
+- name: 1–100 characters
+- description: maximum 500 characters
+- currency: `USD` or `INR`
 
-### `GET /sentiment/{ticker}`
+### `DELETE /portfolios/{portfolio_id}`
 
-When implemented, returns aggregated FinBERT sentiment for recent relevant articles.
+Deletes an owned portfolio. SQLite foreign keys cascade to its holdings and
+saved runs. Returns `404` if absent or owned by another user.
 
-```bash
-curl -fsS http://localhost:8000/sentiment/AAPL
-```
+## Holdings
 
-Example response shape:
+### `GET /portfolios/{portfolio_id}/holdings`
+
+Returns holdings only after verifying portfolio ownership.
+
+### `POST /portfolios/{portfolio_id}/holdings`
 
 ```json
 {
   "ticker": "AAPL",
-  "sentiment_score": 0.18,
-  "sentiment_label": "neutral",
-  "article_count": 12,
-  "generated_at": "2026-09-01T19:10:20Z"
+  "quantity": 5,
+  "buy_price": 195.5,
+  "buy_currency": "USD"
 }
 ```
 
-Sentiment is a model output, not a verified statement about future price movement.
+- ticker: 1–20 safe symbol characters
+- quantity and buy price: greater than zero
+- buy currency: `USD` or `INR`
 
-## News endpoint
+Known Indian symbols are normalized to Yahoo Finance `.NS` symbols. Adding an
+existing ticker updates quantity and weighted-average purchase price.
 
-### `GET /news/{ticker}`
+### `DELETE /holdings/{holding_id}`
 
-When implemented, returns recent deduplicated news metadata.
+Deletes a holding only when its parent portfolio belongs to the caller.
 
-```bash
-curl -fsS "http://localhost:8000/news/AAPL?days_back=7"
-```
+## Analysis
 
-Do not return provider API keys, full copyrighted article bodies, or unsafe HTML.
+### `POST /analysis/run`
 
-## Error format
-
-FastAPI normally returns validation errors in its standard `detail` field. Application errors should also include a stable machine-readable code.
+Runs analysis for an owned portfolio with at least two usable holdings.
 
 ```json
 {
-  "detail": "No market data was returned for one or more symbols.",
-  "code": "MARKET_DATA_UNAVAILABLE",
-  "request_id": "request-id"
+  "portfolio_id": 1,
+  "alpha": 0.6,
+  "portfolio_value": 100000,
+  "use_llm": true
 }
 ```
 
-| HTTP status | Meaning |
+- portfolio ID: positive integer
+- alpha: `0.0`–`1.0`
+- portfolio value: at least `1000`
+
+The response contains tickers, optimized and final weights, baseline metrics,
+risk output, sentiment, adaptive candidates, recommendations, and efficient-
+frontier arrays. Successful runs are saved in `optimization_runs`.
+
+Market data uses `pct_change(fill_method=None)` so missing prices are not
+silently forward-filled.
+
+## History
+
+### `GET /portfolios/{portfolio_id}/history?limit=30`
+
+Returns saved runs for an owned portfolio. `limit` must be 1–100.
+
+## Benchmark
+
+### `GET /benchmark/spy?portfolio_id={id}`
+
+Returns aligned dates, equal-weight holding-universe growth, and SPY growth for
+an owned portfolio. It does not reconstruct a saved final target. Use the
+Streamlit Compare page or saved run data for final-target comparison.
+
+## Service endpoints
+
+### `GET /`
+
+Returns API discovery links.
+
+### `GET /health`
+
+Returns the version and whether shared `src` modules loaded. It returns no
+secret values.
+
+## Error behavior
+
+| Status | Meaning |
 | --- | --- |
-| `400` | Invalid business input |
-| `401` | Authentication required or invalid |
-| `403` | Authenticated caller lacks access |
-| `404` | Portfolio, run, or ticker resource not found |
-| `422` | Request schema validation failed |
-| `429` | Application or provider rate limit exceeded |
-| `502` | Upstream market, news, or LLM provider failed |
-| `503` | Optional model/service temporarily unavailable |
-| `500` | Unexpected server error |
+| `400` | Business input cannot be processed |
+| `401` | Missing, invalid, or expired authentication |
+| `404` | Resource absent or not owned by the caller |
+| `422` | Request validation failed |
+| `500` | Analysis or upstream processing failed |
+| `503` | Required shared modules are unavailable |
 
-## Provider failures and fallback
-
-The API should preserve quantitative output when optional services fail:
-
-- market-price failure: stop or exclude affected symbols with a clear warning
-- news failure: continue without fresh sentiment
-- FinBERT failure: continue with quantitative-only allocation
-- FAISS failure: skip retrieval and do not claim grounded generation
-- Groq failure: return deterministic fallback text and preserve risk results
-
-## Rate limits
-
-Provider quotas change by account and plan. Do not hard-code public promises such as “100 requests per day” without checking the active provider terms.
-
-Recommended controls:
-
-- cache safe market/news responses
-- use request timeouts and bounded retries
-- add per-user and global rate limits
-- return `Retry-After` when appropriate
-- monitor provider error rate, latency, and spend
-
-## Versioning
-
-If the API becomes public, introduce an explicit prefix such as `/api/v1` before clients depend on it. Breaking schema changes should create a new version or a documented migration period.
+Do not expose exception traces, provider credentials, password hashes, private
+holdings, or copyrighted article bodies in responses or logs.
 
 ## Contract verification
 
-Export the real schema from the running service:
-
-```bash
-curl -fsS http://localhost:8000/openapi.json -o openapi.json
+```powershell
+Invoke-WebRequest http://localhost:8000/openapi.json -OutFile openapi.json
 ```
 
-Compare this document with `openapi.json` during CI. Do not document routes or fields that are absent from the generated schema.
+Compare this document with the generated schema in CI. Before making the API a
+public contract, add a prefix such as `/api/v1`, rate limits, HTTPS, request
+IDs, structured audit logs, and managed secrets.

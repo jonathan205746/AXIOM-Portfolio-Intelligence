@@ -26,46 +26,88 @@
   },
   "strategies": {
     "quantitative_only": {
-      "start_nav": 100000.0,
-      "end_nav": 217245.88728211063,
-      "observations": 1255,
-      "elapsed_years": 4.988364134154689,
-      "cagr": 0.16828152111498906,
-      "annualized_volatility": 0.265136661451231,
-      "sharpe_ratio": 0.5314932399219281,
-      "sortino_ratio": 0.7903720869074675,
-      "maximum_drawdown": -0.39628385720176273,
-      "annual_turnover": 1.742685703623955,
-      "transaction_cost_drag": 0.038375654923494165,
-      "total_transaction_cost": 3837.565492349416
+      "gross": {
+        "start_nav": 100000.0,
+        "end_nav": 222759.01241546206,
+        "observations": 1255,
+        "elapsed_years": 4.988364134154689,
+        "total_return": 1.2275901241546205,
+        "cagr": 0.17416553634941123,
+        "annualized_volatility": 0.2651625890663374,
+        "sharpe_ratio": 0.5550154669278129,
+        "sortino_ratio": 0.816012394252239,
+        "maximum_drawdown": -0.39455545206535225
+      },
+      "net": {
+        "start_nav": 100000.0,
+        "end_nav": 217244.03034883886,
+        "observations": 1255,
+        "elapsed_years": 4.988364134154689,
+        "total_return": 1.1724403034883886,
+        "cagr": 0.1682795192463422,
+        "annualized_volatility": 0.26513779145935207,
+        "sharpe_ratio": 0.5360308616131243,
+        "sortino_ratio": 0.7874532326706323,
+        "maximum_drawdown": -0.3962834990529518
+      },
+      "implementation": {
+        "turnover_convention": "one_way_half_absolute_weight_change",
+        "initial_establishment_included": false,
+        "total_turnover": 8.353651080643198,
+        "annual_turnover": 1.6746273639983138,
+        "total_transaction_cost": 3824.469692052366,
+        "transaction_cost_pct_initial": 0.03824469692052366,
+        "terminal_return_cost_drag": 0.055149820666231975,
+        "cagr_cost_drag": 0.005886017103069019
+      }
     },
     "equal_weight": {
-      "start_nav": 100000.0,
-      "end_nav": 254414.90492546218,
-      "observations": 1255,
-      "elapsed_years": 4.988364134154689,
-      "cagr": 0.2058622622381081,
-      "annualized_volatility": 0.26759804695007994,
-      "sharpe_ratio": 0.6481373319853048,
-      "sortino_ratio": 0.9089193460711578,
-      "maximum_drawdown": -0.4654663074756791,
-      "annual_turnover": 0.25041308846284605,
-      "transaction_cost_drag": 0.0054530483238170654,
-      "total_transaction_cost": 545.3048323817065
+      "gross": {
+        "start_nav": 100000.0,
+        "end_nav": 255376.2867003051,
+        "observations": 1255,
+        "elapsed_years": 4.988364134154689,
+        "total_return": 1.553762867003051,
+        "cagr": 0.2067743524984058,
+        "annualized_volatility": 0.26759848488224436,
+        "sharpe_ratio": 0.6554744750269903,
+        "sortino_ratio": 0.9466386485675777,
+        "maximum_drawdown": -0.46503518623060647
+      },
+      "net": {
+        "start_nav": 100000.0,
+        "end_nav": 254421.49503434898,
+        "observations": 1255,
+        "elapsed_years": 4.988364134154689,
+        "total_return": 1.5442149503434899,
+        "cagr": 0.20586852383490029,
+        "annualized_volatility": 0.2675971242613817,
+        "sharpe_ratio": 0.6526615679967066,
+        "sortino_ratio": 0.9424647469016625,
+        "maximum_drawdown": -0.4654662508015597
+      },
+      "implementation": {
+        "turnover_convention": "one_way_half_absolute_weight_change",
+        "initial_establishment_included": false,
+        "total_turnover": 1.2485383614124321,
+        "annual_turnover": 0.2502901407825965,
+        "total_transaction_cost": 556.0493010836921,
+        "transaction_cost_pct_initial": 0.0055604930108369205,
+        "terminal_return_cost_drag": 0.009547916659561118,
+        "cagr_cost_drag": 0.0009058286635055257
+      }
     },
     "benchmark": {
       "start_nav": 100000.0,
       "end_nav": 184981.02172984555,
       "observations": 1255,
       "elapsed_years": 4.988364134154689,
+      "total_return": 0.8498102172984556,
       "cagr": 0.13122776257854674,
       "annualized_volatility": 0.1695767720628268,
-      "sharpe_ratio": 0.5188680647882385,
-      "sortino_ratio": 0.7118027111034086,
-      "maximum_drawdown": -0.2542509661923039,
-      "annual_turnover": 0.0,
-      "transaction_cost_drag": 0.0,
-      "total_transaction_cost": 0.0
+      "sharpe_ratio": 0.5259746533631889,
+      "sortino_ratio": 0.7492290465135596,
+      "maximum_drawdown": -0.2542509661923039
     }
   }
 }

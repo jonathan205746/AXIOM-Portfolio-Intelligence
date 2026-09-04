@@ -8,16 +8,24 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 import math
 import streamlit as st
 import yfinance as yf
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 import plotly.express as px
 from src.database.db import get_user_portfolios, create_portfolio, delete_portfolio, get_portfolio_holdings, add_holding, delete_holding
+from src.data.market_data import (
+    get_fx_rate as fetch_fx_rate,
+    market_currency,
+)
 
-st.set_page_config(page_title="Portfolio | Axiom", page_icon="◫", layout="wide")
+
+st.set_page_config(
+    page_title="Portfolio | Axiom",
+    page_icon="◫",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 if not st.session_state.get("logged_in"):
-    st.warning("Authentication required")
-    st.page_link("pages/1_Login.py", label="▶ Go to Login")
-    st.stop()
+    st.switch_page("pages/1_Login.py")
 
 user = st.session_state["user"]
 
@@ -54,12 +62,6 @@ def normalize_ticker(ticker: str):
         return t, t.rsplit(".", 1)[0], "IN"
     return t, t, "US"
 
-def market_currency(yf_ticker: str, exchange: str) -> str:
-    """Return the native quote currency used by the selected market."""
-    if exchange == "IN" or yf_ticker.upper().endswith((".NS", ".BO")):
-        return "INR"
-    return "USD"
-
 def validate_holding_input(
     ticker: str,
     quantity: float | None,
@@ -82,49 +84,30 @@ def validate_holding_input(
 def currency_symbol(currency: str) -> str:
     return {"INR": "₹", "USD": "$"}.get(currency, f"{currency} ")
 
-def parse_date(value) -> date:
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    return datetime.fromisoformat(str(value).replace("Z", "+00:00")).date()
-
 @st.cache_data(ttl=3600, show_spinner=False)
-def get_fx_rate(source_currency: str, target_currency: str, rate_date=None) -> float:
-    """Get USD/INR FX using buy-date data or the latest available close."""
-    source = source_currency.upper()
-    target = target_currency.upper()
-    if source == target:
-        return 1.0
-    if {source, target} != {"USD", "INR"}:
-        raise ValueError(f"Unsupported conversion: {source}/{target}")
+def get_fx_rate(
+    source_currency: str,
+    target_currency: str,
+    rate_date=None,
+) -> float:
+    """Return a cached shared USD/INR FX rate."""
+    return fetch_fx_rate(
+        source_currency,
+        target_currency,
+        rate_date,
+    )
 
-    pair = yf.Ticker("USDINR=X")
-    if rate_date is None:
-        history = pair.history(period="5d")
-    else:
-        requested = parse_date(rate_date)
-        history = pair.history(
-            start=requested - timedelta(days=5),
-            end=requested + timedelta(days=6),
-        )
-    closes = history["Close"].dropna() if not history.empty else []
-    if len(closes) == 0:
-        raise RuntimeError(f"FX rate unavailable for {source}/{target}")
-    if rate_date is None:
-        usd_to_inr = float(closes.iloc[-1])
-    else:
-        requested = parse_date(rate_date)
-        on_or_after = closes[[index.date() >= requested for index in closes.index]]
-        usd_to_inr = float(
-            on_or_after.iloc[0] if len(on_or_after) else closes.iloc[-1]
-        )
-    if not math.isfinite(usd_to_inr) or usd_to_inr <= 0:
-        raise RuntimeError("USD/INR provider returned an invalid rate")
-    return usd_to_inr if source == "USD" else 1.0 / usd_to_inr
-
-def convert_money(amount: float, source: str, target: str, rate_date=None) -> float:
-    return float(amount) * get_fx_rate(source, target, rate_date)
+def convert_money(
+    amount: float,
+    source: str,
+    target: str,
+    rate_date=None,
+) -> float:
+    return float(amount) * get_fx_rate(
+        source,
+        target,
+        rate_date,
+    )
 
 def get_current_price(yf_ticker: str):
     try:
@@ -200,47 +183,101 @@ st.markdown("""
 portfolios = get_user_portfolios(user["id"])
 
 # ── Layout ──────────────────────────────────────────────────
-col_left, col_right = st.columns([3, 1], gap="small")
+# ── Portfolio Creation ──────────────────────────────────────
+with st.expander(
+    "+ New Portfolio",
+    expanded=not portfolios,
+):
+    new_name = st.text_input(
+        "NAME",
+        placeholder="e.g. TECH_PICKS_INDIA",
+        key="new_pf_name",
+    )
+    new_desc = st.text_input(
+        "DESCRIPTION",
+        placeholder="Optional",
+        key="new_pf_desc",
+    )
+    new_curr = st.selectbox(
+        "CURRENCY",
+        ["USD", "INR"],
+        key="new_pf_curr",
+    )
 
-with col_right:
-    section_header("+ New Portfolio", "Create workspace", accent="green")
-    st.markdown("""
-    <div style="
-        background: rgba(18,18,26,0.72);
-        border: 1px solid rgba(255,255,255,0.06);
-        border-top: 2px solid #10B981;
-        border-radius: 12px;
-        backdrop-filter: blur(20px);
-        padding: 16px;
-    ">
-    """, unsafe_allow_html=True)
-    new_name = st.text_input("NAME", placeholder="e.g. TECH_PICKS_INDIA", key="new_pf_name")
-    new_desc = st.text_input("DESCRIPTION", placeholder="Optional", key="new_pf_desc")
-    new_curr = st.selectbox("CURRENCY", ["USD", "INR"], key="new_pf_curr")
-    if st.button("+ CREATE", use_container_width=True, type="primary"):
-        if new_name:
-            p = create_portfolio(user["id"], new_name, new_desc, new_curr)
-            if p:
-                st.success(f"Created: {new_name.upper()}")
-                st.rerun()
-        else:
+    if st.button(
+        "+ CREATE",
+        use_container_width=True,
+        type="primary",
+    ):
+        if not new_name.strip():
             st.error("Name required")
-    st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            created_portfolio = create_portfolio(
+                user["id"],
+                new_name.strip(),
+                new_desc.strip(),
+                new_curr,
+            )
 
-with col_left:
-    if not portfolios:
-        info_card(
-            "No Portfolios Found",
-            "Create a portfolio workspace to begin tracking holdings and running AI analysis.",
-            badge("START HERE", tone="positive"),
-            accent="cyan"
-        )
-        st.stop()
-    
-    portfolio_names = [p["name"] for p in portfolios]
-    selected_name = st.selectbox("SELECT PORTFOLIO", portfolio_names, key="sel_pf")
-    selected_portfolio = next(p for p in portfolios if p["name"] == selected_name)
-    st.session_state["current_portfolio"] = selected_portfolio
+            if created_portfolio:
+                st.session_state["current_portfolio"] = (
+                    created_portfolio
+                )
+                st.session_state.pop("results", None)
+                st.success(
+                    f"Created: {new_name.strip().upper()}"
+                )
+                st.rerun()
+            else:
+                st.error("Portfolio could not be created")
+
+
+# ── Portfolio Selection ─────────────────────────────────────
+if not portfolios:
+    info_card(
+        "No Portfolios Found",
+        "Create a portfolio workspace to begin tracking holdings "
+        "and running AI analysis.",
+        badge("START HERE", tone="positive"),
+        accent="cyan",
+    )
+    st.stop()
+
+portfolio_names = [p["name"] for p in portfolios]
+
+current_portfolio = st.session_state.get("current_portfolio")
+current_id = (
+    current_portfolio.get("id")
+    if isinstance(current_portfolio, dict)
+    else None
+)
+
+default_index = next(
+    (
+        index
+        for index, item in enumerate(portfolios)
+        if item.get("id") == current_id
+    ),
+    0,
+)
+
+selected_name = st.selectbox(
+    "SELECT PORTFOLIO",
+    portfolio_names,
+    index=default_index,
+    key="sel_pf",
+)
+
+selected_portfolio = next(
+    item
+    for item in portfolios
+    if item["name"] == selected_name
+)
+
+if selected_portfolio.get("id") != current_id:
+    st.session_state.pop("results", None)
+
+st.session_state["current_portfolio"] = selected_portfolio
 
 # ── Portfolio Header ────────────────────────────────────────
 st.markdown(f"""
@@ -305,16 +342,33 @@ with st.form("add_holding_form", clear_on_submit=True, enter_to_submit=False):
             if not valid:
                 st.error(err_msg)
             else:
-                yf_ticker, display, exchange = normalize_ticker(ticker_input)
-                quote_currency = market_currency(yf_ticker, exchange)
+                # Validation above guarantees both values are present.
+                assert quantity is not None
+                assert buy_price is not None
+
+                yf_ticker, display, exchange = normalize_ticker(
+                    ticker_input
+                )
+                quote_currency = market_currency(
+                    yf_ticker,
+                    exchange,
+                )
                 buy_currency = (
                     quote_currency if buy_currency_choice == "AUTO"
                     else buy_currency_choice
                 )
                 result = add_holding(
-                    selected_portfolio["id"], yf_ticker, display, exchange,
-                    float(quantity), float(buy_price), buy_currency,
-                    datetime.combine(buy_date_val, datetime.min.time())
+                    selected_portfolio["id"],
+                    yf_ticker,
+                    display,
+                    exchange,
+                    float(quantity),
+                    float(buy_price),
+                    buy_currency,
+                    datetime.combine(
+                        buy_date_val,
+                        datetime.min.time(),
+                    ),
                 )
                 if result:
                     st.success(f"Added {display} ({yf_ticker}) — {quantity} @ {buy_currency} {buy_price:.2f}")
