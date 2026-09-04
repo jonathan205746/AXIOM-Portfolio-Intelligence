@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     NEWS_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     CORS_ORIGINS: str = "http://localhost:8501"
+    SMTP_HOST: str = "email-smtp.ap-south-1.amazonaws.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = ""
+    PASSWORD_RESET_CODE_TTL_MINUTES: int = 15
+    PASSWORD_RESET_MAX_ATTEMPTS: int = 5
 
     @field_validator("SECRET_KEY")
     @classmethod

@@ -2,8 +2,9 @@ import hashlib
 import hmac
 import json
 import os
+import secrets
 import sqlite3
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -161,6 +162,16 @@ def init_db() -> bool:
                 risk_report_json TEXT,
                 FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS password_reset_codes (
+                user_id INTEGER PRIMARY KEY,
+                code_hash TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                used_at TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
             """
         )
         conn.commit()
@@ -246,46 +257,128 @@ def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
         return _row_to_dict(row)
 
 
-def verify_identity(username: str, email: str) -> bool:
-    """
-    Check whether a username + email pair matches an existing account.
-    Used as the identity check for the forgot-password flow, since there
-    is no email/SMTP service in this stack to send a reset link through.
-    Deliberately does not reveal *which* field was wrong — returning a
-    single bool avoids leaking whether a username exists at all.
-    """
+def _reset_code_hash(user_id: int, code: str, secret_key: Optional[str] = None) -> str:
+    key = secret_key or os.environ.get("SECRET_KEY", "")
+    if len(key) < 32:
+        raise ValueError("SECRET_KEY must contain at least 32 characters")
+    message = f"{user_id}:{code}".encode("utf-8")
+    return hmac.new(key.encode("utf-8"), message, hashlib.sha256).hexdigest()
+
+
+def create_password_reset_code(
+    username: str,
+    email: str,
+    code: str,
+    ttl_minutes: int = 15,
+    cooldown_seconds: int = 60,
+) -> bool:
+    """Store an expiring reset-code hash; never store the plaintext code."""
     username = (username or "").strip()
-    email = (email or "").strip()
-    if not username or not email:
+    email = (email or "").strip().lower()
+    if not username or not email or not code or ttl_minutes < 1:
         return False
 
     with _connect() as conn:
         row = conn.execute(
-            "SELECT id FROM users WHERE username = ? AND email = ?",
+            "SELECT id FROM users WHERE username = ? AND lower(email) = ?",
             (username, email),
         ).fetchone()
-        return row is not None
+        if row is None:
+            return False
 
+        previous = conn.execute(
+            "SELECT created_at FROM password_reset_codes WHERE user_id = ?",
+            (row["id"],),
+        ).fetchone()
+        now = datetime.now(timezone.utc)
+        if previous is not None:
+            created_at = datetime.fromisoformat(previous["created_at"])
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            if (now - created_at).total_seconds() < cooldown_seconds:
+                return False
 
-def reset_password(username: str, email: str, new_password: str) -> bool:
-    """
-    Reset a user's password after verify_identity() confirms the
-    username + email pair. Returns False if the identity check fails
-    or the new password is empty.
-    """
-    if not verify_identity(username, email):
-        return False
-    if not new_password:
-        return False
-
-    username = (username or "").strip()
-    with _connect() as conn:
-        cursor = conn.execute(
-            "UPDATE users SET password_hash = ? WHERE username = ?",
-            (_hash_password(new_password), username),
+        expires_at = now + timedelta(minutes=ttl_minutes)
+        conn.execute(
+            """
+            INSERT INTO password_reset_codes
+                (user_id, code_hash, expires_at, attempts, created_at, used_at)
+            VALUES (?, ?, ?, 0, ?, NULL)
+            ON CONFLICT(user_id) DO UPDATE SET
+                code_hash = excluded.code_hash,
+                expires_at = excluded.expires_at,
+                attempts = 0,
+                created_at = excluded.created_at,
+                used_at = NULL
+            """,
+            (
+                row["id"],
+                _reset_code_hash(row["id"], code),
+                expires_at.isoformat(),
+                now.isoformat(),
+            ),
         )
         conn.commit()
-        return cursor.rowcount > 0
+        return True
+
+
+def reset_password_with_code(
+    username: str,
+    email: str,
+    code: str,
+    new_password: str,
+    max_attempts: int = 5,
+) -> bool:
+    """Consume a valid single-use reset code and replace the password."""
+    username = (username or "").strip()
+    email = (email or "").strip().lower()
+    if not username or not email or not code or len(new_password or "") < 12:
+        return False
+
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT u.id, r.code_hash, r.expires_at, r.attempts, r.used_at
+            FROM users AS u
+            JOIN password_reset_codes AS r ON r.user_id = u.id
+            WHERE u.username = ? AND lower(u.email) = ?
+            """,
+            (username, email),
+        ).fetchone()
+        if row is None or row["used_at"] is not None or row["attempts"] >= max_attempts:
+            return False
+
+        now = datetime.now(timezone.utc)
+        expires_at = datetime.fromisoformat(row["expires_at"])
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if now >= expires_at:
+            return False
+
+        valid = hmac.compare_digest(row["code_hash"], _reset_code_hash(row["id"], code))
+        if not valid:
+            conn.execute(
+                "UPDATE password_reset_codes SET attempts = attempts + 1 WHERE user_id = ?",
+                (row["id"],),
+            )
+            conn.commit()
+            return False
+
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (_hash_password(new_password), row["id"]),
+        )
+        conn.execute(
+            "UPDATE password_reset_codes SET used_at = ? WHERE user_id = ?",
+            (now.isoformat(), row["id"]),
+        )
+        conn.commit()
+        return True
+
+
+def generate_password_reset_code() -> str:
+    """Generate a cryptographically secure six-digit code."""
+    return f"{secrets.randbelow(1_000_000):06d}"
 
 
 def create_portfolio(
