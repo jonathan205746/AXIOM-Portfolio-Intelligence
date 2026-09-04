@@ -40,6 +40,7 @@ faiss-cpu==1.15.0
 langchain==0.1.9
 langchain-openai==0.0.8
 langchain-google-genai==4.3.7
+langchain-community==0.0.24
 langchain-google-genai==0.0.11
 langchain-community==0.4.2
 langchain-groq==0.0.1
