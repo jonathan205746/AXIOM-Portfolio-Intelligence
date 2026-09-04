@@ -75,7 +75,7 @@ jobs:
 
       - name: Build and push immutable image
         uses: docker/build-push-action@v6
-        with<Service Name:
+        with:
           context: .
           file: ./Dockerfile
           push: true
