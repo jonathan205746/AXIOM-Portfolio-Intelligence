@@ -101,6 +101,7 @@ jobs:
 
       - name: Sign in to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
+
       - name: Check whether immutable image exists
         id: image
         shell: bash
@@ -119,18 +120,12 @@ jobs:
             echo "Image does not exist; build and push will run"
           fi
 
-      - name: Build and push immutable image
+      - name: Configure Docker Buildx
         if: steps.image.outputs.exists != 'true'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ vars.ECR_REGISTRY }}/${{ vars.ECR_REPOSITORY }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        uses: docker/setup-buildx-action@v3
 
       - name: Build and push immutable image
+        if: steps.image.outputs.exists != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
