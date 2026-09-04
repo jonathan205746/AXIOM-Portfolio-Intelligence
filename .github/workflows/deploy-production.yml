@@ -1,0 +1,176 @@
+name: Deploy production
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test application
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Compile Python sources
+        run: python -m compileall -q frontend src backend
+
+  deploy:
+    name: Deploy to EC2
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    environment:
+      name: production
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure temporary AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Sign in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Configure Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push immutable image
+        uses: docker/build-push-action@v6
+        with<Service Name:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ vars.ECR_REGISTRY }}/${{ vars.ECR_REPOSITORY }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy through Systems Manager
+        shell: bash
+        env:
+          IMAGE_URI: ${{ vars.ECR_REGISTRY }}/${{ vars.ECR_REPOSITORY }}:${{ github.sha }}
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          APP_DIRECTORY: ${{ vars.APP_DIRECTORY }}
+          CONTAINER_NAME: ${{ vars.CONTAINER_NAME }}
+          HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL }}
+        run: |
+          set -Eeuo pipefail
+
+          deploy_script="$(base64 -w 0 scripts/deploy_ec2.sh)"
+
+          parameters="$(
+            jq -n \
+              --arg script "$deploy_script" \
+              --arg image "$IMAGE_URI" \
+              --arg registry "$ECR_REGISTRY" \
+              --arg region "$AWS_REGION" \
+              --arg directory "$APP_DIRECTORY" \
+              --arg container "$CONTAINER_NAME" \
+              --arg health "$HEALTHCHECK_URL" \
+              '{
+                commands: [
+                  "echo " + ($script | @sh) + " | base64 -d > /tmp/axiom-deploy.sh",
+                  "chmod 700 /tmp/axiom-deploy.sh",
+                  "/tmp/axiom-deploy.sh "
+                    + ($image | @sh) + " "
+                    + ($registry | @sh) + " "
+                    + ($region | @sh) + " "
+                    + ($directory | @sh) + " "
+                    + ($container | @sh) + " "
+                    + ($health | @sh)
+                ]
+              }'
+          )"
+
+          command_id="$(
+            aws ssm send-command \
+              --instance-ids "$EC2_INSTANCE_ID" \
+              --document-name AWS-RunShellScript \
+              --comment "Deploy GitHub commit $GITHUB_SHA" \
+              --parameters "$parameters" \
+              --query 'Command.CommandId' \
+              --output text
+          )"
+
+          echo "SSM command submitted: $command_id"
+
+          status="Pending"
+
+          for attempt in $(seq 1 90); do
+            status="$(
+              aws ssm get-command-invocation \
+                --command-id "$command_id" \
+                --instance-id "$EC2_INSTANCE_ID" \
+                --query Status \
+                --output text 2>/dev/null || echo Pending
+            )"
+
+            echo "Deployment status: $status"
+
+            case "$status" in
+              Success|Failed|Cancelled|TimedOut)
+                break
+                ;;
+            esac
+
+            sleep 10
+          done
+
+          aws ssm get-command-invocation \
+            --command-id "$command_id" \
+            --instance-id "$EC2_INSTANCE_ID" \
+            --query StandardOutputContent \
+            --output text || true
+
+          if [ "$status" != "Success" ]; then
+            aws ssm get-command-invocation \
+              --command-id "$command_id" \
+              --instance-id "$EC2_INSTANCE_ID" \
+              --query StandardErrorContent \
+              --output text || true
+
+            echo "Production deployment failed with status: $status"
+            exit 1
+          fi
+
+          echo "Production deployment completed successfully"
