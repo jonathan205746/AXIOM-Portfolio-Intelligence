@@ -3,12 +3,20 @@ Axiom Authentication v2.0
 Secure access with glassmorphic terminal aesthetic.
 """
 
+import smtplib
 import sys, os
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import streamlit as st
-from src.database.db import create_user, get_user, create_portfolio, init_db
+from src.auth.password_reset import GENERIC_RESPONSE, request_password_reset
+from src.database.db import (
+    create_user,
+    get_user,
+    create_portfolio,
+    init_db,
+    reset_password_with_code,
+)
 
 init_db()
 
@@ -108,7 +116,7 @@ st.markdown(
 )
 
 # ── Tabs ────────────────────────────────────────────────────
-tab_login, tab_register = st.tabs(["▶ LOGIN", "+ REGISTER"])
+tab_login, tab_register, tab_reset = st.tabs(["▶ LOGIN", "+ REGISTER", "? RESET"])
 
 with tab_login:
     st.markdown(
@@ -224,6 +232,65 @@ with tab_register:
                 st.switch_page("app.py")
             else:
                 st.error("Username already exists")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+with tab_reset:
+    st.markdown(
+        """
+    <div style="
+        background: rgba(18,18,26,0.72);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-top: 2px solid #F43F5E;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 12px;
+    ">
+        <div style="font-size:0.75rem;font-weight:700;color:#F43F5E;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px;">
+            ? Secure Password Reset
+        </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    reset_username = st.text_input("USERNAME", key="reset_username")
+    reset_email = st.text_input("EMAIL", key="reset_email")
+
+    if st.button("SEND RESET CODE", use_container_width=True):
+        if not reset_username or not reset_email:
+            st.error("Username and email are required")
+        else:
+            try:
+                request_password_reset(reset_username.strip(), reset_email.strip())
+                st.success(GENERIC_RESPONSE)
+            except (OSError, smtplib.SMTPException, KeyError, ValueError):
+                st.error("Password recovery is temporarily unavailable")
+
+    reset_code = st.text_input("RESET CODE", key="reset_code", max_chars=6)
+    reset_password = st.text_input(
+        "NEW PASSWORD", type="password", key="reset_new_password"
+    )
+    reset_confirm = st.text_input(
+        "CONFIRM NEW PASSWORD", type="password", key="reset_confirm_password"
+    )
+
+    if st.button("RESET PASSWORD", type="primary", use_container_width=True):
+        if len(reset_password) < 12:
+            st.error("Password: min 12 characters")
+        elif reset_password != reset_confirm:
+            st.error("Passwords do not match")
+        elif not reset_code.isdigit() or len(reset_code) != 6:
+            st.error("Enter the six-digit reset code")
+        elif reset_password_with_code(
+            reset_username.strip(),
+            reset_email.strip(),
+            reset_code,
+            reset_password,
+            int(os.environ.get("PASSWORD_RESET_MAX_ATTEMPTS", "5")),
+        ):
+            st.success("Password reset complete. You can now log in.")
+        else:
+            st.error("Invalid or expired reset code")
+
     st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown(

@@ -7,6 +7,7 @@ Endpoints: Auth, Portfolios, Holdings, Analysis, History, Benchmark
 
 import os
 import sys
+import logging
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -22,6 +23,7 @@ from pydantic import BaseModel, EmailStr, Field
 from jose import JWTError, jwt
 
 from backend.config import get_settings
+from src.auth.password_reset import GENERIC_RESPONSE, request_password_reset
 
 # ── Import your existing src modules ─────────────────────────────────────────
 try:
@@ -39,6 +41,7 @@ try:
         delete_holding,
         get_portfolio_history,
         save_optimization_run,
+        reset_password_with_code,
     )
     from src.data.stock_fetcher import fetch_stock_data
     from src.models.sentiment import aggregate_sentiment
@@ -122,6 +125,18 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: dict
+
+
+class PasswordResetRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    email: EmailStr
+    code: str = Field(..., pattern=r"^\d{6}$")
+    new_password: str = Field(..., min_length=12, max_length=72)
 
 
 class PortfolioCreate(BaseModel):
@@ -228,6 +243,34 @@ def register(req: RegisterRequest):
 @app.get("/auth/me")
 def me(user: dict = Depends(get_current_user)):
     return user
+
+
+@app.post("/auth/password-reset/request")
+def password_reset_request(req: PasswordResetRequest):
+    if not SRC_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Backend modules not loaded")
+    try:
+        request_password_reset(req.username, str(req.email))
+    except Exception:
+        # Do not include identifiers or SMTP details in logs or responses.
+        logging.getLogger(__name__).exception("Password reset delivery failed")
+    return {"message": GENERIC_RESPONSE}
+
+
+@app.post("/auth/password-reset/confirm")
+def password_reset_confirm(req: PasswordResetConfirm):
+    if not SRC_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Backend modules not loaded")
+    changed = reset_password_with_code(
+        req.username,
+        str(req.email),
+        req.code,
+        req.new_password,
+        settings.PASSWORD_RESET_MAX_ATTEMPTS,
+    )
+    if not changed:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset code")
+    return {"message": "Password reset complete"}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

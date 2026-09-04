@@ -9,6 +9,9 @@ from src.database import db
 def isolated_db(tmp_path, monkeypatch):
     monkeypatch.setattr(db, "DB_DIR", str(tmp_path))
     monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "security.db"))
+    monkeypatch.setenv(
+        "SECRET_KEY", "test-secret-key-that-is-longer-than-32-characters"
+    )
     db.init_db()
     return db
 
@@ -73,3 +76,40 @@ def test_non_owner_cannot_delete_portfolio_or_holding(isolated_db):
     assert isolated_db.get_portfolio_for_user(portfolio["id"], alice["id"]) is not None
     assert isolated_db.delete_holding(holding["id"], user_id=alice["id"])
     assert isolated_db.delete_portfolio(portfolio["id"], user_id=alice["id"])
+
+
+def test_password_reset_code_is_hashed_single_use_and_changes_password(isolated_db):
+    user = isolated_db.create_user("alice", "alice@example.com", "old secure password")
+    assert user is not None
+    assert isolated_db.create_password_reset_code(
+        "alice", "alice@example.com", "123456", ttl_minutes=15
+    )
+
+    with isolated_db._connect() as conn:
+        stored = conn.execute(
+            "SELECT code_hash FROM password_reset_codes WHERE user_id = ?",
+            (user["id"],),
+        ).fetchone()["code_hash"]
+    assert stored != "123456"
+
+    assert isolated_db.reset_password_with_code(
+        "alice", "alice@example.com", "123456", "new secure password"
+    )
+    assert isolated_db.authenticate_user("alice", "new secure password") is not None
+    assert not isolated_db.reset_password_with_code(
+        "alice", "alice@example.com", "123456", "another secure password"
+    )
+
+
+def test_password_reset_locks_after_failed_attempts(isolated_db):
+    isolated_db.create_user("bob", "bob@example.com", "old secure password")
+    assert isolated_db.create_password_reset_code(
+        "bob", "bob@example.com", "654321", ttl_minutes=15
+    )
+    for _ in range(5):
+        assert not isolated_db.reset_password_with_code(
+            "bob", "bob@example.com", "000000", "new secure password", 5
+        )
+    assert not isolated_db.reset_password_with_code(
+        "bob", "bob@example.com", "654321", "new secure password", 5
+    )
