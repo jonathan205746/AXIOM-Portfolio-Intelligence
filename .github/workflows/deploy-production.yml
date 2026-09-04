@@ -62,13 +62,42 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+
+      - name: Inspect OIDC claims
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          response="$(
+            curl -fsSL \
+              -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com"
+          )"
+
+          token="$(jq -r '.value' <<< "$response")"
+
+          OIDC_TOKEN="$token" python - <<'PY'
+          import base64
+          import json
+          import os
+
+          payload = os.environ["OIDC_TOKEN"].split(".")[1]
+          payload += "=" * (-len(payload) % 4)
+          claims = json.loads(base64.urlsafe_b64decode(payload))
+
+          for name in ("aud", "sub", "repository", "ref", "environment"):
+              print(f"{name}={claims.get(name)}")
+          PY
 
       - name: Configure temporary AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+          audience: sts.amazonaws.com
+          role-session-name: GitHubPortfolioProduction
+          mask-aws-account-id: true
 
       - name: Sign in to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
