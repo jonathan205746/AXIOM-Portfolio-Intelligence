@@ -1,5 +1,5 @@
 # AI-Powered Portfolio Optimizer — Streamlit Dashboard Dockerfile
-FROM python:3.10-slim-bookworm
+FROM python:3.14-slim-bookworm
 
 # ── System dependencies ──
 RUN apt-get update && apt-get install -y --no-install-recommends \
