@@ -18,11 +18,14 @@ import warnings
 from pathlib import Path
 
 # Set up logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
 # ── Main Functions ─────────────────────────────────────────────────────────────
+
 
 def fetch_stock_data(tickers: List[str], period: str = "1y") -> pd.DataFrame:
     """
@@ -50,8 +53,8 @@ def fetch_stock_data(tickers: List[str], period: str = "1y") -> pd.DataFrame:
             tickers=tickers,
             period=period,
             auto_adjust=True,
-            progress=False,   # Disable progress bar
-            threads=False       # Parallel download for multiple tickers
+            progress=False,  # Disable progress bar
+            threads=False,  # Parallel download for multiple tickers
         )
 
         if data is None or data.empty:
@@ -72,7 +75,9 @@ def fetch_stock_data(tickers: List[str], period: str = "1y") -> pd.DataFrame:
                 if "Close" in data.columns.get_level_values(0):
                     prices = data["Close"]
                 else:
-                    raise ValueError(f"No closing price data returned. Check ticker symbols: {tickers}")
+                    raise ValueError(
+                        f"No closing price data returned. Check ticker symbols: {tickers}"
+                    )
         else:
             # Flat columns such as ['Close', 'High', ...] for single ticker, or a simple DataFrame for one ticker
             if len(tickers) == 1:
@@ -86,7 +91,9 @@ def fetch_stock_data(tickers: List[str], period: str = "1y") -> pd.DataFrame:
                 if "Close" in data:
                     prices = data["Close"]
                 else:
-                    raise ValueError(f"No closing price data returned. Check ticker symbols: {tickers}")
+                    raise ValueError(
+                        f"No closing price data returned. Check ticker symbols: {tickers}"
+                    )
 
         # Ensure we always return a DataFrame (yfinance may return a Series for a single column)
         if isinstance(prices, pd.Series):
@@ -119,7 +126,9 @@ def fetch_stock_data(tickers: List[str], period: str = "1y") -> pd.DataFrame:
         invalid_tickers = [t for t in tickers if t not in valid_tickers]
 
         if invalid_tickers:
-            logger.warning(f"No data found for: {invalid_tickers}. Removing from results.")
+            logger.warning(
+                f"No data found for: {invalid_tickers}. Removing from results."
+            )
 
         prices = prices[valid_tickers].dropna(how="all")
 
@@ -205,7 +214,9 @@ def calculate_returns(prices: pd.DataFrame) -> pd.DataFrame:
         print(returns.mean())  # Average daily return per stock
     """
     returns = prices.pct_change().dropna()
-    logger.info(f"Calculated returns: {len(returns)} rows, {len(returns.columns)} tickers")
+    logger.info(
+        f"Calculated returns: {len(returns)} rows, {len(returns.columns)} tickers"
+    )
     return returns
 
 
@@ -220,7 +231,9 @@ def calculate_cumulative_returns(prices: pd.DataFrame) -> pd.DataFrame:
     return (prices / prices.iloc[0]) * 100
 
 
-def calculate_rolling_volatility(returns: pd.DataFrame, window: int = 30) -> pd.DataFrame:
+def calculate_rolling_volatility(
+    returns: pd.DataFrame, window: int = 30
+) -> pd.DataFrame:
     """
     Calculate rolling 30-day volatility for each stock.
     Useful for seeing how volatility changes over time.
@@ -254,8 +267,12 @@ def fetch_52_week_range(ticker: str) -> Dict:
             "current_price": current,
             "52w_high": high_52w,
             "52w_low": low_52w,
-            "pct_from_high": round((current - high_52w) / high_52w * 100, 2) if high_52w else None,
-            "pct_from_low": round((current - low_52w) / low_52w * 100, 2) if low_52w else None,
+            "pct_from_high": (
+                round((current - high_52w) / high_52w * 100, 2) if high_52w else None
+            ),
+            "pct_from_low": (
+                round((current - low_52w) / low_52w * 100, 2) if low_52w else None
+            ),
         }
     except Exception as e:
         logger.warning(f"Could not fetch 52w range for {ticker}: {e}")
@@ -268,69 +285,14 @@ def get_summary_stats(returns: pd.DataFrame) -> pd.DataFrame:
 
     Returns DataFrame with: mean daily return, volatility, min, max, skew
     """
-    stats = pd.DataFrame({
-        "mean_daily_return_%": (returns.mean() * 100).round(4),
-        "annual_return_%": (returns.mean() * 252 * 100).round(2),
-        "annual_volatility_%": (returns.std() * np.sqrt(252) * 100).round(2),
-        "min_daily_return_%": (returns.min() * 100).round(4),
-        "max_daily_return_%": (returns.max() * 100).round(4),
-        "skewness": returns.skew().round(4),
-    })
+    stats = pd.DataFrame(
+        {
+            "mean_daily_return_%": (returns.mean() * 100).round(4),
+            "annual_return_%": (returns.mean() * 252 * 100).round(2),
+            "annual_volatility_%": (returns.std() * np.sqrt(252) * 100).round(2),
+            "min_daily_return_%": (returns.min() * 100).round(4),
+            "max_daily_return_%": (returns.max() * 100).round(4),
+            "skewness": returns.skew().round(4),
+        }
+    )
     return stats
-
-
-# ── Main — Run this to test ────────────────────────────────────────────────────
-
-if __name__ == "__main__":
-
-    print("=" * 60)
-    print("AI Portfolio Optimizer — Stock Data Fetcher Test")
-    print("=" * 60)
-
-    # Test tickers — mix of US tech stocks
-    tickers = [
-    "AAPL", "MSFT", "GOOGL", "AMZN"
-]
-
-    # ── Test 1: Fetch Price Data ──
-    print("\n[1] Fetching 1-Year price history...")
-    prices = fetch_stock_data(tickers, period="1y")
-    print(f"Shape: {prices.shape} (rows=trading days, cols=tickers)")
-    print(f"\nLatest 10 closing prices:")
-    print(prices.tail().to_string())
-
-    # ── Test 2: Calculate Returns ──
-    print("\n[2] Calculating daily returns...")
-    returns = calculate_returns(prices)
-    print(f"Returns shape: {returns.shape}")
-    print(f"\nLatest 10 daily returns (%):")
-    print((returns.tail() * 100).round(3).to_string())
-
-    # ── Test 3: Summary Stats ──
-    print("\n[3] Summary statistics:")
-    stats = get_summary_stats(returns)
-    print(stats.to_string())
-
-    # ── Test 4: Cumulative Returns ──
-    print("\n[4] Cumulative returns (base=100):")
-    cumulative = calculate_cumulative_returns(prices)
-    print(f"Start: {cumulative.iloc[0].to_dict()}")
-    print(f"End  : {cumulative.iloc[-1].round(2).to_dict()}")
-    print(f"(Values above 100 = profit, below 100 = loss from start date)")
-
-    # ── Test 5: Company Info ──
-    print("\n[5] Company info for AAPL:")
-    info = fetch_stock_info("AAPL")
-    for key, value in info.items():
-        if key != "description":
-            print(f"  {key}: {value}")
-
-    # ── Test 6: 52-week range ──
-    print("\n[6] 52-week range for AAPL:")
-    range_data = fetch_52_week_range("AAPL")
-    for key, value in range_data.items():
-        print(f"  {key}: {value}")
-
-    print("\n" + "=" * 60)
-    print("ALL TESTS PASSED")
-    print("=" * 60)
