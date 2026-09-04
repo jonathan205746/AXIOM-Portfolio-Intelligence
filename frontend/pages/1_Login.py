@@ -262,13 +262,16 @@ with tab_reset:
             st.error("Username and email are required")
         else:
             try:
-                request_password_reset(reset_username.strip(), reset_email.strip())
-                st.success(GENERIC_RESPONSE)
+                request_password_reset(
+                    reset_username.strip(),
+                    reset_email.strip(),
+                )
             except (OSError, smtplib.SMTPException, KeyError, ValueError):
                 logging.getLogger(__name__).exception(
                     "Password reset email delivery failed"
-                )
-            st.success(GENERIC_RESPONSE)
+            )
+
+        st.success(GENERIC_RESPONSE)
 
     reset_code = st.text_input("RESET CODE", key="reset_code", max_chars=6)
     reset_password = st.text_input(
