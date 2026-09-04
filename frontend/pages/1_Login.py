@@ -5,6 +5,8 @@ Secure access with glassmorphic terminal aesthetic.
 
 import smtplib
 import sys, os
+import logging
+import smtplib
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
@@ -263,7 +265,10 @@ with tab_reset:
                 request_password_reset(reset_username.strip(), reset_email.strip())
                 st.success(GENERIC_RESPONSE)
             except (OSError, smtplib.SMTPException, KeyError, ValueError):
-                st.error("Password recovery is temporarily unavailable")
+                logging.getLogger(__name__).exception(
+                    "Password reset email delivery failed"
+                )
+            st.success(GENERIC_RESPONSE)
 
     reset_code = st.text_input("RESET CODE", key="reset_code", max_chars=6)
     reset_password = st.text_input(
