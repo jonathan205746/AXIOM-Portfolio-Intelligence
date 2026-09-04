@@ -41,7 +41,7 @@ jobs:
           python -m pip install pytest pytest-asyncio
 
       - name: Run tests
-        run: python -m pytest -q
+        run: python -m pytest -q tests
 
       - name: Compile Python sources
         run: python -m compileall -q frontend src backend
