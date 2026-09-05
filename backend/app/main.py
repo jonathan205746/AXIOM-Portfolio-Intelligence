@@ -24,7 +24,7 @@ from jose import JWTError, jwt
 
 from backend.config import get_settings
 from src.auth.password_reset import GENERIC_RESPONSE, request_password_reset
-
+logger = logging.getLogger(__name__)
 # ── Import your existing src modules ─────────────────────────────────────────
 try:
     from src.database.db import (
@@ -51,7 +51,10 @@ try:
     from src.optimization.health_score import HealthScoreEngine
     from src.optimization.adaptive_optimizer import AdaptiveHealthOptimizer
     from src.models.rag_pipeline import RAGPipeline
-
+    from src.auth.ses_email import (
+        EmailDeliveryError,
+        send_password_reset_template,
+     )
     SRC_AVAILABLE = True
 except Exception as e:
     print(f"Warning: src modules not available: {e}")
@@ -248,12 +251,26 @@ def me(user: dict = Depends(get_current_user)):
 @app.post("/auth/password-reset/request")
 def password_reset_request(req: PasswordResetRequest):
     if not SRC_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Backend modules not loaded")
+        raise HTTPException(
+            status_code=503,
+            detail="Backend modules not loaded",
+        )
+
     try:
-        request_password_reset(req.username, str(req.email))
-    except Exception:
-        # Do not include identifiers or SMTP details in logs or responses.
-        logging.getLogger(__name__).exception("Password reset delivery failed")
+        request_password_reset(
+            req.username,
+            str(req.email),
+        )
+
+    except EmailDeliveryError:
+        logger.exception(
+            "Password-reset email delivery failed"
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Password-reset email could not be delivered. Please try again.",
+        )
+
     return {"message": GENERIC_RESPONSE}
 
 
