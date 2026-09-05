@@ -5,8 +5,7 @@
 <p align="center">
   <a href="http://15.252.103.217:8501"><strong>Live Demo</strong></a> ·
   <a href="https://parmodk2310.vercel.app/projects/portfolio"><strong>Case Study</strong></a> ·
-  <a href="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer"><strong>Source</strong></a> ·
-  <a href="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/pkgs/container/ai-powered-portfolio-optimizer"><strong>Container Package</strong></a>
+  <a href="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer"><strong>Source</strong></a>
 </p>
 
 <p align="center">
@@ -74,7 +73,7 @@ The application keeps quantitative calculations separate from probabilistic AI o
 | Security | Secrets are injected at runtime and excluded from Git | Reduces accidental credential exposure |
 | Deployment | CloudFormation + Docker Compose on EC2 | Makes the demo environment repeatable and inspectable |
 | CI/CD identity | GitHub Actions exchanges an OIDC token for temporary AWS credentials | Avoids long-lived AWS access keys in GitHub |
-| Release images | ECR and GHCR images use immutable Git commit SHA tags | Makes deployments traceable and provides a public package |
+| Release images | ECR images use immutable Git commit SHA tags | Makes each deployment traceable and rollback-safe |
 | Remote delivery | AWS Systems Manager runs the deployment on EC2 | Removes SSH credentials from the CI/CD path |
 
 ## Verified evaluation
@@ -175,17 +174,7 @@ flowchart LR
 
 Pull requests run the test and compile gates. A push to `main` receives temporary AWS credentials through IAM OIDC, builds an image tagged with the exact Git commit SHA, stores it in Amazon ECR, and deploys it to EC2 through Systems Manager. The instance checks `/_stcore/health`; a failed deployment automatically restores the previously running image and leaves the GitHub workflow failed for visibility.
 
-Amazon ECR remains the production registry used by EC2. The workflow also mirrors the tested image to GitHub Container Registry so the same build is available through GitHub Packages.
-
-### GitHub Package
-
-Pull the latest public container image:
-
-```bash
-docker pull ghcr.io/parmodk2310/ai-powered-portfolio-optimizer:latest
-```
-
-For a reproducible deployment, replace `latest` with a commit SHA shown on the package page.
+Amazon ECR is the production container registry used by EC2. Images use immutable Git commit SHA tags so deployments and rollbacks remain traceable.
 
 ## Infrastructure
 
