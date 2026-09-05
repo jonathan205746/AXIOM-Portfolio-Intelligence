@@ -1,5 +1,5 @@
 """
-Axiom Report Generator v2.1
+Axiom Report Generator v1.0.0
 Self-contained HTML reports in institutional glassmorphic aesthetic.
 """
 from datetime import datetime
@@ -144,7 +144,7 @@ def generate_axiom_report(portfolio, results, display_names):
     gen_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     pf_name = portfolio.get("name", "PORTFOLIO").upper()
 
-    # ── Color System (Axiom v2.1) ───────────────────────────
+    # ── Color System (Axiom v1.0.0) ───────────────────────────
     C = {
         "bg_base": "#020202",
         "bg_elevated": "#0a0a0f",
@@ -825,7 +825,7 @@ def generate_axiom_report(portfolio, results, display_names):
     <div class="header-top">
       <div>
         <h1>◈ AXIOM PORTFOLIO INTELLIGENCE</h1>
-        <div class="meta">TERMINAL EDITION v2.1 · QUANTITATIVE ANALYSIS REPORT</div>
+        <div class="meta">TERMINAL EDITION v1.0.0 · QUANTITATIVE ANALYSIS REPORT</div>
       </div>
       <div class="badge">CONFIDENTIAL</div>
     </div>
@@ -846,7 +846,7 @@ def generate_axiom_report(portfolio, results, display_names):
       <div class="kpi-grid">
         <div class="kpi-cell">
           <div class="kpi-value accent">{ai_score:.0f}</div>
-          <div class="kpi-label">AI Score · {score_label}</div>
+          <div class="kpi-label">Portfolio Health · {score_label}</div>
         </div>
         <div class="kpi-cell">
           <div class="kpi-value cyan">{sharpe:.3f}</div>
@@ -883,7 +883,7 @@ def generate_axiom_report(portfolio, results, display_names):
   <!-- Health Breakdown -->
   <div class="panel animate-in">
     <div class="panel-header">
-      <span class="panel-title">◈ AI Health Score v3 Breakdown</span>
+      <span class="panel-title">◈ Portfolio Health Score v3 Breakdown</span>
       <span class="panel-sub">EXPLAINABLE MODEL</span>
     </div>
     <div class="panel-body">
@@ -1020,7 +1020,7 @@ def generate_axiom_report(portfolio, results, display_names):
       does not guarantee future results. Consult a qualified professional
       before making financial decisions.<br><br>
     <span style="color:{C['text_tertiary']};font-family:'JetBrains Mono',monospace;">
-      AXIOM Portfolio Intelligence v2.1 · Generated {gen_str}
+      AXIOM Portfolio Intelligence v1.0.0 · Generated {gen_str}
     </span>
   </div>
 

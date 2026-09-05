@@ -1,13 +1,13 @@
 """
-Axiom UI Components v2.1
+Axiom UI Components V1.0.0
 Reusable glassmorphic layout primitives.
 """
 import html
 import streamlit as st
 from typing import List, Dict, Optional, Any
 
-APP_NAME = "AXIOM"
-APP_VERSION = "2.1"
+APP_NAME = "Axiom Portfolio Intelligence"
+APP_VERSION = "1.0.0"
 
 # ── Core Injection ──────────────────────────────────────────
 
@@ -265,7 +265,7 @@ def page_sidebar(current_page: str, user: Optional[dict] = None, market_data: Op
         st.markdown("""
         <div style="padding:  25px 20px 10px 20px; margin-top: auto; border-top: 1px solid rgba(255,255,255,0.06);">
             <div style="font-size:0.6rem;color:#4a4a5e;text-align:center;letter-spacing:0.05em;">
-                AXIOM v2.1 · Portfolio Intelligence
+                AXIOM V1.0.0 · Portfolio Intelligence
             </div>
         </div>
         """, unsafe_allow_html=True)

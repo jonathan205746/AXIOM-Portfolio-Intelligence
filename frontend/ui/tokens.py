@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 APP_NAME = "Axiom Portfolio Intelligence"
-APP_VERSION = "6.0"
+APP_VERSION = "1.0.0"
 
 COLORS = {
     "bg": "#070A0F",

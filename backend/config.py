@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     APP_NAME: str = "AI Portfolio API"
-    VERSION: str = "3.0.0"
+    VERSION: str = "1.0.0"
 
     SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
