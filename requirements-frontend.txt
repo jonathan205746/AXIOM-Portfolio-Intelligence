@@ -58,3 +58,4 @@ requests-cache==1.2.0
 email-validator==2.0.0
 Markdown==3.10.3
 bleach==6.4.0
+boto3==1.43.88
