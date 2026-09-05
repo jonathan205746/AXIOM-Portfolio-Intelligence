@@ -19,7 +19,8 @@ from src.database.db import (
     init_db,
     reset_password_with_code,
 )
-
+from src.auth.ses_email import EmailDeliveryError
+logger = logging.getLogger(__name__)
 init_db()
 
 st.set_page_config(
@@ -266,12 +267,14 @@ with tab_reset:
                     reset_username.strip(),
                     reset_email.strip(),
                 )
-            except (OSError, smtplib.SMTPException, KeyError, ValueError):
-                logging.getLogger(__name__).exception(
-                    "Password reset email delivery failed"
-            )
-
-        st.success(GENERIC_RESPONSE)
+            except EmailDeliveryError:
+                logger.exception("Password-reset email delivery failed")
+                st.error(
+                    "We could not send the reset email right now. "
+                    "Please try again shortly."
+                )
+            else:
+               st.success(GENERIC_RESPONSE)
 
     reset_code = st.text_input("RESET CODE", key="reset_code", max_chars=6)
     reset_password = st.text_input(
