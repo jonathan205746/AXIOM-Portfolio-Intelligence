@@ -18,8 +18,6 @@
   <img alt="License" src="https://img.shields.io/badge/License-MIT-green">
 </p>
 
-<!-- Add docs/demo/axiom-v1-demo.gif here after recording and sanitizing it. -->
-
 ## Why AXIOM
 
 Portfolio tools often separate allocation, risk, news, and AI commentary. AXIOM connects them in one reproducible workflow: it retrieves market data, estimates portfolio risk, creates constrained allocations, evaluates company news with FinBERT, retrieves relevant evidence with FAISS, and generates a portfolio report through an LLM.
@@ -199,8 +197,6 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_NAMED_IAM
 ```
 
-See the [`production release guide`](docs/production-release-guide.md) for IAM/OIDC configuration, repository variables, ECR verification, rollback drills, mobile access, evidence capture, and the `v1.0.0` release procedure.
-
 ## Current limitations
 
 - Historical estimates do not predict future performance.
@@ -234,10 +230,6 @@ tests/           Automated test suite
 deploy/aws/      CloudFormation and deployment documentation
 docs/            Architecture, setup, and API documentation
 ```
-
-## Release evidence
-
-Before publishing a version, capture sanitized proof of the user workflow and delivery pipeline. The required filenames and recording storyboard are in [`docs/screenshots/README.md`](docs/screenshots/README.md). Release-specific validation belongs in [`RELEASE_NOTES_v1.0.0.md`](RELEASE_NOTES_v1.0.0.md), not in unverified badges or claims.
 
 ## Responsible use
 
