@@ -1,5 +1,5 @@
 """
-Axiom Dashboard V1.0.0
+Axiom Dashboard v1.0.0
 Institutional-grade portfolio intelligence hub.
 """
 import sys, os
@@ -158,7 +158,7 @@ with st.sidebar:
     st.markdown("""
     <div style="padding: 12px 16px; margin-top: auto; border-top: 1px solid rgba(255,255,255,0.06);">
         <div style="font-size:0.6rem;color:#4a4a5e;text-align:center;letter-spacing:0.05em;">
-            AXIOM V1.0.0 · Portfolio Intelligence
+            AXIOM v1.0.0 · Portfolio Intelligence
         </div>
     </div>
     """, unsafe_allow_html=True)

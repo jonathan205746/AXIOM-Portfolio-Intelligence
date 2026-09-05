@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from frontend.ui.components import APP_VERSION
-
 APP_NAME = "Axiom Portfolio Intelligence"
 APP_VERSION = "1.0.0"
 
