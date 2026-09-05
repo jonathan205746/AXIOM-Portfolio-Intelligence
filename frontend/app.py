@@ -1,5 +1,5 @@
 """
-Axiom Dashboard v1.0.0
+Axiom Dashboard V1.0.0
 Institutional-grade portfolio intelligence hub.
 """
 import sys, os
@@ -29,7 +29,13 @@ inject_theme()
 
 # ── Database Init ───────────────────────────────────────────
 try:
-    from src.database.db import init_db, get_user_portfolios, get_portfolio_history
+    from src.database.db import (
+        get_portfolio_history,
+        get_user_portfolios,
+        init_db,
+    )
+    from src.optimization.health_score import HealthScoreEngine
+
     init_db()
     DB_AVAILABLE = True
 except Exception:
@@ -152,7 +158,7 @@ with st.sidebar:
     st.markdown("""
     <div style="padding: 12px 16px; margin-top: auto; border-top: 1px solid rgba(255,255,255,0.06);">
         <div style="font-size:0.6rem;color:#4a4a5e;text-align:center;letter-spacing:0.05em;">
-            AXIOM v1.0.0 · Portfolio Intelligence
+            AXIOM V1.0.0 · Portfolio Intelligence
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -189,28 +195,68 @@ if logged_in and user and DB_AVAILABLE:
             opt = results.get("opt_result", {})
             risk = results.get("risk_report", {})
             sent = results.get("sentiment_scores", {})
-            fw = results.get("final_weights", {})
+            final_weights = results.get("final_weights", {})
+            baseline = results.get("baseline", {})
+            all_news = results.get("all_news", {})
+
             sharpe = opt.get("sharpe_ratio", 0)
-            var95 = abs(risk.get("value_at_risk", {}).get("historical_95", {}).get("var_pct", 0))
-            vol = risk.get("volatility", {}).get("portfolio_annualized", 0)
-            avg_sent = sum(sent.values()) / len(sent) if sent else 0
-            div = sum(1 for w in fw.values() if w > 0.01) / len(fw) if fw else 0
-            ss = min(max(sharpe * 25, 0), 100)
-            vs = max(0, 100 - var95 * 1000)
-            vos = max(0, 100 - vol * 100)
-            sns = (avg_sent + 1) * 50
-            ds = div * 100
-            ai_score = min(
-                100,
-                max(0, ss * 0.35 + vs * 0.2 + vos * 0.2 + sns * 0.15 + ds * 0.1),
+            vol = (
+                risk.get("volatility", {})
+                .get("portfolio_annualized", 0)
+            )
+
+            valid_sentiment = {
+                ticker: score
+                for ticker, score in sent.items()
+                if score is not None
+            }
+            avg_sent = (
+                sum(valid_sentiment.values()) / len(valid_sentiment)
+                if valid_sentiment
+                else 0
+            )
+
+            health = (
+                results.get("health_score")
+                or HealthScoreEngine.calculate(
+                    sharpe=sharpe,
+                    volatility=vol,
+                    var95=(
+                        risk
+                        .get("value_at_risk", {})
+                        .get("historical_95", {})
+                        .get("var_pct", 0.0)
+                    ),
+                    max_drawdown_pct=(
+                        risk
+                        .get("drawdown", {})
+                        .get("portfolio", {})
+                        .get("max_drawdown_pct", 0.0)
+                    ),
+                    sentiment_scores=valid_sentiment,
+                    final_weights=final_weights,
+                    risk_report=risk,
+                    baseline_sharpe=baseline.get("sharpe_ratio"),
+                    news_counts={
+                        ticker: len(all_news.get(ticker, []))
+                        for ticker in final_weights
+                    },
+                )
+            )
+
+            portfolio_health_score = float(
+                health.get("score", 0)
             )
         except Exception:
-            ai_score, sharpe, vol, avg_sent = 0, 0, 0, 0
+            portfolio_health_score = 0
+            sharpe = 0
+            vol = 0
+            avg_sent = 0
         
         section_header("Portfolio Health", "Real-time composite metrics", accent="primary")
         
         metrics = [
-            {"label": "Portfolio Health", "value": f"{ai_score:.0f}", "tone": "accent", "icon": "◈", "delta": f"{ai_score:.0f}/100"},
+            {"label": "Portfolio Health", "value": f"{portfolio_health_score:.0f}", "tone": "accent", "icon": "◈", "delta": f"{portfolio_health_score:.0f}/100"},
             {"label": "Sharpe Ratio", "value": f"{sharpe:.2f}", "tone": "cyan", "icon": "◉"},
             {"label": "Exp Return", "value": f"{opt.get('expected_return', 0)*100:.1f}%", "tone": "positive" if opt.get('expected_return', 0) > 0 else "negative", "icon": "▲"},
             {"label": "Volatility", "value": f"{vol*100:.1f}%", "tone": "negative", "icon": "◊"},
