@@ -1,5 +1,5 @@
 """
-Axiom Design System v2.1
+Axiom Design System v1.0.0
 Institutional-grade dark UI tokens for Streamlit.
 Dynamically generated from tokens.py — single source of truth.
 """

@@ -1,5 +1,5 @@
 """
-Axiom Quantitative Analysis v2.1
+Axiom Quantitative Analysis v1.0.0
 AI-driven portfolio optimization with glassmorphic terminal aesthetic.
 """
 import sys, os
@@ -623,7 +623,7 @@ var95 = risk_report["value_at_risk"]["historical_95"]
 # ── KPI Metrics ─────────────────────────────────────────────
 section_header("Key Performance Indicators", "Real-time composite metrics", accent="primary")
 metrics = [
-    {"label": "AI Score", "value": f"{ai_score:.0f}", "tone": "accent", "icon": "◈", "delta": score_label},
+    {"label": "Portfolio Health", "value": f"{ai_score:.0f}", "tone": "accent", "icon": "◈", "delta": score_label},
     {"label": "Sharpe Ratio", "value": f"{sharpe:.3f}", "tone": "cyan", "icon": "◉", "delta": f"{sharpe - baseline.get('sharpe_ratio', 0):+.3f} vs base"},
     {"label": "Exp Return", "value": f"{opt_result.get('expected_return', 0)*100:.1f}%", "tone": "positive" if opt_result.get("expected_return", 0) > 0 else "negative", "icon": "▲"},
     {"label": "Volatility", "value": f"{vol*100:.1f}%", "tone": "negative", "icon": "◊"},
@@ -691,7 +691,7 @@ with col_e2:
     st.download_button("◉ Risk CSV", risk_csv, "risk_metrics.csv", "text/csv", use_container_width=True)
 with col_e3:
     if st.button("◉ Share", use_container_width=True):
-        st.code(f"Portfolio: {portfolio['name']} | Sharpe: {opt_result['sharpe_ratio']:.2f} | AI: {ai_score:.0f}/100", language=None)
+        st.code(f"Portfolio: {portfolio['name']} | Sharpe: {opt_result['sharpe_ratio']:.2f} | Health: {ai_score:.0f}/100", language=None)
 with col_e4:
     try:
         report_html = generate_axiom_report(portfolio, results, display_names)
@@ -1270,7 +1270,7 @@ with tab6:
         )
 
 # ── Health Score Expander ───────────────────────────────────
-with st.expander("◈ AI Health Score v3 — Explain Score", expanded=False):
+with st.expander("◈ Portfolio Health Score v3 — Explain Score", expanded=False):
     glass_container(accent="primary")
     score_rows = []
     for key, value in health.get("components", {}).items():

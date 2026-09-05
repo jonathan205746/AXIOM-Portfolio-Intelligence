@@ -1,5 +1,5 @@
 """
-Axiom UI Package v2.1
+Axiom UI Package v1.0.0
 Institutional-grade design system for Streamlit.
 """
 

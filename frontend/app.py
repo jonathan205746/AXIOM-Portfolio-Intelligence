@@ -1,5 +1,5 @@
 """
-Axiom Dashboard v2.0
+Axiom Dashboard v1.0.0
 Institutional-grade portfolio intelligence hub.
 """
 import sys, os
@@ -152,7 +152,7 @@ with st.sidebar:
     st.markdown("""
     <div style="padding: 12px 16px; margin-top: auto; border-top: 1px solid rgba(255,255,255,0.06);">
         <div style="font-size:0.6rem;color:#4a4a5e;text-align:center;letter-spacing:0.05em;">
-            AXIOM v2.0 · Portfolio Intelligence
+            AXIOM v1.0.0 · Portfolio Intelligence
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -200,14 +200,17 @@ if logged_in and user and DB_AVAILABLE:
             vos = max(0, 100 - vol * 100)
             sns = (avg_sent + 1) * 50
             ds = div * 100
-            ai_score = min(100, max(0, ss * 0.35 + vs * 0.2 + vos * 0.2 + sns * 0.15 + ds * 0.1))
+            ai_score = min(
+                100,
+                max(0, ss * 0.35 + vs * 0.2 + vos * 0.2 + sns * 0.15 + ds * 0.1),
+            )
         except Exception:
             ai_score, sharpe, vol, avg_sent = 0, 0, 0, 0
         
         section_header("Portfolio Health", "Real-time composite metrics", accent="primary")
         
         metrics = [
-            {"label": "AI Score", "value": f"{ai_score:.0f}", "tone": "accent", "icon": "◈", "delta": f"{ai_score:.0f}/100"},
+            {"label": "Portfolio Health", "value": f"{ai_score:.0f}", "tone": "accent", "icon": "◈", "delta": f"{ai_score:.0f}/100"},
             {"label": "Sharpe Ratio", "value": f"{sharpe:.2f}", "tone": "cyan", "icon": "◉"},
             {"label": "Exp Return", "value": f"{opt.get('expected_return', 0)*100:.1f}%", "tone": "positive" if opt.get('expected_return', 0) > 0 else "negative", "icon": "▲"},
             {"label": "Volatility", "value": f"{vol*100:.1f}%", "tone": "negative", "icon": "◊"},
