@@ -1,5 +1,5 @@
 """
-Axiom Quantitative Analysis v1.0.0
+Axiom Quantitative Analysis V1.0.0
 AI-driven portfolio optimization with glassmorphic terminal aesthetic.
 """
 import sys, os
