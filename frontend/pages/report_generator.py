@@ -1,5 +1,5 @@
 """
-Axiom Report Generator v1.0.0
+Axiom Report Generator V1.0.0
 Self-contained HTML reports in institutional glassmorphic aesthetic.
 """
 from datetime import datetime
@@ -144,7 +144,7 @@ def generate_axiom_report(portfolio, results, display_names):
     gen_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     pf_name = portfolio.get("name", "PORTFOLIO").upper()
 
-    # ── Color System (Axiom v1.0.0) ───────────────────────────
+    # ── Color System (Axiom V1.0.0) ───────────────────────────
     C = {
         "bg_base": "#020202",
         "bg_elevated": "#0a0a0f",
@@ -825,7 +825,7 @@ def generate_axiom_report(portfolio, results, display_names):
     <div class="header-top">
       <div>
         <h1>◈ AXIOM PORTFOLIO INTELLIGENCE</h1>
-        <div class="meta">TERMINAL EDITION v1.0.0 · QUANTITATIVE ANALYSIS REPORT</div>
+        <div class="meta">TERMINAL EDITION V1.0.0 · QUANTITATIVE ANALYSIS REPORT</div>
       </div>
       <div class="badge">CONFIDENTIAL</div>
     </div>
@@ -1020,7 +1020,7 @@ def generate_axiom_report(portfolio, results, display_names):
       does not guarantee future results. Consult a qualified professional
       before making financial decisions.<br><br>
     <span style="color:{C['text_tertiary']};font-family:'JetBrains Mono',monospace;">
-      AXIOM Portfolio Intelligence v1.0.0 · Generated {gen_str}
+      AXIOM Portfolio Intelligence V1.0.0 · Generated {gen_str}
     </span>
   </div>
 

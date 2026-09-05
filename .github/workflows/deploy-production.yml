@@ -55,6 +55,7 @@ jobs:
 
     environment:
       name: production
+      url: http://15.252.103.217:8501
 
     permissions:
       contents: read

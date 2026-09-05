@@ -1,5 +1,5 @@
 """
-Axiom Performance History v1.0.0
+Axiom Performance History V1.0.0
 Optimization run tracking with glassmorphic terminal aesthetic.
 """
 import sys, os

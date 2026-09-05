@@ -1,5 +1,5 @@
 """
-Axiom Benchmark Comparison v1.0.0
+Axiom Benchmark Comparison V1.0.0
 Portfolio vs SPY & equal-weight with glassmorphic terminal aesthetic.
 """
 import sys, os

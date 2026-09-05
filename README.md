@@ -28,7 +28,7 @@ The platform uses FinBERT for financial sentiment analysis, FAISS for semantic r
 
 ## Project links
 
-- **Live demo:** [Open AXIOM Portfolio Intelligence](http://13.207.84.157:8501)
+- **Live demo:** [Open AXIOM Portfolio Intelligence](http://15.252.103.217:8501)
 - **Portfolio case study:** [View the case study](https://parmodk2310.vercel.app/projects/portfolio)
 - **Source code:** [GitHub repository](https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer)
 
