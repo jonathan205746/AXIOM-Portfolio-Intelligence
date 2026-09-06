@@ -74,6 +74,9 @@ The application keeps quantitative calculations separate from probabilistic AI o
 | Persistence | Named Docker volume mounted at `/data` | Survives container recreation on the current single-host deployment |
 | Security | Secrets are injected at runtime and excluded from Git | Reduces accidental credential exposure |
 | Deployment | CloudFormation + Docker Compose on EC2 | Makes the demo environment repeatable and inspectable |
+| CI/CD identity | GitHub Actions exchanges an OIDC token for temporary AWS credentials | Avoids long-lived AWS access keys in GitHub |
+| Release images | ECR images use immutable Git commit SHA tags | Makes each deployment traceable and rollback-safe |
+| Remote delivery | AWS Systems Manager runs the deployment on EC2 | Removes SSH credentials from the CI/CD path |
 
 ## Verified evaluation
 
@@ -184,6 +187,49 @@ aws cloudformation deploy \
 
 Operational details belong in [`deploy/aws/README.md`](deploy/aws/README.md), keeping this page focused on product and engineering evidence.
 
+```bash
+python -m compileall -q frontend src backend
+python -m pytest -q tests
+git diff --check
+```
+
+The tests cover financial calculations, optimizer constraints, sentiment aggregation, database behavior, service failure paths, RAG fallback behavior, and safe report generation.
+
+## Production delivery
+
+```mermaid
+flowchart LR
+    G["GitHub Actions"] --> I["IAM OIDC role"]
+    I --> E["Amazon ECR"]
+    E --> S["AWS Systems Manager"]
+    S --> C["Docker on EC2"]
+```
+
+Pull requests run the test and compile gates. A push to `main` receives temporary AWS credentials through IAM OIDC, builds an image tagged with the exact Git commit SHA, stores it in Amazon ECR, and deploys it to EC2 through Systems Manager. The instance checks `/_stcore/health`; a failed deployment automatically restores the previously running image and leaves the GitHub workflow failed for visibility.
+
+Amazon ECR is the production container registry used by EC2. Images use immutable Git commit SHA tags so deployments and rollbacks remain traceable.
+
+## Infrastructure
+
+The current demo uses an Amazon Linux 2023 EC2 instance provisioned through [`deploy/aws/ec2-stack.yaml`](deploy/aws/ec2-stack.yaml). Docker Compose runs the Streamlit service, while a named volume persists the SQLite database and FAISS index under `/data`.
+
+```bash
+aws cloudformation validate-template \
+  --region ap-south-1 \
+  --template-body file://deploy/aws/ec2-stack.yaml
+
+aws cloudformation deploy \
+  --region ap-south-1 \
+  --stack-name portfolio-optimizer \
+  --template-file deploy/aws/ec2-stack.yaml \
+  --parameter-overrides \
+    VpcId=vpc-xxxxxxxx \
+    SubnetId=subnet-xxxxxxxx \
+    KeyName=portfolio-optimizer-key \
+    AllowedCidr=YOUR_PUBLIC_IP/32 \
+  --capabilities CAPABILITY_NAMED_IAM
+```
+
 ## Current limitations
 
 - Historical estimates do not predict future performance.
@@ -192,6 +238,7 @@ Operational details belong in [`deploy/aws/README.md`](deploy/aws/README.md), ke
 - The current single-EC2/SQLite design is not highly available or horizontally scalable.
 - The demo IP can change unless it is associated with an Elastic IP.
 - HTTPS, managed secrets, monitoring, and automated rollback are production hardening items.
+- HTTPS, managed secrets, monitoring, and database-aware rollback remain production hardening items.
 
 ## Roadmap
 
@@ -201,6 +248,8 @@ Operational details belong in [`deploy/aws/README.md`](deploy/aws/README.md), ke
 - [ ] Retrieval relevance and groundedness evaluation
 - [ ] GitHub Actions deployment using IAM OIDC and immutable ECR tags
 - [ ] Health-gated rollback to the previous container image
+- [x] GitHub Actions deployment using IAM OIDC and immutable ECR tags
+- [x] Health-gated application rollback to the previous container image
 - [ ] HTTPS, stable domain, managed secrets, CloudWatch metrics, and alarms
 - [ ] PostgreSQL migrations and managed backups for multi-user scale
 
