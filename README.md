@@ -18,7 +18,7 @@
   <img alt="License" src="https://img.shields.io/badge/License-MIT-green">
 </p>
 
-![AXIOM dashboard](docs/screenshots/01-dashboard.png)
+![AXIOM — AI-powered portfolio intelligence](docs/screenshots/axiom-hero.png)
 
 ## Why AXIOM
 
@@ -38,6 +38,40 @@ This repository demonstrates production-oriented ML engineering—not only model
 - Graceful degradation when news or LLM providers are unavailable
 - SQLite and FAISS persistence through a Docker volume
 - Dockerized deployment on AWS EC2 provisioned by CloudFormation
+
+## Product walkthrough
+
+### Portfolio construction
+
+Create a multi-market portfolio and review currency-normalized allocation across US and Indian equities.
+
+![Portfolio allocation](docs/screenshots/02-portfolio-allocation.png)
+
+### AI-powered optimization
+
+Compare constrained optimized targets against an equal-weight baseline and review the resulting portfolio KPIs.
+
+![Optimization overview](docs/screenshots/03-optimization-overview.png)
+
+### Risk intelligence
+
+Inspect Value at Risk, maximum drawdown, concentration, correlation, volatility, and risk-adjusted performance.
+
+![Risk analytics](docs/screenshots/04-risk-analytics.png)
+
+### Evidence-grounded AI research
+
+Review ticker-level sentiment, supporting financial-news evidence, risk scenarios, and quantitative next steps.
+
+![AI research commentary](docs/screenshots/05-ai-research.png)
+
+### Benchmark validation
+
+Compare the final target portfolio with equal-weight allocation and the S&P 500 benchmark.
+
+![Benchmark results](docs/screenshots/06-benchmark-results.png)
+
+> Historical analysis is illustrative and does not guarantee future performance.
 
 ## Architecture
 
