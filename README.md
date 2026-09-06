@@ -18,6 +18,8 @@
   <img alt="License" src="https://img.shields.io/badge/License-MIT-green">
 </p>
 
+![AXIOM dashboard](docs/screenshots/01-dashboard.png)
+
 ## Why AXIOM
 
 Portfolio tools often separate allocation, risk, news, and AI commentary. AXIOM connects them in one reproducible workflow: it retrieves market data, estimates portfolio risk, creates constrained allocations, evaluates company news with FinBERT, retrieves relevant evidence with FAISS, and generates a portfolio report through an LLM.
@@ -162,6 +164,37 @@ git diff --check
 
 The tests cover financial calculations, optimizer constraints, sentiment aggregation, database behavior, service failure paths, RAG fallback behavior, and safe report generation.
 
+## Deployment
+
+The current demo uses an Amazon Linux 2023 EC2 instance provisioned through [`deploy/aws/ec2-stack.yaml`](deploy/aws/ec2-stack.yaml). Docker Compose runs the Streamlit service, while a named volume persists the SQLite database and FAISS index under `/data`.
+
+```bash
+aws cloudformation validate-template \
+  --region ap-south-1 \
+  --template-body file://deploy/aws/ec2-stack.yaml
+
+aws cloudformation deploy \
+  --region ap-south-1 \
+  --stack-name portfolio-optimizer \
+  --template-file deploy/aws/ec2-stack.yaml \
+  --parameter-overrides \
+    VpcId=vpc-xxxxxxxx \
+    SubnetId=subnet-xxxxxxxx \
+    KeyName=portfolio-optimizer-key \
+    AllowedCidr=YOUR_PUBLIC_IP/32 \
+  --capabilities CAPABILITY_NAMED_IAM
+```
+
+Operational details belong in [`deploy/aws/README.md`](deploy/aws/README.md), keeping this page focused on product and engineering evidence.
+
+```bash
+python -m compileall -q frontend src backend
+python -m pytest -q tests
+git diff --check
+```
+
+The tests cover financial calculations, optimizer constraints, sentiment aggregation, database behavior, service failure paths, RAG fallback behavior, and safe report generation.
+
 ## Production delivery
 
 ```mermaid
@@ -204,6 +237,7 @@ aws cloudformation deploy \
 - Retrieved context reduces—but cannot eliminate—LLM hallucination.
 - The current single-EC2/SQLite design is not highly available or horizontally scalable.
 - The demo IP can change unless it is associated with an Elastic IP.
+- HTTPS, managed secrets, monitoring, and automated rollback are production hardening items.
 - HTTPS, managed secrets, monitoring, and database-aware rollback remain production hardening items.
 
 ## Roadmap
@@ -212,6 +246,8 @@ aws cloudformation deploy \
 - [x] Containerized EC2 deployment with persistent application data
 - [ ] Point-in-time news dataset and sentiment backtesting
 - [ ] Retrieval relevance and groundedness evaluation
+- [ ] GitHub Actions deployment using IAM OIDC and immutable ECR tags
+- [ ] Health-gated rollback to the previous container image
 - [x] GitHub Actions deployment using IAM OIDC and immutable ECR tags
 - [x] Health-gated application rollback to the previous container image
 - [ ] HTTPS, stable domain, managed secrets, CloudWatch metrics, and alarms

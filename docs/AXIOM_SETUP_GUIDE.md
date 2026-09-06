@@ -351,7 +351,8 @@ Do not run `cd /opt/portfolio` or `sudo docker` in Windows PowerShell. Those com
 
 ## Deploy updated application code
 
-Commit and push locally first:
+The normal production path is GitHub Actions, not a host-side source rebuild.
+Commit and push only after local validation:
 
 ```powershell
 git add frontend src README.md docs Makefile
@@ -359,15 +360,27 @@ git commit -m "Update AXIOM application and documentation"
 git push origin main
 ```
 
-Then SSH to EC2 and rebuild:
+The production workflow then:
+
+1. runs tests and compiles Python sources;
+2. assumes the AWS deployment role using IAM OIDC;
+3. builds and pushes a full commit-SHA image to Amazon ECR;
+4. sends the deployment through AWS Systems Manager; and
+5. accepts the image only after the Streamlit health endpoint returns `ok`.
+
+Verify the deployed image on EC2 without rebuilding it:
 
 ```bash
 cd /opt/portfolio
-git pull origin main
-sudo docker compose up -d --build --force-recreate frontend
 sudo docker compose ps
+sudo docker inspect portfolio-dashboard --format '{{.Config.Image}}'
 sudo docker compose logs --tail=200 frontend
+curl -f http://localhost:8501/_stcore/health
 ```
+
+Use a manual host-side build only as a documented emergency procedure. It is
+not equivalent to the immutable image tested by CI and should not be described
+as the successful production release.
 
 ## Upload `.env` to EC2
 
@@ -459,5 +472,5 @@ Replace raw inline handlers with CSS pseudo-classes or supported Streamlit compo
 - retain bcrypt password hashing and remove legacy-hash compatibility after all active accounts have migrated
 - implement password recovery only with signed, single-use, expiring tokens delivered to a verified address
 - add backups and restore testing
-- build immutable container images in CI
-- add health-gated deployment and rollback
+- add a dedicated operator-selected rollback workflow for previous ECR SHA tags
+- verify database backup and migration compatibility before every rollback drill
