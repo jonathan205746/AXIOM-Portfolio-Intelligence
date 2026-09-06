@@ -17,35 +17,15 @@ AXIOM combines market-price analytics, adaptive Modern Portfolio Theory, financi
 
 ## High-level logical architecture
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│ User browser                                                 │
-└──────────────────────────────┬───────────────────────────────┘
-                               │ HTTP :8501
-                               ▼
-┌──────────────────────────────────────────────────────────────┐
-│ Streamlit application                                       │
-│ frontend/app.py and frontend/pages/                         │
-│                                                              │
-│ Authentication · Portfolio · Analysis · History · Benchmark │
-└───────────┬──────────────────┬──────────────────┬────────────┘
-            │                  │                  │
-            ▼                  ▼                  ▼
-┌──────────────────┐  ┌──────────────────┐  ┌─────────────────┐
-│ Market and news  │  │ Intelligence     │  │ Quant and risk  │
-│                  │  │                  │  │                 │
-│ yfinance         │  │ FinBERT          │  │ Adaptive MPT    │
-│ NewsAPI          │  │ FAISS            │  │ Efficient front.│
-│ company mapping  │  │ LangChain + Groq │  │ VaR/drawdown    │
-└─────────┬────────┘  └─────────┬────────┘  └────────┬────────┘
-          │                     │                    │
-          └─────────────────────┴────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────┐
-│ Persistence and outputs                                      │
-│ SQLite · FAISS index · session state · self-contained report │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    U["User browser"] --> S["Streamlit experience"]
+    S --> D["Market data and news"]
+    S --> A["FinBERT · FAISS · Groq"]
+    S --> Q["Optimization and risk"]
+    D --> O["SQLite · FAISS · HTML report"]
+    A --> O
+    Q --> O
 ```
 
 ## Main analysis sequence
@@ -187,25 +167,14 @@ Docker mounts a named volume at `/data`, allowing SQLite and FAISS data to survi
 
 ## Deployed AWS architecture
 
-```text
-Internet user from allowed CIDR
-              │
-              ▼
-AWS Security Group
-  - TCP 22 for SSH
-  - TCP 8501 for Streamlit
-              │
-              ▼
-Amazon EC2 · Amazon Linux 2023
-              │
-              ▼
-Docker Compose
-              │
-              ├── frontend service
-              │     └── portfolio-dashboard :8501
-              │
-              └── named volume
-                    └── /data
+```mermaid
+flowchart TB
+    G["GitHub Actions"] --> I["IAM OIDC role"]
+    I --> E["Amazon ECR · SHA image"]
+    E --> M["Systems Manager"]
+    M --> C["Docker on EC2"]
+    U["Allowed user"] --> C
+    C --> V["Persistent /data volume"]
 ```
 
 Infrastructure is provisioned by `deploy/aws/ec2-stack.yaml`. The CloudFormation stack name is `portfolio-optimizer`; this technical name does not need to match the product brand.
@@ -219,6 +188,10 @@ Infrastructure is provisioned by `deploy/aws/ec2-stack.yaml`. The CloudFormation
 - security-group access restricted by `AllowedCidr`
 - bootstrap log at `/var/log/portfolio-bootstrap.log`
 - container health endpoint at `/_stcore/health`
+- CI-built ECR images tagged with the full Git commit SHA
+- GitHub Actions authentication through IAM OIDC rather than static AWS keys
+- remote deployment through Systems Manager rather than CI-managed SSH keys
+- automatic application-image restoration when the new container fails health
 
 ### Capacity lesson
 
@@ -272,7 +245,7 @@ Use TLS, least-privilege IAM, managed secrets, rate limits, output escaping, and
 | SQLite | RDS PostgreSQL with migrations and backups |
 | Local FAISS | Versioned shared vector storage or managed vector service |
 | Manual logs | CloudWatch metrics, logs, traces, dashboards, and alarms |
-| Pull/build on host | CI-built immutable image with health-gated deployment |
+| ECR image rollback | Add a separately auditable operator-selected rollback workflow |
 
 ## Architectural principles
 

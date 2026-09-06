@@ -322,10 +322,15 @@ st.plotly_chart(fig, width='stretch')
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ── Rolling Sharpe Chart ────────────────────────────────────
-section_header("Rolling 60-Day Sharpe", "Risk-adjusted momentum", accent="violet")
+ROLLING_WINDOW = 60
+section_header(
+    "Rolling 60-Trading-Day Sharpe",
+    "Annualized risk-adjusted return over each trailing 60-session window",
+    accent="violet",
+)
 glass_container(accent="violet")
 
-MIN_DAYS = 65
+MIN_DAYS = ROLLING_WINDOW
 if len(final_daily) < MIN_DAYS:
     info_card(
         "Insufficient Data",
@@ -334,10 +339,18 @@ if len(final_daily) < MIN_DAYS:
         accent="amber"
     )
 else:
-    def rolling_sharpe(series: pd.Series, window: int = 60, rf_daily: float = 0.05/252) -> pd.Series:
+    def rolling_sharpe(
+        series: pd.Series,
+        window: int = ROLLING_WINDOW,
+        rf_daily: float = 0.05 / TRADING_DAYS,
+    ) -> pd.Series:
         roll_mean = series.rolling(window).mean()
         roll_std = series.rolling(window).std()
-        return ((roll_mean - rf_daily) / roll_std * np.sqrt(252)).where(roll_std > 0)
+        return (
+            (roll_mean - rf_daily)
+            / roll_std
+            * np.sqrt(TRADING_DAYS)
+        ).where(roll_std > 0)
 
     roll_opt = rolling_sharpe(final_daily)
     roll_eq = rolling_sharpe(eq_daily)
@@ -358,13 +371,19 @@ else:
     ))
     fig2.add_hline(y=0, line_color="rgba(255,255,255,0.1)", line_width=1)
     fig2.update_layout(
-        title="Rolling Sharpe Ratio (60D)",
+        title="Rolling Sharpe Ratio — 60 Trading Days",
         xaxis_title="Date", yaxis_title="Rolling Sharpe",
         height=420,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     fig2 = apply_plotly_theme(fig2)
     st.plotly_chart(fig2, width='stretch')
+    st.caption(
+        "Each point uses the preceding 60 trading sessions and a 5% annual "
+        "risk-free rate. Current target weights are applied retrospectively "
+        "across the displayed history; this is a hypothetical comparison, "
+        "not realized or walk-forward performance."
+    )
 
 st.markdown("</div>", unsafe_allow_html=True)
 

@@ -29,7 +29,8 @@ the signing key.
 
 ## Authentication
 
-Except for `/`, `/health`, `/auth/register`, and `/auth/login`, routes require:
+Except for `/`, `/health`, `/auth/register`, `/auth/login`, and the two
+password-reset routes, endpoints require:
 
 ```http
 Authorization: Bearer <access_token>
@@ -89,6 +90,41 @@ expiring tokens delivered to a verified address.
 ### `GET /auth/me`
 
 Returns the current safe user record.
+
+### `POST /auth/password-reset/request`
+
+Requests a six-digit password-reset code for a matching username and verified
+email address.
+
+```json
+{
+  "username": "parmod01",
+  "email": "user@example.com"
+}
+```
+
+The normal response is deliberately generic so callers cannot use the endpoint
+to enumerate accounts. Email delivery failure returns `503` without exposing
+provider credentials or internal exception details. Apply rate limits at the
+edge as well as the application-level resend controls.
+
+### `POST /auth/password-reset/confirm`
+
+```json
+{
+  "username": "parmod01",
+  "email": "user@example.com",
+  "code": "123456",
+  "new_password": "a-new-long-password"
+}
+```
+
+- code: exactly six digits, expiring and single-use
+- new password: 12–72 characters
+- invalid, expired, or over-attempt codes return `400`
+
+The implementation invalidates the code after a successful reset. Do not log
+the code, new password, or full request body.
 
 ## Portfolios
 
