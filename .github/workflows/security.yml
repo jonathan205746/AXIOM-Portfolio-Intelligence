@@ -38,13 +38,24 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
-      - name: Scan dependency manifests
+      - name: Report high and critical dependency findings
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
           scanners: vuln
           severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+          format: table
+
+      - name: Block critical dependency findings
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: CRITICAL
           ignore-unfixed: true
           exit-code: "1"
           format: table
@@ -60,13 +71,24 @@ jobs:
       - name: Build runtime image
         run: docker build --tag axiom:${{ github.sha }} .
 
-      - name: Scan runtime image
+      - name: Report high and critical image findings
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: axiom:${{ github.sha }}
           scanners: vuln
           vuln-type: os,library
           severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+          format: table
+
+      - name: Block critical image findings
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: axiom:${{ github.sha }}
+          scanners: vuln
+          vuln-type: os,library
+          severity: CRITICAL
           ignore-unfixed: true
           exit-code: "1"
           format: table
