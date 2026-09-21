@@ -12,7 +12,7 @@ WORKDIR /app
 
 COPY requirements-frontend.txt .
 
-RUN pip install --no-cache-dir torch==2.2.0+cpu \
+RUN pip install --no-cache-dir torch==2.6.0+cpu \
     --extra-index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements-frontend.txt \
     && pip install --no-cache-dir --upgrade "streamlit>=1.36.0"
