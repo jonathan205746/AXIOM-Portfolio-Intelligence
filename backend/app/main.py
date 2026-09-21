@@ -24,6 +24,7 @@ from jose import JWTError, jwt
 
 from backend.config import get_settings
 from src.auth.password_reset import GENERIC_RESPONSE, request_password_reset
+
 logger = logging.getLogger(__name__)
 # ── Import your existing src modules ─────────────────────────────────────────
 try:
@@ -54,7 +55,8 @@ try:
     from src.auth.ses_email import (
         EmailDeliveryError,
         send_password_reset_template,
-     )
+    )
+
     SRC_AVAILABLE = True
 except Exception as e:
     print(f"Warning: src modules not available: {e}")
@@ -263,9 +265,7 @@ def password_reset_request(req: PasswordResetRequest):
         )
 
     except EmailDeliveryError:
-        logger.exception(
-            "Password-reset email delivery failed"
-        )
+        logger.exception("Password-reset email delivery failed")
         raise HTTPException(
             status_code=503,
             detail="Password-reset email could not be delivered. Please try again.",

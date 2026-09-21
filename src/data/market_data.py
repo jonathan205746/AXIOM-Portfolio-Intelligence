@@ -15,10 +15,7 @@ def market_currency(
     normalized_ticker = ticker.upper()
     normalized_exchange = exchange.upper()
 
-    if (
-        normalized_exchange == "IN"
-        or normalized_ticker.endswith((".NS", ".BO"))
-    ):
+    if normalized_exchange == "IN" or normalized_ticker.endswith((".NS", ".BO")):
         return "INR"
 
     return "USD"
@@ -32,9 +29,7 @@ def parse_date(value) -> date:
     if isinstance(value, date):
         return value
 
-    return datetime.fromisoformat(
-        str(value).replace("Z", "+00:00")
-    ).date()
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00")).date()
 
 
 def get_fx_rate(
@@ -50,9 +45,7 @@ def get_fx_rate(
         return 1.0
 
     if {source, target} != {"USD", "INR"}:
-        raise ValueError(
-            f"Unsupported conversion: {source}/{target}"
-        )
+        raise ValueError(f"Unsupported conversion: {source}/{target}")
 
     pair = yf.Ticker("USDINR=X")
 
@@ -66,16 +59,12 @@ def get_fx_rate(
         )
 
     if history.empty or "Close" not in history.columns:
-        raise RuntimeError(
-            f"FX rate unavailable for {source}/{target}"
-        )
+        raise RuntimeError(f"FX rate unavailable for {source}/{target}")
 
     closes: pd.Series = history["Close"].dropna()
 
     if closes.empty:
-        raise RuntimeError(
-            f"FX rate unavailable for {source}/{target}"
-        )
+        raise RuntimeError(f"FX rate unavailable for {source}/{target}")
 
     if rate_date is None:
         usd_to_inr = float(closes.iloc[-1])
@@ -88,19 +77,10 @@ def get_fx_rate(
             if parse_date(index) >= requested
         ]
 
-        usd_to_inr = (
-            eligible_values[0]
-            if eligible_values
-            else float(closes.iloc[-1])
-        )
+        usd_to_inr = eligible_values[0] if eligible_values else float(closes.iloc[-1])
 
-    if (
-        not math.isfinite(usd_to_inr)
-        or usd_to_inr <= 0
-    ):
-        raise RuntimeError(
-            "USD/INR provider returned an invalid rate"
-        )
+    if not math.isfinite(usd_to_inr) or usd_to_inr <= 0:
+        raise RuntimeError("USD/INR provider returned an invalid rate")
 
     if source == "USD":
         return usd_to_inr

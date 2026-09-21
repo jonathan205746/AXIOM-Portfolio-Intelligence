@@ -2,7 +2,9 @@
 Axiom Quantitative Analysis V1.0.0
 AI-driven portfolio optimization with glassmorphic terminal aesthetic.
 """
+
 import sys, os
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import streamlit as st
@@ -54,16 +56,21 @@ if not portfolio:
     st.switch_page("pages/2_Portfolio.py")
 
 
-base_currency = str(
-    portfolio.get("currency") or "USD"
-).upper()
+base_currency = str(portfolio.get("currency") or "USD").upper()
 
 # ── Design System ───────────────────────────────────────────
 from frontend.ui.theme import inject_theme, apply_plotly_theme
 from frontend.ui.components import (
-    page_sidebar, command_bar, section_header, metric_grid,
-    glass_container, info_card, badge, loading_skeleton
+    page_sidebar,
+    command_bar,
+    section_header,
+    metric_grid,
+    glass_container,
+    info_card,
+    badge,
+    loading_skeleton,
 )
+
 inject_theme()
 
 SENTIMENT_VISUALS = {
@@ -113,6 +120,7 @@ def sentiment_progress_value(score: float | None) -> int:
     progress_value = int((score + 1.0) / 2.0 * 100)
     return max(0, min(100, progress_value))
 
+
 # ── Market Data ─────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def _market_snapshot():
@@ -125,7 +133,13 @@ def _market_snapshot():
     out = {}
     try:
         import yfinance as yf
-        for t, n in [("^GSPC", "SPX"), ("^NSEI", "NIFTY"), ("^IXIC", "NDX"), ("BTC-USD", "BTC")]:
+
+        for t, n in [
+            ("^GSPC", "SPX"),
+            ("^NSEI", "NIFTY"),
+            ("^IXIC", "NDX"),
+            ("BTC-USD", "BTC"),
+        ]:
             try:
                 h = yf.Ticker(t).history(period="2d")
                 if len(h) >= 2:
@@ -138,6 +152,7 @@ def _market_snapshot():
     except Exception:
         return fallback
     return out
+
 
 market_data = _market_snapshot()
 
@@ -159,7 +174,8 @@ page_sidebar("pages/3_Analysis.py", user=user, market_data=market_data)
 command_bar("AXIOM / ANALYSIS", f"PORTFOLIO: {portfolio['name'].upper()}")
 
 # ── Header ──────────────────────────────────────────────────
-st.markdown("""
+st.markdown(
+    """
 <div style="padding: 20px 0 12px;">
     <div style="font-size:1.6rem;font-weight:800;color:#f0f0f5;letter-spacing:-0.03em;font-family:'Inter',sans-serif;">
         Quantitative Analysis
@@ -168,8 +184,9 @@ st.markdown("""
         Blend quantitative signals with market sentiment and AI reasoning
     </div>
 </div>
-""", unsafe_allow_html=True)
-
+""",
+    unsafe_allow_html=True,
+)
 
 
 def _safe_float(value: Any, digits: int | None = None) -> float | None:
@@ -194,7 +211,7 @@ if len(holdings) < 2:
         "Insufficient Holdings",
         "Add at least 2 positions to run portfolio optimization and risk analysis.",
         badge("MIN 2 TICKERS", "warning"),
-        accent="amber"
+        accent="amber",
     )
     if st.button("◫ Add Holdings →", type="primary", use_container_width=True):
         st.switch_page("pages/2_Portfolio.py")
@@ -203,7 +220,8 @@ if len(holdings) < 2:
 tickers = [h["ticker"] for h in holdings]
 display_names = {h["ticker"]: h["display_name"] for h in holdings}
 
-st.markdown(f'''
+st.markdown(
+    f"""
 <div style="
     background: rgba(255,255,255,0.02);
     border: 1px solid rgba(255,255,255,0.04);
@@ -216,7 +234,9 @@ st.markdown(f'''
 ">
     <span style="color:#4a4a5e;">SELECTED:</span> {', '.join([h['display_name'] for h in holdings])}
 </div>
-''', unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # ── Strategy Settings ───────────────────────────────────────
 section_header("Strategy Configuration", "Optimization parameters", accent="primary")
@@ -224,15 +244,27 @@ glass_container(accent="primary")
 
 s1, s2 = st.columns(2)
 with s1:
-    alpha = st.slider("Quant / Sentiment Balance", 0.0, 1.0, 0.6, 0.05,
-                      help="1.0 = Risk/Return first | 0.0 = Sentiment first")
+    alpha = st.slider(
+        "Quant / Sentiment Balance",
+        0.0,
+        1.0,
+        0.6,
+        0.05,
+        help="1.0 = Risk/Return first | 0.0 = Sentiment first",
+    )
     st.caption(f"Quant: {int(alpha*100)}% • Sentiment: {int((1-alpha)*100)}%")
 with s2:
     portfolio_value = st.number_input(
-        f"Risk Scenario Value ({base_currency})", min_value=1000, max_value=10_000_000, value=100_000, step=10_000)
+        f"Risk Scenario Value ({base_currency})",
+        min_value=1000,
+        max_value=10_000_000,
+        value=100_000,
+        step=10_000,
+    )
     use_llm = st.checkbox("Enable AI Research Commentary", value=True)
 
 run_button = st.button("▶ Run Optimization", type="primary", use_container_width=True)
+
 
 # ── Pipeline ────────────────────────────────────────────────
 def run_pipeline(tickers, alpha, portfolio_value, use_llm):
@@ -254,7 +286,8 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
 
     def _set(msg, pct, stage=""):
         with status_placeholder.container():
-            st.markdown(f'''
+            st.markdown(
+                f"""
             <div style="
                 display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:10px 14px;
                 background:rgba(18,18,26,0.9);border:1px solid rgba(255,255,255,0.06);border-radius:10px;
@@ -265,7 +298,9 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
                 <span style="margin-left:auto;font-size:0.7rem;color:#FF6B35;font-weight:700;font-family:'JetBrains Mono',monospace;">{pct}%</span>
             </div>
             <style>@keyframes pulse {{ 0%,100% {{ opacity:1; }} 50% {{ opacity:0.3; }} }}</style>
-            ''', unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
             # Show skeleton for the upcoming content area
             if stage == "prices":
@@ -292,7 +327,9 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
         if isinstance(prices, pd.Series):
             prices = prices.to_frame()
         if isinstance(prices.columns, pd.MultiIndex):
-            prices.columns = [col[-1] if isinstance(col, tuple) else col for col in prices.columns]
+            prices.columns = [
+                col[-1] if isinstance(col, tuple) else col for col in prices.columns
+            ]
         available = [t for t in tickers if t in prices.columns]
         if not available:
             raise ValueError("No valid tickers")
@@ -311,13 +348,10 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
         st.error(f"Price fetch failed: {exc}")
         return None
 
-
     _set("Calculating current allocation...", 20, "prices")
 
     latest_prices = {
-        ticker: float(
-            prices[ticker].dropna().iloc[-1]
-        )
+        ticker: float(prices[ticker].dropna().iloc[-1])
         for ticker in available
         if not prices[ticker].dropna().empty
     }
@@ -336,8 +370,7 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
             "current_weights": {},
             "total_market_value": None,
             "excluded_tickers": {
-                ticker: f"{type(exc).__name__}: {exc}"
-                for ticker in tickers
+                ticker: f"{type(exc).__name__}: {exc}" for ticker in tickers
             },
             "is_complete": False,
         }
@@ -345,9 +378,7 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
     results["current_allocation"] = current_allocation
     results["base_currency"] = base_currency
 
-    excluded_tickers = current_allocation[
-        "excluded_tickers"
-    ]
+    excluded_tickers = current_allocation["excluded_tickers"]
 
     if excluded_tickers:
         st.warning(
@@ -414,19 +445,17 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
             )
 
     results["sentiment_scores"] = sentiment_scores
-    results["optimization_sentiment_scores"] = (
-        optimization_sentiment_scores
-    )
+    results["optimization_sentiment_scores"] = optimization_sentiment_scores
 
     _set("Searching health-aware portfolios...", 72, "adaptive")
     try:
         risk_analyzer = RiskAnalyzer(prices)
         news_counts = {t: len(all_news.get(t, [])) for t in available}
         adaptive = AdaptiveHealthOptimizer(
-           optimizer,
-           risk_analyzer,
-           optimization_sentiment_scores,
-           news_counts,
+            optimizer,
+            risk_analyzer,
+            optimization_sentiment_scores,
+            news_counts,
         )
 
         selected = adaptive.search(alpha=alpha, portfolio_value=portfolio_value)
@@ -437,27 +466,25 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
         final_weights = selected["final_weights"]
 
         rebalance_plan = build_rebalance_plan(
-            current_weights=current_allocation[
-                "current_weights"
-            ],
+            current_weights=current_allocation["current_weights"],
             target_weights=final_weights,
-            allocation_complete=bool(
-                current_allocation["is_complete"]
-            ),
+            allocation_complete=bool(current_allocation["is_complete"]),
         )
 
-        results.update({
-            "opt_result": opt_result,
-            "combined": combined,
-            "final_weights": final_weights,
-            "final_stats": selected["final_stats"],
-            "risk_report": risk_report,
-            "health_score": selected["health_score"],
-            "adaptive_candidates": selected["candidates"],
-            "selected_cap": selected["selected_cap"],
-            "tickers": available,
-            "rebalance_plan": rebalance_plan,
-        })
+        results.update(
+            {
+                "opt_result": opt_result,
+                "combined": combined,
+                "final_weights": final_weights,
+                "final_stats": selected["final_stats"],
+                "risk_report": risk_report,
+                "health_score": selected["health_score"],
+                "adaptive_candidates": selected["candidates"],
+                "selected_cap": selected["selected_cap"],
+                "tickers": available,
+                "rebalance_plan": rebalance_plan,
+            }
+        )
     except Exception as exc:
         st.error(f"Adaptive optimization failed: {exc}")
         return None
@@ -493,9 +520,7 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
                     rec = rag.generate_recommendation(
                         ticker=ticker,
                         sentiment_score=sentiment_score,
-                        portfolio_weight=opt_result[
-                            "weights"
-                        ].get(ticker, 0.0),
+                        portfolio_weight=opt_result["weights"].get(ticker, 0.0),
                         retrieved_articles=articles_text,
                     )
 
@@ -533,14 +558,20 @@ if run_button:
             if not results:
                 st.stop()
 
-            results["opt_result"]["sharpe_ratio"] = results["final_stats"]["sharpe_ratio"]
-            results["opt_result"]["expected_return"] = results["final_stats"]["expected_return"]
+            results["opt_result"]["sharpe_ratio"] = results["final_stats"][
+                "sharpe_ratio"
+            ]
+            results["opt_result"]["expected_return"] = results["final_stats"][
+                "expected_return"
+            ]
             results["opt_result"]["volatility"] = results["final_stats"]["volatility"]
 
             st.session_state["results"] = results
             safe_opt = {}
             for key, value in results["opt_result"].items():
-                safe_opt[key] = value.tolist() if isinstance(value, np.ndarray) else value
+                safe_opt[key] = (
+                    value.tolist() if isinstance(value, np.ndarray) else value
+                )
             safe_opt["baseline_sharpe"] = results["baseline"]["sharpe_ratio"]
             save_optimization_run(
                 portfolio_id=portfolio["id"],
@@ -548,7 +579,7 @@ if run_button:
                 opt_result=safe_opt,
                 sentiment_scores=results["sentiment_scores"],
                 recommendations=results["recommendations"],
-                risk_report=results["risk_report"]
+                risk_report=results["risk_report"],
             )
             st.success("Analysis complete — saved to history")
         except Exception as e:
@@ -563,7 +594,7 @@ if not results:
         "Ready to Optimize",
         "Configure your strategy settings above and click Run Optimization to begin the AI pipeline.",
         badge("CONFIGURE", "cyan"),
-        accent="cyan"
+        accent="cyan",
     )
     st.stop()
 
@@ -590,30 +621,23 @@ health = results.get("health_score") or HealthScoreEngine.calculate(
     sharpe=sharpe,
     volatility=vol,
     var95=(
-        risk_report
-        .get("value_at_risk", {})
+        risk_report.get("value_at_risk", {})
         .get("historical_95", {})
         .get("var_pct", 0.0)
     ),
     max_drawdown_pct=(
-        risk_report
-        .get("drawdown", {})
+        risk_report.get("drawdown", {})
         .get("portfolio", {})
         .get("max_drawdown_pct", 0.0)
     ),
     sentiment_scores={
-        ticker: score
-        for ticker, score in sentiment_scores.items()
-        if score is not None
+        ticker: score for ticker, score in sentiment_scores.items() if score is not None
     },
     final_weights=final_weights,
     risk_report=risk_report,
     baseline_sharpe=baseline.get("sharpe_ratio"),
     news_counts={
-        ticker: len(
-            results.get("all_news", {}).get(ticker, [])
-        )
-        for ticker in available
+        ticker: len(results.get("all_news", {}).get(ticker, [])) for ticker in available
     },
 )
 ai_score = health["score"]
@@ -621,13 +645,43 @@ score_label = f'{health["label"]} · {health["grade"]}'
 var95 = risk_report["value_at_risk"]["historical_95"]
 
 # ── KPI Metrics ─────────────────────────────────────────────
-section_header("Key Performance Indicators", "Real-time composite metrics", accent="primary")
+section_header(
+    "Key Performance Indicators", "Real-time composite metrics", accent="primary"
+)
 metrics = [
-    {"label": "Portfolio Health", "value": f"{ai_score:.0f}", "tone": "accent", "icon": "◈", "delta": score_label},
-    {"label": "Sharpe Ratio", "value": f"{sharpe:.3f}", "tone": "cyan", "icon": "◉", "delta": f"{sharpe - baseline.get('sharpe_ratio', 0):+.3f} vs base"},
-    {"label": "Exp Return", "value": f"{opt_result.get('expected_return', 0)*100:.1f}%", "tone": "positive" if opt_result.get("expected_return", 0) > 0 else "negative", "icon": "▲"},
-    {"label": "Volatility", "value": f"{vol*100:.1f}%", "tone": "negative", "icon": "◊"},
-    {"label": "95% VaR", "value": f"${var95['var_usd']:,.0f}", "tone": "negative", "icon": "⚡", "delta": f"{var95['var_pct']*100:.2f}%"},
+    {
+        "label": "Portfolio Health",
+        "value": f"{ai_score:.0f}",
+        "tone": "accent",
+        "icon": "◈",
+        "delta": score_label,
+    },
+    {
+        "label": "Sharpe Ratio",
+        "value": f"{sharpe:.3f}",
+        "tone": "cyan",
+        "icon": "◉",
+        "delta": f"{sharpe - baseline.get('sharpe_ratio', 0):+.3f} vs base",
+    },
+    {
+        "label": "Exp Return",
+        "value": f"{opt_result.get('expected_return', 0)*100:.1f}%",
+        "tone": "positive" if opt_result.get("expected_return", 0) > 0 else "negative",
+        "icon": "▲",
+    },
+    {
+        "label": "Volatility",
+        "value": f"{vol*100:.1f}%",
+        "tone": "negative",
+        "icon": "◊",
+    },
+    {
+        "label": "95% VaR",
+        "value": f"${var95['var_usd']:,.0f}",
+        "tone": "negative",
+        "icon": "⚡",
+        "delta": f"{var95['var_pct']*100:.2f}%",
+    },
 ]
 metric_grid(metrics, columns=5)
 
@@ -640,58 +694,79 @@ weights_export_rows = []
 for ticker in available:
     plan_entry = rebalance_plan.get(ticker, {})
 
-    weights_export_rows.append({
-        "Ticker": display_names.get(ticker, ticker),
-        "Current Weight": _safe_pct(
-            plan_entry.get("current_weight"),
-            2,
-        ),
-        "Quant Target": _safe_pct(
-            opt_result["weights"].get(ticker),
-            2,
-        ),
-        "Final Target": _safe_pct(
-            final_weights.get(ticker),
-            2,
-        ),
-        "Model Shift": _safe_pct(
-            combined["weight_changes"][ticker]["change"],
-            2,
-        ),
-        "Model Adjustment": classify_model_adjustment(
-            opt_result["weights"].get(ticker, 0.0),
-            final_weights.get(ticker, 0.0),
-        ),
-        "Rebalance Gap": _safe_pct(
-            plan_entry.get("gap"),
-            2,
-        ),
-        "Rebalance Action": plan_entry.get(
-            "action",
-            "UNAVAILABLE",
-        ),
-    })
+    weights_export_rows.append(
+        {
+            "Ticker": display_names.get(ticker, ticker),
+            "Current Weight": _safe_pct(
+                plan_entry.get("current_weight"),
+                2,
+            ),
+            "Quant Target": _safe_pct(
+                opt_result["weights"].get(ticker),
+                2,
+            ),
+            "Final Target": _safe_pct(
+                final_weights.get(ticker),
+                2,
+            ),
+            "Model Shift": _safe_pct(
+                combined["weight_changes"][ticker]["change"],
+                2,
+            ),
+            "Model Adjustment": classify_model_adjustment(
+                opt_result["weights"].get(ticker, 0.0),
+                final_weights.get(ticker, 0.0),
+            ),
+            "Rebalance Gap": _safe_pct(
+                plan_entry.get("gap"),
+                2,
+            ),
+            "Rebalance Action": plan_entry.get(
+                "action",
+                "UNAVAILABLE",
+            ),
+        }
+    )
 
-weights_csv = (
-    pd.DataFrame(weights_export_rows)
+weights_csv = pd.DataFrame(weights_export_rows).to_csv(index=False).encode("utf-8")
+
+risk_csv = (
+    pd.DataFrame(
+        [
+            {
+                "Metric": "Volatility",
+                "Value": f"{risk_report['volatility']['portfolio_annualized']*100:.2f}%",
+            },
+            {"Metric": "95% VaR", "Value": f"${var95['var_usd']:,.0f}"},
+            {
+                "Metric": "99% VaR",
+                "Value": f"${risk_report['value_at_risk']['historical_99']['var_usd']:,.0f}",
+            },
+        ]
+    )
     .to_csv(index=False)
     .encode("utf-8")
 )
 
-risk_csv = pd.DataFrame([
-    {"Metric": "Volatility", "Value": f"{risk_report['volatility']['portfolio_annualized']*100:.2f}%"},
-    {"Metric": "95% VaR", "Value": f"${var95['var_usd']:,.0f}"},
-    {"Metric": "99% VaR", "Value": f"${risk_report['value_at_risk']['historical_99']['var_usd']:,.0f}"}
-]).to_csv(index=False).encode("utf-8")
-
 col_e1, col_e2, col_e3, col_e4 = st.columns(4)
 with col_e1:
-    st.download_button("◉ Weights CSV", weights_csv, "optimized_weights.csv", "text/csv", use_container_width=True)
+    st.download_button(
+        "◉ Weights CSV",
+        weights_csv,
+        "optimized_weights.csv",
+        "text/csv",
+        use_container_width=True,
+    )
 with col_e2:
-    st.download_button("◉ Risk CSV", risk_csv, "risk_metrics.csv", "text/csv", use_container_width=True)
+    st.download_button(
+        "◉ Risk CSV", risk_csv, "risk_metrics.csv", "text/csv", use_container_width=True
+    )
 with col_e3:
     if st.button("◉ Share", use_container_width=True):
-        st.code(f"Portfolio: {portfolio['name']} | Sharpe: {opt_result['sharpe_ratio']:.2f} | Health: {ai_score:.0f}/100", language=None)
+        st.code(
+            f"Portfolio: {portfolio['name']} | Sharpe: {opt_result['sharpe_ratio']:.2f} | Health: {ai_score:.0f}/100",
+            language=None,
+        )
 with col_e4:
     try:
         report_html = generate_axiom_report(portfolio, results, display_names)
@@ -701,14 +776,18 @@ with col_e4:
             f"AI_PORTFOLIO_REPORT_{portfolio['name'].upper().replace(' ', '_')}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.html",
             "text/html",
             type="primary",
-            use_container_width=True
+            use_container_width=True,
         )
     except Exception as e:
         st.error(f"Report generation error: {e}")
 
 # ── Tabs ────────────────────────────────────────────────────
-section_header("Detailed Analytics", "Multi-dimensional portfolio intelligence", accent="violet")
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["◈ Overview", "⚖ Optimization", "◉ Sentiment", "◫ Risk", "◉ AI", "◫ Performance"])
+section_header(
+    "Detailed Analytics", "Multi-dimensional portfolio intelligence", accent="violet"
+)
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+    ["◈ Overview", "⚖ Optimization", "◉ Sentiment", "◫ Risk", "◉ AI", "◫ Performance"]
+)
 
 with tab1:
     st.caption("High-level portfolio snapshot")
@@ -716,76 +795,113 @@ with tab1:
     disp = [display_names.get(t, t) for t in available]
     with c1:
         glass_container(accent="primary")
-        fig = go.Figure(go.Bar(
-            y=disp, x=[final_weights[t]*100 for t in available],
-            orientation='h', marker_color='#FF6B35',
-            text=[f"{final_weights[t]*100:.1f}%" for t in available],
-            textposition='outside'
-        ))
-        fig.update_layout(title="Final Weights", xaxis_title="Weight (%)", yaxis=dict(autorange="reversed"), height=350)
+        fig = go.Figure(
+            go.Bar(
+                y=disp,
+                x=[final_weights[t] * 100 for t in available],
+                orientation="h",
+                marker_color="#FF6B35",
+                text=[f"{final_weights[t]*100:.1f}%" for t in available],
+                textposition="outside",
+            )
+        )
+        fig.update_layout(
+            title="Final Weights",
+            xaxis_title="Weight (%)",
+            yaxis=dict(autorange="reversed"),
+            height=350,
+        )
         fig = apply_plotly_theme(fig)
-        st.plotly_chart(fig, width='stretch')
+        st.plotly_chart(fig, width="stretch")
     with c2:
         glass_container(accent="cyan")
-        fig2 = go.Figure(go.Bar(
-            y=disp, x=[100/len(available)]*len(available),
-            orientation='h', marker_color='#8b8b9e',
-            text=[f"{100/len(available):.1f}%"]*len(available),
-            textposition='outside'
-        ))
-        fig2.update_layout(title=f"Equal Weight (Sharpe={baseline['sharpe_ratio']:.3f})", xaxis_title="Weight (%)", yaxis=dict(autorange="reversed"), height=350)
+        fig2 = go.Figure(
+            go.Bar(
+                y=disp,
+                x=[100 / len(available)] * len(available),
+                orientation="h",
+                marker_color="#8b8b9e",
+                text=[f"{100/len(available):.1f}%"] * len(available),
+                textposition="outside",
+            )
+        )
+        fig2.update_layout(
+            title=f"Equal Weight (Sharpe={baseline['sharpe_ratio']:.3f})",
+            xaxis_title="Weight (%)",
+            yaxis=dict(autorange="reversed"),
+            height=350,
+        )
         fig2 = apply_plotly_theme(fig2)
-        st.plotly_chart(fig2, width='stretch')
+        st.plotly_chart(fig2, width="stretch")
 
     glass_container(accent="primary")
-    df_weights = pd.DataFrame([
-    {
-        "Ticker": display_names.get(t, t),
-        "Quant Target": (
-            f"{opt_result['weights'][t] * 100:.1f}%"
-        ),
-        "Final Target": (
-            f"{final_weights[t] * 100:.1f}%"
-        ),
-        "Model Shift": (
-            f"{combined['weight_changes'][t]['change'] * 100:+.1f}%"
-        ),
-        "Model Adjustment": classify_model_adjustment(
-            opt_result["weights"].get(t, 0.0),
-            final_weights.get(t, 0.0),
-        ),
-} for t in available
-    ])
-    st.dataframe(df_weights, hide_index=True, width='stretch')
+    df_weights = pd.DataFrame(
+        [
+            {
+                "Ticker": display_names.get(t, t),
+                "Quant Target": (f"{opt_result['weights'][t] * 100:.1f}%"),
+                "Final Target": (f"{final_weights[t] * 100:.1f}%"),
+                "Model Shift": (
+                    f"{combined['weight_changes'][t]['change'] * 100:+.1f}%"
+                ),
+                "Model Adjustment": classify_model_adjustment(
+                    opt_result["weights"].get(t, 0.0),
+                    final_weights.get(t, 0.0),
+                ),
+            }
+            for t in available
+        ]
+    )
+    st.dataframe(df_weights, hide_index=True, width="stretch")
 
 with tab2:
     st.caption("Efficient frontier and optimal vs baseline")
     glass_container(accent="violet")
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=frontier_df["volatility"]*100, y=frontier_df["return"]*100,
-        mode='markers', marker=dict(
-            color=frontier_df["sharpe"],
-            colorscale=[[0,'#F43F5E'],[0.5,'#FF6B35'],[1,'#10B981']],
-            size=5, opacity=0.6
-        ), name="Frontier"
-    ))
-    fig.add_trace(go.Scatter(
-        x=[opt_result["volatility"]*100], y=[opt_result["expected_return"]*100],
-        text=[f"Final (Sharpe={opt_result['sharpe_ratio']:.3f})"],
-        textposition="top center", mode="markers+text",
-        marker=dict(color='#FF6B35', size=14, symbol='star'),
-        name="Optimal"
-    ))
-    fig.add_trace(go.Scatter(
-        x=[baseline["volatility"]*100], y=[baseline["expected_return"]*100],
-        mode='markers+text', marker=dict(color='#8b8b9e', size=10, symbol='diamond'),
-        text=[f"Baseline (Sharpe={baseline['sharpe_ratio']:.3f})"],
-        textposition="bottom center", name="Baseline"
-    ))
-    fig.update_layout(title="Efficient Frontier", xaxis_title="Volatility (%)", yaxis_title="Return (%)", height=500)
+    fig.add_trace(
+        go.Scatter(
+            x=frontier_df["volatility"] * 100,
+            y=frontier_df["return"] * 100,
+            mode="markers",
+            marker=dict(
+                color=frontier_df["sharpe"],
+                colorscale=[[0, "#F43F5E"], [0.5, "#FF6B35"], [1, "#10B981"]],
+                size=5,
+                opacity=0.6,
+            ),
+            name="Frontier",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=[opt_result["volatility"] * 100],
+            y=[opt_result["expected_return"] * 100],
+            text=[f"Final (Sharpe={opt_result['sharpe_ratio']:.3f})"],
+            textposition="top center",
+            mode="markers+text",
+            marker=dict(color="#FF6B35", size=14, symbol="star"),
+            name="Optimal",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=[baseline["volatility"] * 100],
+            y=[baseline["expected_return"] * 100],
+            mode="markers+text",
+            marker=dict(color="#8b8b9e", size=10, symbol="diamond"),
+            text=[f"Baseline (Sharpe={baseline['sharpe_ratio']:.3f})"],
+            textposition="bottom center",
+            name="Baseline",
+        )
+    )
+    fig.update_layout(
+        title="Efficient Frontier",
+        xaxis_title="Volatility (%)",
+        yaxis_title="Return (%)",
+        height=500,
+    )
     fig = apply_plotly_theme(fig)
-    st.plotly_chart(fig, width='stretch')
+    st.plotly_chart(fig, width="stretch")
 
 with tab3:
     st.caption("FinBERT sentiment scores")
@@ -798,9 +914,7 @@ with tab3:
 
         ca, cb, cc = st.columns([1.5, 4, 1.5])
 
-        ca.markdown(
-            f"**{visual['symbol']} {display_names.get(t, t)}**"
-        )
+        ca.markdown(f"**{visual['symbol']} {display_names.get(t, t)}**")
         cb.progress(progress_value)
         cc.markdown(
             f'<span class="{visual["css"]}">'
@@ -830,20 +944,14 @@ with tab4:
     r1.metric(
         "95% VaR (1-Day)",
         f"${abs(var95['var_usd']):,.0f}",
-        delta=(
-            f"{abs(var95['var_pct']) * 100:.2f}% "
-            "potential loss"
-        ),
+        delta=(f"{abs(var95['var_pct']) * 100:.2f}% " "potential loss"),
         delta_color="off",
     )
 
     r2.metric(
         "99% VaR (1-Day)",
         f"${abs(var99['var_usd']):,.0f}",
-        delta=(
-            f"{abs(var99['var_pct']) * 100:.2f}% "
-            "potential loss"
-        ),
+        delta=(f"{abs(var99['var_pct']) * 100:.2f}% " "potential loss"),
         delta_color="off",
     )
 
@@ -867,25 +975,41 @@ with tab4:
         corr = returns_df.corr()
         corr.columns = [display_names.get(t, t) for t in corr.columns]
         corr.index = corr.columns
-        fig_c = px.imshow(corr, color_continuous_scale=[[0,'#F43F5E'],[0.5,'#12121a'],[1,'#10B981']], aspect="auto")
+        fig_c = px.imshow(
+            corr,
+            color_continuous_scale=[[0, "#F43F5E"], [0.5, "#12121a"], [1, "#10B981"]],
+            aspect="auto",
+        )
         fig_c.update_traces(texttemplate="%{z:.2f}")
         fig_c.update_layout(title="Correlation Matrix", height=400)
         fig_c = apply_plotly_theme(fig_c)
-        st.plotly_chart(fig_c, width='stretch')
+        st.plotly_chart(fig_c, width="stretch")
     with c2:
         glass_container(accent="amber")
         vols = risk_report["volatility"]["per_ticker_annualized"]
-        vol_df = pd.DataFrame({
-            "Ticker": [display_names.get(t, t) for t in vols.keys()],
-            "Volatility": [v*100 for v in vols.values()]
-        })
-        fig_v = px.bar(vol_df, x="Volatility", y="Ticker", orientation='h',
-                       color="Volatility", color_continuous_scale=[[0,'#10B981'],[0.5,'#FF6B35'],[1,'#F43F5E']])
-        fig_v.add_vline(x=vol*100, line_dash="dash", line_color="#FF6B35",
-                        annotation_text=f"Portfolio: {vol*100:.1f}%")
+        vol_df = pd.DataFrame(
+            {
+                "Ticker": [display_names.get(t, t) for t in vols.keys()],
+                "Volatility": [v * 100 for v in vols.values()],
+            }
+        )
+        fig_v = px.bar(
+            vol_df,
+            x="Volatility",
+            y="Ticker",
+            orientation="h",
+            color="Volatility",
+            color_continuous_scale=[[0, "#10B981"], [0.5, "#FF6B35"], [1, "#F43F5E"]],
+        )
+        fig_v.add_vline(
+            x=vol * 100,
+            line_dash="dash",
+            line_color="#FF6B35",
+            annotation_text=f"Portfolio: {vol*100:.1f}%",
+        )
         fig_v.update_layout(yaxis=dict(autorange="reversed"), height=400)
         fig_v = apply_plotly_theme(fig_v)
-        st.plotly_chart(fig_v, width='stretch')
+        st.plotly_chart(fig_v, width="stretch")
 
     st.markdown("#### Risk Gauges")
 
@@ -993,12 +1117,10 @@ with tab4:
 
         return apply_plotly_theme(figure)
 
-
     sharpe_axis_max = max(
         4.0,
         math.ceil(max(0.0, sharpe) + 0.5),
     )
-
 
     g1, g2, g3 = st.columns(3)
 
@@ -1087,17 +1209,10 @@ with tab5:
             )
 
 with tab6:
-    st.caption(
-        "Historical cumulative returns and portfolio performance"
-    )
+    st.caption("Historical cumulative returns and portfolio performance")
     glass_container(accent="green")
 
-    cumulative_returns = (
-        (1.0 + returns_df)
-        .cumprod()
-        .sub(1.0)
-        .mul(100.0)
-    )
+    cumulative_returns = (1.0 + returns_df).cumprod().sub(1.0).mul(100.0)
 
     # Create an independent figure. Do not reuse the Efficient
     # Frontier figure from the Optimization tab.
@@ -1114,9 +1229,7 @@ with tab6:
         "#6366F1",
     ]
 
-    for index, ticker in enumerate(
-        cumulative_returns.columns
-    ):
+    for index, ticker in enumerate(cumulative_returns.columns):
         ticker_return_fig.add_trace(
             go.Scatter(
                 x=cumulative_returns.index,
@@ -1127,9 +1240,7 @@ with tab6:
                     ticker,
                 ),
                 line={
-                    "color": colors[
-                        index % len(colors)
-                    ],
+                    "color": colors[index % len(colors)],
                     "width": 1.7,
                 },
                 hovertemplate=(
@@ -1155,9 +1266,7 @@ with tab6:
         zerolinecolor="rgba(255,255,255,0.20)",
     )
 
-    ticker_return_fig = apply_plotly_theme(
-        ticker_return_fig
-    )
+    ticker_return_fig = apply_plotly_theme(ticker_return_fig)
 
     st.plotly_chart(
         ticker_return_fig,
@@ -1170,22 +1279,17 @@ with tab6:
         "return. These lines do not apply portfolio weights."
     )
 
-
     st.markdown("#### Final Portfolio Cumulative Return")
 
     aligned_weights = pd.Series(
         {
-            ticker: float(
-                final_weights.get(ticker, 0.0)
-            )
+            ticker: float(final_weights.get(ticker, 0.0))
             for ticker in returns_df.columns
         },
         dtype=float,
     )
 
-    aligned_weights = aligned_weights.reindex(
-        returns_df.columns
-    ).fillna(0.0)
+    aligned_weights = aligned_weights.reindex(returns_df.columns).fillna(0.0)
 
     weight_total = float(aligned_weights.sum())
 
@@ -1195,9 +1299,7 @@ with tab6:
             "the final weights contain no usable values."
         )
     else:
-        aligned_weights = (
-            aligned_weights / weight_total
-        )
+        aligned_weights = aligned_weights / weight_total
 
         portfolio_daily_returns = returns_df.mul(
             aligned_weights,
@@ -1205,10 +1307,7 @@ with tab6:
         ).sum(axis=1)
 
         portfolio_cumulative_return = (
-            (1.0 + portfolio_daily_returns)
-            .cumprod()
-            .sub(1.0)
-            .mul(100.0)
+            (1.0 + portfolio_daily_returns).cumprod().sub(1.0).mul(100.0)
         )
 
         portfolio_return_fig = go.Figure()
@@ -1242,14 +1341,10 @@ with tab6:
         portfolio_return_fig.update_yaxes(
             ticksuffix="%",
             zeroline=True,
-            zerolinecolor=(
-                "rgba(255,255,255,0.20)"
-            ),
+            zerolinecolor=("rgba(255,255,255,0.20)"),
         )
 
-        portfolio_return_fig = apply_plotly_theme(
-            portfolio_return_fig
-        )
+        portfolio_return_fig = apply_plotly_theme(portfolio_return_fig)
 
         st.plotly_chart(
             portfolio_return_fig,
@@ -1257,9 +1352,7 @@ with tab6:
             key="final_portfolio_cumulative_return",
         )
 
-        ending_return = float(
-            portfolio_cumulative_return.iloc[-1]
-        )
+        ending_return = float(portfolio_cumulative_return.iloc[-1])
 
         st.caption(
             f"Historical weighted cumulative return: "
@@ -1274,12 +1367,14 @@ with st.expander("◈ Portfolio Health Score v3 — Explain Score", expanded=Fal
     glass_container(accent="primary")
     score_rows = []
     for key, value in health.get("components", {}).items():
-        score_rows.append({
-            "Component": key.replace("_", " ").title(),
-            "Score": round(value, 1),
-            "Weight": f'{health.get("component_weights", {}).get(key, 0) * 100:.0f}%',
-        })
-    st.dataframe(pd.DataFrame(score_rows), hide_index=True, width='stretch')
+        score_rows.append(
+            {
+                "Component": key.replace("_", " ").title(),
+                "Score": round(value, 1),
+                "Weight": f'{health.get("component_weights", {}).get(key, 0) * 100:.0f}%',
+            }
+        )
+    st.dataframe(pd.DataFrame(score_rows), hide_index=True, width="stretch")
     d = health.get("diagnostics", {})
     st.caption(
         f'Max Position {d.get("max_weight", 0)*100:.1f}% | '
@@ -1293,43 +1388,23 @@ with st.expander("◈ Portfolio Health Score v3 — Explain Score", expanded=Fal
         st.markdown("**Adaptive Cap Search**")
         cand_df = pd.DataFrame(results["adaptive_candidates"])
         if not cand_df.empty:
-            cand_df["max_weight_cap"] = (
-                cand_df["max_weight_cap"].map(
-                    lambda value: (
-                        f"{float(value) * 100:.1f}%"
-                        if pd.notna(value)
-                        else "N/A"
-                    )
+            cand_df["max_weight_cap"] = cand_df["max_weight_cap"].map(
+                lambda value: (
+                    f"{float(value) * 100:.1f}%" if pd.notna(value) else "N/A"
                 )
             )
 
-            cand_df["health_score"] = (
-                cand_df["health_score"].map(
-                    lambda value: (
-                        round(float(value), 1)
-                        if pd.notna(value)
-                        else None
-                    )
-                )
+            cand_df["health_score"] = cand_df["health_score"].map(
+                lambda value: (round(float(value), 1) if pd.notna(value) else None)
             )
 
-            cand_df["sharpe_ratio"] = (
-                cand_df["sharpe_ratio"].map(
-                    lambda value: (
-                        round(float(value), 3)
-                        if pd.notna(value)
-                        else None
-                    )
-                )
+            cand_df["sharpe_ratio"] = cand_df["sharpe_ratio"].map(
+                lambda value: (round(float(value), 3) if pd.notna(value) else None)
             )
 
-            cand_df["volatility"] = (
-                cand_df["volatility"].map(
-                    lambda value: (
-                        f"{float(value) * 100:.1f}%"
-                        if pd.notna(value)
-                        else "N/A"
-                    )
+            cand_df["volatility"] = cand_df["volatility"].map(
+                lambda value: (
+                    f"{float(value) * 100:.1f}%" if pd.notna(value) else "N/A"
                 )
             )
 
@@ -1344,14 +1419,8 @@ with st.expander("◈ Portfolio Health Score v3 — Explain Score", expanded=Fal
             )
 
             if "Max Drawdown" in cand_df:
-                cand_df["Max Drawdown"] = (
-                    cand_df["Max Drawdown"].map(
-                        lambda value: (
-                            f"{float(value):.2f}%"
-                            if pd.notna(value)
-                            else "N/A"
-                        )
-                    )
+                cand_df["Max Drawdown"] = cand_df["Max Drawdown"].map(
+                    lambda value: (f"{float(value):.2f}%" if pd.notna(value) else "N/A")
                 )
 
             st.dataframe(
@@ -1360,17 +1429,19 @@ with st.expander("◈ Portfolio Health Score v3 — Explain Score", expanded=Fal
                 width="stretch",
             )
 
-
     st.caption(
         "Each line shows the standalone cumulative return of one "
         "ticker. It does not apply portfolio weights or represent "
         "the combined portfolio return."
     )
 
-st.markdown("""
+st.markdown(
+    """
 <div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:32px;padding-top:16px;">
     <div style="font-size:0.65rem;color:#4a4a5e;text-align:center;letter-spacing:0.05em;">
         AXIOM Portfolio Intelligence · Terminal Edition
     </div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)

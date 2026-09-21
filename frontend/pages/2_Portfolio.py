@@ -2,7 +2,9 @@
 Axiom Portfolio Manager V1.0.0
 Holdings management with institutional terminal aesthetic.
 """
+
 import sys, os
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import math
@@ -10,7 +12,14 @@ import streamlit as st
 import yfinance as yf
 from datetime import datetime, date
 import plotly.express as px
-from src.database.db import get_user_portfolios, create_portfolio, delete_portfolio, get_portfolio_holdings, add_holding, delete_holding
+from src.database.db import (
+    get_user_portfolios,
+    create_portfolio,
+    delete_portfolio,
+    get_portfolio_holdings,
+    add_holding,
+    delete_holding,
+)
 from src.data.market_data import (
     get_fx_rate as fetch_fx_rate,
     market_currency,
@@ -31,28 +40,67 @@ user = st.session_state["user"]
 
 from frontend.ui.theme import inject_theme, apply_plotly_theme
 from frontend.ui.components import (
-    sidebar_brand, sidebar_user, sidebar_nav_item, command_bar,
-    section_header, metric_grid, badge, info_card, glass_panel
+    sidebar_brand,
+    sidebar_user,
+    sidebar_nav_item,
+    command_bar,
+    section_header,
+    metric_grid,
+    badge,
+    info_card,
+    glass_panel,
 )
+
 inject_theme()
 
 # ── Constants ───────────────────────────────────────────────
 INDIAN_STOCKS = {
-    "TCS": "TCS.NS", "INFY": "INFY.NS", "RELIANCE": "RELIANCE.NS",
-    "WIPRO": "WIPRO.NS", "HDFCBANK": "HDFCBANK.NS", "ICICIBANK": "ICICIBANK.NS",
-    "TATAMOTORS": "TATAMOTORS.NS", "BAJFINANCE": "BAJFINANCE.NS",
-    "SBIN": "SBIN.NS", "AXISBANK": "AXISBANK.NS", "BHARTIARTL": "BHARTIARTL.NS",
-    "ITC": "ITC.NS", "LT": "LT.NS", "MARUTI": "MARUTI.NS",
-    "NESTLEIND": "NESTLEIND.NS", "TITAN": "TITAN.NS", "HINDUNILVR": "HINDUNILVR.NS",
-    "KOTAKBANK": "KOTAKBANK.NS", "ASIANPAINT": "ASIANPAINT.NS", "ULTRACEMCO": "ULTRACEMCO.NS"
+    "TCS": "TCS.NS",
+    "INFY": "INFY.NS",
+    "RELIANCE": "RELIANCE.NS",
+    "WIPRO": "WIPRO.NS",
+    "HDFCBANK": "HDFCBANK.NS",
+    "ICICIBANK": "ICICIBANK.NS",
+    "TATAMOTORS": "TATAMOTORS.NS",
+    "BAJFINANCE": "BAJFINANCE.NS",
+    "SBIN": "SBIN.NS",
+    "AXISBANK": "AXISBANK.NS",
+    "BHARTIARTL": "BHARTIARTL.NS",
+    "ITC": "ITC.NS",
+    "LT": "LT.NS",
+    "MARUTI": "MARUTI.NS",
+    "NESTLEIND": "NESTLEIND.NS",
+    "TITAN": "TITAN.NS",
+    "HINDUNILVR": "HINDUNILVR.NS",
+    "KOTAKBANK": "KOTAKBANK.NS",
+    "ASIANPAINT": "ASIANPAINT.NS",
+    "ULTRACEMCO": "ULTRACEMCO.NS",
 }
-BLOCKED_TICKERS = {"INR", "USD", "EUR", "GBP", "JPY", "CNY", "AUD", "CAD", "CHF", "BTC", "ETH", "GOLD", "SILVER", "OIL", "CRUDE"}
+BLOCKED_TICKERS = {
+    "INR",
+    "USD",
+    "EUR",
+    "GBP",
+    "JPY",
+    "CNY",
+    "AUD",
+    "CAD",
+    "CHF",
+    "BTC",
+    "ETH",
+    "GOLD",
+    "SILVER",
+    "OIL",
+    "CRUDE",
+}
+
 
 def validate_ticker(ticker: str) -> tuple[bool, str]:
     t = ticker.strip().upper()
     if t in BLOCKED_TICKERS:
         return False, f"❌ {t} is not an equity ticker."
     return True, ""
+
 
 def normalize_ticker(ticker: str):
     t = ticker.strip().upper()
@@ -61,6 +109,7 @@ def normalize_ticker(ticker: str):
     if t.endswith((".NS", ".BO")):
         return t, t.rsplit(".", 1)[0], "IN"
     return t, t, "US"
+
 
 def validate_holding_input(
     ticker: str,
@@ -81,8 +130,10 @@ def validate_holding_input(
         errors.append("Buy price must be greater than zero.")
     return errors
 
+
 def currency_symbol(currency: str) -> str:
     return {"INR": "₹", "USD": "$"}.get(currency, f"{currency} ")
+
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_fx_rate(
@@ -97,6 +148,7 @@ def get_fx_rate(
         rate_date,
     )
 
+
 def convert_money(
     amount: float,
     source: str,
@@ -109,11 +161,10 @@ def convert_money(
         rate_date,
     )
 
+
 def get_current_price(yf_ticker: str):
     try:
-        data = yf.Ticker(yf_ticker).history(
-            period="5d", auto_adjust=False, timeout=15
-        )
+        data = yf.Ticker(yf_ticker).history(period="5d", auto_adjust=False, timeout=15)
         if data.empty or "Close" not in data:
             return None
         closes = data["Close"].dropna()
@@ -127,49 +178,64 @@ def get_current_price(yf_ticker: str):
         pass
     return None
 
+
 # ── Sidebar ─────────────────────────────────────────────────
 with st.sidebar:
     sidebar_brand()
     sidebar_user(user.get("username", "User"), "Portfolio Manager")
-    
-    st.markdown("""
+
+    st.markdown(
+        """
     <div style="padding: 0 16px; margin: 12px 0;">
         <div style="font-size:0.6rem;color:#4a4a5e;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">
             Navigation
         </div>
     </div>
-    """, unsafe_allow_html=True)
-    
+    """,
+        unsafe_allow_html=True,
+    )
+
     pages = [
-        ("app.py", "◈", "Dashboard"), ("pages/2_Portfolio.py", "◫", "Portfolio"),
-        ("pages/3_Analysis.py", "▣", "Analysis"), ("pages/4_History.py", "◫", "History"),
-        ("pages/5_Compare.py", "⚖", "Benchmark")
+        ("app.py", "◈", "Dashboard"),
+        ("pages/2_Portfolio.py", "◫", "Portfolio"),
+        ("pages/3_Analysis.py", "▣", "Analysis"),
+        ("pages/4_History.py", "◫", "History"),
+        ("pages/5_Compare.py", "⚖", "Benchmark"),
     ]
     for page, icon, label in pages:
         is_active = page == "pages/2_Portfolio.py"
         if is_active:
-            st.markdown(sidebar_nav_item(label, icon, active=True), unsafe_allow_html=True)
+            st.markdown(
+                sidebar_nav_item(label, icon, active=True), unsafe_allow_html=True
+            )
         else:
-            st.page_link(page, label=f"{icon}  {label}", width='stretch')
-    
-    st.markdown("<div style='border-top:1px solid rgba(255,255,255,0.06);margin:12px 0;'></div>", unsafe_allow_html=True)
+            st.page_link(page, label=f"{icon}  {label}", width="stretch")
+
+    st.markdown(
+        "<div style='border-top:1px solid rgba(255,255,255,0.06);margin:12px 0;'></div>",
+        unsafe_allow_html=True,
+    )
     if st.button("◀ Logout", key="logout_portfolio"):
         for k in ["logged_in", "user", "current_portfolio", "results"]:
             st.session_state.pop(k, None)
         st.switch_page("app.py")
-    
-    st.markdown("""
+
+    st.markdown(
+        """
     <div style="padding: 12px 16px; margin-top: auto; border-top: 1px solid rgba(255,255,255,0.06);">
         <div style="font-size:0.6rem;color:#4a4a5e;text-align:center;letter-spacing:0.05em;">
             AXIOM V1.0.0 · Portfolio Intelligence
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 # ── Command Bar ─────────────────────────────────────────────
 command_bar("AXIOM / PORTFOLIO", f"USER: {user['username'].upper()}")
 
-st.markdown("""
+st.markdown(
+    """
 <div style="padding: 20px 0 12px;">
     <div style="font-size:1.6rem;font-weight:800;color:#f0f0f5;letter-spacing:-0.03em;font-family:'Inter',sans-serif;">
         Portfolio Manager
@@ -178,7 +244,9 @@ st.markdown("""
         Manage holdings and prepare for quantitative analysis
     </div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 portfolios = get_user_portfolios(user["id"])
 
@@ -220,13 +288,9 @@ with st.expander(
             )
 
             if created_portfolio:
-                st.session_state["current_portfolio"] = (
-                    created_portfolio
-                )
+                st.session_state["current_portfolio"] = created_portfolio
                 st.session_state.pop("results", None)
-                st.success(
-                    f"Created: {new_name.strip().upper()}"
-                )
+                st.success(f"Created: {new_name.strip().upper()}")
                 st.rerun()
             else:
                 st.error("Portfolio could not be created")
@@ -247,17 +311,11 @@ portfolio_names = [p["name"] for p in portfolios]
 
 current_portfolio = st.session_state.get("current_portfolio")
 current_id = (
-    current_portfolio.get("id")
-    if isinstance(current_portfolio, dict)
-    else None
+    current_portfolio.get("id") if isinstance(current_portfolio, dict) else None
 )
 
 default_index = next(
-    (
-        index
-        for index, item in enumerate(portfolios)
-        if item.get("id") == current_id
-    ),
+    (index for index, item in enumerate(portfolios) if item.get("id") == current_id),
     0,
 )
 
@@ -268,11 +326,7 @@ selected_name = st.selectbox(
     key="sel_pf",
 )
 
-selected_portfolio = next(
-    item
-    for item in portfolios
-    if item["name"] == selected_name
-)
+selected_portfolio = next(item for item in portfolios if item["name"] == selected_name)
 
 if selected_portfolio.get("id") != current_id:
     st.session_state.pop("results", None)
@@ -280,18 +334,25 @@ if selected_portfolio.get("id") != current_id:
 st.session_state["current_portfolio"] = selected_portfolio
 
 # ── Portfolio Header ────────────────────────────────────────
-st.markdown(f"""
+st.markdown(
+    f"""
 <div style="display:flex;align-items:center;gap:10px;margin:16px 0;">
     <span style="font-size:1.1rem;color:#FF6B35;">◫</span>
     <strong style="font-size:0.95rem;color:#f0f0f5;font-family:'Inter',sans-serif;">{selected_portfolio['name'].upper()}</strong>
     <span style="background:rgba(255,107,53,0.12);color:#FF6B35;padding:2px 8px;border-radius:6px;font-size:0.6rem;font-weight:700;letter-spacing:0.04em;">{selected_portfolio['currency']}</span>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 with st.expander("🗑 Delete Portfolio"):
     st.warning("Permanently deletes all holdings and history")
-    confirm = st.checkbox(f'Confirm delete "{selected_portfolio["name"].upper()}"', key="del_confirm")
-    if st.button("🗑 DELETE", type="primary", disabled=not confirm, use_container_width=True):
+    confirm = st.checkbox(
+        f'Confirm delete "{selected_portfolio["name"].upper()}"', key="del_confirm"
+    )
+    if st.button(
+        "🗑 DELETE", type="primary", disabled=not confirm, use_container_width=True
+    ):
         delete_portfolio(selected_portfolio["id"])
         st.session_state.pop("current_portfolio", None)
         st.success("Portfolio deleted")
@@ -299,7 +360,8 @@ with st.expander("🗑 Delete Portfolio"):
 
 # ── Add Holding ─────────────────────────────────────────────
 section_header("+ Add Holding", "Position entry", accent="primary")
-st.markdown("""
+st.markdown(
+    """
 <div style="
     background: rgba(18,18,26,0.72);
     border: 1px solid rgba(255,255,255,0.06);
@@ -309,28 +371,43 @@ st.markdown("""
     padding: 16px;
     margin-bottom: 16px;
 ">
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 with st.form("add_holding_form", clear_on_submit=True, enter_to_submit=False):
     fc1, fc2, fc3, fc4, fc5 = st.columns([2, 1.5, 1.5, 1.5, 2])
     ticker_input = fc1.text_input("TICKER", placeholder="AAPL or TCS", key="add_ticker")
     quantity = fc2.number_input(
-        "QTY", min_value=0.001, max_value=1_000_000.0, value=None,
-        step=1.0, placeholder="Required", key="add_qty"
+        "QTY",
+        min_value=0.001,
+        max_value=1_000_000.0,
+        value=None,
+        step=1.0,
+        placeholder="Required",
+        key="add_qty",
     )
     buy_price = fc3.number_input(
-        "BUY PRICE", min_value=0.01, max_value=100_000_000.0, value=None,
-        step=0.01, format="%.2f", placeholder="Required", key="add_price"
+        "BUY PRICE",
+        min_value=0.01,
+        max_value=100_000_000.0,
+        value=None,
+        step=0.01,
+        format="%.2f",
+        placeholder="Required",
+        key="add_price",
     )
     buy_currency_choice = fc4.selectbox(
-        "BUY CURR", ["AUTO", "INR", "USD"], key="add_curr",
+        "BUY CURR",
+        ["AUTO", "INR", "USD"],
+        key="add_curr",
         help=(
             "AUTO uses the stock's market currency. Select INR or USD only if "
             "the entered purchase price was actually paid in that currency."
-        )
+        ),
     )
     buy_date_val = fc5.date_input("DATE", value=date.today(), key="add_date")
-    
+
     submitted = st.form_submit_button("+ ADD HOLDING", use_container_width=True)
     if submitted:
         errors = validate_holding_input(ticker_input, quantity, buy_price)
@@ -346,15 +423,14 @@ with st.form("add_holding_form", clear_on_submit=True, enter_to_submit=False):
                 assert quantity is not None
                 assert buy_price is not None
 
-                yf_ticker, display, exchange = normalize_ticker(
-                    ticker_input
-                )
+                yf_ticker, display, exchange = normalize_ticker(ticker_input)
                 quote_currency = market_currency(
                     yf_ticker,
                     exchange,
                 )
                 buy_currency = (
-                    quote_currency if buy_currency_choice == "AUTO"
+                    quote_currency
+                    if buy_currency_choice == "AUTO"
                     else buy_currency_choice
                 )
                 result = add_holding(
@@ -371,7 +447,9 @@ with st.form("add_holding_form", clear_on_submit=True, enter_to_submit=False):
                     ),
                 )
                 if result:
-                    st.success(f"Added {display} ({yf_ticker}) — {quantity} @ {buy_currency} {buy_price:.2f}")
+                    st.success(
+                        f"Added {display} ({yf_ticker}) — {quantity} @ {buy_currency} {buy_price:.2f}"
+                    )
                     st.rerun()
                 else:
                     st.error("Failed to add")
@@ -381,7 +459,12 @@ st.markdown("</div>", unsafe_allow_html=True)
 holdings = get_portfolio_holdings(selected_portfolio["id"])
 
 if not holdings:
-    info_card("No Holdings", "Add stocks above to begin tracking.", badge_html="", accent="warning")
+    info_card(
+        "No Holdings",
+        "Add stocks above to begin tracking.",
+        badge_html="",
+        accent="warning",
+    )
     st.stop()
 
 rows = []
@@ -419,23 +502,34 @@ with st.spinner("Fetching prices and FX rates..."):
         except Exception as exc:
             fx_errors.append(f"{h['display_name']}: {exc}")
 
-        rows.append({
-            "Ticker": h["display_name"], "Exchange": h["exchange"], "Qty": h["quantity"],
-            "Buy Price": f"{currency_symbol(buy_currency)}{h['buy_price']:.2f}",
-            "Current Price": f"{currency_symbol(quote_currency)}{current_price:.2f}" if current_price else "N/A",
-            "Invested": invested_base, "Current Value": current_base,
-            "Native Current Value": current_native,
-            "Value Currency": quote_currency, "P&L": pnl, "P&L %": pnl_pct,
-            "Buy Date": h["buy_date"], "_id": h["id"]
-        })
+        rows.append(
+            {
+                "Ticker": h["display_name"],
+                "Exchange": h["exchange"],
+                "Qty": h["quantity"],
+                "Buy Price": f"{currency_symbol(buy_currency)}{h['buy_price']:.2f}",
+                "Current Price": (
+                    f"{currency_symbol(quote_currency)}{current_price:.2f}"
+                    if current_price
+                    else "N/A"
+                ),
+                "Invested": invested_base,
+                "Current Value": current_base,
+                "Native Current Value": current_native,
+                "Value Currency": quote_currency,
+                "P&L": pnl,
+                "P&L %": pnl_pct,
+                "Buy Date": h["buy_date"],
+                "_id": h["id"],
+            }
+        )
 
 total_pnl = total_current - total_invested
 total_pnl_pct = (total_pnl / total_invested * 100) if total_invested > 0 else 0.0
 total_invested_text = f"{currency_symbol(base_currency)}{total_invested:,.2f}"
 total_current_text = f"{currency_symbol(base_currency)}{total_current:,.2f}"
 total_pnl_text = (
-    f"{currency_symbol(base_currency)}{total_pnl:+,.2f} "
-    f"({total_pnl_pct:+.2f}%)"
+    f"{currency_symbol(base_currency)}{total_pnl:+,.2f} " f"({total_pnl_pct:+.2f}%)"
 )
 
 section_header("Current Holdings", f"{len(rows)} positions", accent="cyan")
@@ -456,10 +550,11 @@ if market_data_errors:
         "Live prices are temporarily unavailable for: "
         + ", ".join(sorted(set(market_data_errors)))
         + ". Their value, P&L, and allocation are shown as N/A until valid "
-          "market data is returned."
+        "market data is returned."
     )
 
-st.markdown("""
+st.markdown(
+    """
 <div style="
     background: rgba(18,18,26,0.72);
     border: 1px solid rgba(255,255,255,0.06);
@@ -468,10 +563,13 @@ st.markdown("""
     overflow: hidden;
     margin-bottom: 16px;
 ">
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # Table Header
-st.markdown("""
+st.markdown(
+    """
 <div style="display:flex;background:rgba(255,255,255,0.02);border-bottom:1px solid rgba(255,255,255,0.06);padding:10px 12px;font-size:0.6rem;font-weight:700;color:#FF6B35;text-transform:uppercase;letter-spacing:0.08em;font-family:'Inter',sans-serif;">
     <div style="flex:2.2;">TICKER</div>
     <div style="flex:1;">QTY</div>
@@ -481,37 +579,66 @@ st.markdown("""
     <div style="flex:1.6;">P&L</div>
     <div style="flex:0.6;">DEL</div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 for row in rows:
-    color = "#8b8b9e" if row["P&L"] is None else ("#10B981" if row["P&L"] >= 0 else "#F43F5E")
+    color = (
+        "#8b8b9e"
+        if row["P&L"] is None
+        else ("#10B981" if row["P&L"] >= 0 else "#F43F5E")
+    )
     flag = "🇮🇳" if row["Exchange"] == "IN" else "🇺🇸"
-    
+
     c1, c2, c3, c4, c5, c6, c7 = st.columns([2.2, 1, 1.4, 1.3, 1.4, 1.6, 0.6])
-    c1.markdown(f"<span style='color:#f0f0f5;font-weight:600;'>{flag} {row['Ticker']}</span>", unsafe_allow_html=True)
-    c2.write(f"<span style='color:#8b8b9e;font-family:JetBrains Mono;'>{row['Qty']:.2f}</span>", unsafe_allow_html=True)
-    c3.write(f"<span style='color:#8b8b9e;font-family:JetBrains Mono;'>{row['Buy Price']}</span>", unsafe_allow_html=True)
-    c4.write(f"<span style='color:#8b8b9e;font-family:JetBrains Mono;'>{row['Current Price']}</span>", unsafe_allow_html=True)
+    c1.markdown(
+        f"<span style='color:#f0f0f5;font-weight:600;'>{flag} {row['Ticker']}</span>",
+        unsafe_allow_html=True,
+    )
+    c2.write(
+        f"<span style='color:#8b8b9e;font-family:JetBrains Mono;'>{row['Qty']:.2f}</span>",
+        unsafe_allow_html=True,
+    )
+    c3.write(
+        f"<span style='color:#8b8b9e;font-family:JetBrains Mono;'>{row['Buy Price']}</span>",
+        unsafe_allow_html=True,
+    )
+    c4.write(
+        f"<span style='color:#8b8b9e;font-family:JetBrains Mono;'>{row['Current Price']}</span>",
+        unsafe_allow_html=True,
+    )
     current_value_display = (
-        "N/A" if row["Current Value"] is None
+        "N/A"
+        if row["Current Value"] is None
         else f"{currency_symbol(base_currency)}{row['Current Value']:,.0f}"
     )
-    c5.write(f"<span style='color:#f0f0f5;font-family:JetBrains Mono;font-weight:600;'>{current_value_display}</span>", unsafe_allow_html=True)
+    c5.write(
+        f"<span style='color:#f0f0f5;font-family:JetBrains Mono;font-weight:600;'>{current_value_display}</span>",
+        unsafe_allow_html=True,
+    )
     pnl_display = (
         "FX unavailable"
         if row["P&L"] is None
         else f"{currency_symbol(base_currency)}{row['P&L']:+,.0f} ({row['P&L %']:+.1f}%)"
     )
-    c6.markdown(f"<span style='color:{color};font-weight:700;font-family:JetBrains Mono;'>{pnl_display}</span>", unsafe_allow_html=True)
+    c6.markdown(
+        f"<span style='color:{color};font-weight:700;font-family:JetBrains Mono;'>{pnl_display}</span>",
+        unsafe_allow_html=True,
+    )
     if c7.button("×", key=f"del_{row['_id']}"):
         delete_holding(row["_id"])
         st.rerun()
 
 # Total Row
-st.markdown("<div style='border-top:1px solid rgba(255,255,255,0.08);margin:8px 0;'></div>", unsafe_allow_html=True)
+st.markdown(
+    "<div style='border-top:1px solid rgba(255,255,255,0.08);margin:8px 0;'></div>",
+    unsafe_allow_html=True,
+)
 all_pnl_nonnegative = total_pnl >= 0
 total_color = "#10B981" if all_pnl_nonnegative else "#F43F5E"
-st.markdown(f"""
+st.markdown(
+    f"""
 <div style="display:flex;padding:10px 12px;align-items:center;">
     <div style="flex:2.2;"><strong style="color:#f0f0f5;font-size:0.9rem;">TOTAL</strong></div>
     <div style="flex:1;"><strong style="color:#f0f0f5;font-family:JetBrains Mono;">{sum(r['Qty'] for r in rows):.2f}</strong></div>
@@ -525,14 +652,23 @@ st.markdown(f"""
     </div>
     <div style="flex:0.6;"></div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ── Multi-currency Allocation Charts ───────────────────────
 CHART_COLORS = [
-    "#FF6B35", "#00D9FF", "#8B5CF6", "#10B981",
-    "#F43F5E", "#F59E0B", "#EC4899", "#6366F1",
+    "#FF6B35",
+    "#00D9FF",
+    "#8B5CF6",
+    "#10B981",
+    "#F43F5E",
+    "#F59E0B",
+    "#EC4899",
+    "#6366F1",
 ]
+
 
 def allocation_figure(chart_rows, value_key: str, title: str):
     chart_data = {
@@ -568,6 +704,7 @@ def allocation_figure(chart_rows, value_key: str, title: str):
     )
     return figure
 
+
 allocation_rows = [row for row in rows if row["Current Value"] is not None]
 
 if allocation_rows:
@@ -593,7 +730,8 @@ if allocation_rows:
     native_columns = st.columns(len(native_currencies))
     for column, currency in zip(native_columns, native_currencies):
         currency_rows = [
-            row for row in allocation_rows
+            row
+            for row in allocation_rows
             if row["Value Currency"] == currency
             and row["Native Current Value"] is not None
         ]
@@ -616,10 +754,13 @@ st.info(f"**{len(rows)} tickers ready:** {', '.join([r['Ticker'] for r in rows])
 if st.button("▣ Go to Analysis →", type="primary", use_container_width=True):
     st.switch_page("pages/3_Analysis.py")
 
-st.markdown("""
+st.markdown(
+    """
 <div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:32px;padding-top:16px;">
     <div style="font-size:0.65rem;color:#4a4a5e;text-align:center;letter-spacing:0.05em;">
         AXIOM Portfolio Intelligence · Terminal Edition
     </div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)

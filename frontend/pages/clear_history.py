@@ -1,4 +1,5 @@
 import sys, os
+
 sys.path.append(os.path.abspath("."))
 from src.database.db import _connect
 

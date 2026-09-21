@@ -20,7 +20,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
@@ -134,6 +136,7 @@ TICKER_ALIASES = {
     "ICICIBANK.NS": ("ICICI Bank",),
 }
 
+
 def normalize_news_text(value: str) -> str:
     """Normalize text for reliable matching and deduplication."""
 
@@ -154,14 +157,9 @@ def get_ticker_aliases(
 
     canonical_ticker = ticker.upper().strip()
 
-    aliases = list(
-        TICKER_ALIASES.get(canonical_ticker, ())
-    )
+    aliases = list(TICKER_ALIASES.get(canonical_ticker, ()))
 
-    resolved_company = (
-        company_name
-        or TICKER_TO_COMPANY.get(canonical_ticker)
-    )
+    resolved_company = company_name or TICKER_TO_COMPANY.get(canonical_ticker)
 
     if resolved_company:
         aliases.append(resolved_company)
@@ -197,9 +195,7 @@ def find_matching_aliases(
 ) -> list[str]:
     """Return company aliases found in the article text."""
 
-    article_text = normalize_news_text(
-        f"{title or ''} {description or ''}"
-    )
+    article_text = normalize_news_text(f"{title or ''} {description or ''}")
     matches = []
 
     for alias in get_ticker_aliases(ticker, company_name):
@@ -247,9 +243,7 @@ def filter_relevant_articles(
 
     for article in articles:
         title = str(article.get("title") or "").strip()
-        description = str(
-            article.get("description") or ""
-        ).strip()
+        description = str(article.get("description") or "").strip()
 
         if not title or title == "[Removed]":
             continue
@@ -279,21 +273,20 @@ def filter_relevant_articles(
         filtered_article["relevance_match"] = matched_aliases
         filtered_articles.append(filtered_article)
 
-        if (
-            max_articles is not None
-            and len(filtered_articles) >= max_articles
-        ):
+        if max_articles is not None and len(filtered_articles) >= max_articles:
             break
 
     return filtered_articles
 
+
 # ── Core Functions ─────────────────────────────────────────────────────────────
+
 
 def fetch_news(
     ticker: str,
     company_name: Optional[str] = None,
     days_back: int = 7,
-    max_articles: int = 20
+    max_articles: int = 20,
 ) -> List[Dict]:
     """
     Fetch recent news articles for a stock ticker.
@@ -360,24 +353,26 @@ def fetch_news(
             if article.get("title") == "[Removed]":
                 continue
 
-            articles.append({
-                "ticker": ticker,
-                "title": article["title"],
-                "description": article["description"],
-                "url": article["url"],
-                "published_at": article["publishedAt"],
-                "source": article["source"]["name"],
-                # text = combined title + description (used by FinBERT and FAISS)
-                "text": f"{article['title']}. {article['description']}"
-            })
+            articles.append(
+                {
+                    "ticker": ticker,
+                    "title": article["title"],
+                    "description": article["description"],
+                    "url": article["url"],
+                    "published_at": article["publishedAt"],
+                    "source": article["source"]["name"],
+                    # text = combined title + description (used by FinBERT and FAISS)
+                    "text": f"{article['title']}. {article['description']}",
+                }
+            )
 
         raw_article_count = len(articles)
 
         articles = filter_relevant_articles(
-           ticker=ticker,
-           articles=articles,
-           company_name=company_name,
-           max_articles=max_articles,
+            ticker=ticker,
+            articles=articles,
+            company_name=company_name,
+            max_articles=max_articles,
         )
 
         logger.info(
@@ -405,7 +400,7 @@ def fetch_news_batch(
     company_names: Optional[Dict[str, str]] = None,
     days_back: int = 7,
     max_articles: int = 20,
-    delay: float = 1.1
+    delay: float = 1.1,
 ) -> Dict[str, List[Dict]]:
     """
     Fetch news for multiple tickers with rate limiting.
@@ -434,9 +429,11 @@ def fetch_news_batch(
     for i, ticker in enumerate(tickers):
         articles = fetch_news(
             ticker=ticker,
-            company_name=company_names.get(ticker),  # None is OK — fetch_news auto-resolves
+            company_name=company_names.get(
+                ticker
+            ),  # None is OK — fetch_news auto-resolves
             days_back=days_back,
-            max_articles=max_articles
+            max_articles=max_articles,
         )
         results[ticker] = articles
 
@@ -488,7 +485,7 @@ def check_api_status() -> Dict:
         response = requests.get(
             BASE_URL,
             params={"q": "test", "pageSize": 1, "apiKey": NEWS_API_KEY},
-            timeout=5
+            timeout=5,
         )
         data = response.json()
 
@@ -496,13 +493,10 @@ def check_api_status() -> Dict:
             return {
                 "status": "ok",
                 "message": "API key valid",
-                "total_results_for_test": data.get("totalResults", 0)
+                "total_results_for_test": data.get("totalResults", 0),
             }
         else:
-            return {
-                "status": "error",
-                "message": data.get("message", "Unknown error")
-            }
+            return {"status": "error", "message": data.get("message", "Unknown error")}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

@@ -17,7 +17,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 # Model choice: fast + lightweight + good quality for semantic search
@@ -72,17 +74,15 @@ class FinancialNewsStore:
             return
 
         logger.info(f"Embedding {len(texts)} articles...")
-        embeddings = self.model.encode(
-            texts,
-            show_progress_bar=True,
-            batch_size=32
-        )
+        embeddings = self.model.encode(texts, show_progress_bar=True, batch_size=32)
         embeddings = np.array(embeddings).astype("float32")
 
         self.index.add(embeddings)
         self.documents.extend(articles)
 
-        logger.info(f"Added {len(articles)} articles. Total in store: {len(self.documents)}")
+        logger.info(
+            f"Added {len(articles)} articles. Total in store: {len(self.documents)}"
+        )
 
     def add_articles_batch(self, news_by_ticker: Dict[str, List[Dict]]) -> None:
         """
@@ -96,12 +96,7 @@ class FinancialNewsStore:
             logger.info(f"Adding articles for {ticker}...")
             self.add_articles(articles)
 
-    def search(
-        self,
-        query: str,
-        ticker: str = None,
-        top_k: int = 5
-    ) -> List[Dict]:
+    def search(self, query: str, ticker: str = None, top_k: int = 5) -> List[Dict]:
         """
         Find the most relevant articles for a query.
 
@@ -184,7 +179,7 @@ class FinancialNewsStore:
             "articles_per_ticker": ticker_counts,
             "index_size": self.index.ntotal,
             "embedding_dimension": self.dimension,
-            "model": EMBED_MODEL
+            "model": EMBED_MODEL,
         }
 
     def save(self, path: str = INDEX_PATH) -> None:
@@ -255,14 +250,12 @@ if __name__ == "__main__":
     from src.data.news_fetcher import fetch_news_batch
     import time
 
-    tickers = [
-        "AAPL", "MSFT", "GOOGL", "AMZN"
-    ]
+    tickers = ["AAPL", "MSFT", "GOOGL", "AMZN"]
     company_names = {
         "AAPL": "Apple",
         "MSFT": "Microsoft",
         "GOOGL": "Google",
-        "AMZN": "Amazon"
+        "AMZN": "Amazon",
     }
 
     news_by_ticker = fetch_news_batch(tickers, company_names)
@@ -320,6 +313,7 @@ if __name__ == "__main__":
 # This class does NOT change FinancialNewsStore at all.
 # It is a thin adapter so the notebooks work without any import change.
 
+
 class VectorStore(FinancialNewsStore):
     """
     Drop-in adapter over FinancialNewsStore.
@@ -354,12 +348,14 @@ class VectorStore(FinancialNewsStore):
                 possible_ticker = text.split(": ")[0].strip()
                 if possible_ticker.isupper() and len(possible_ticker) <= 5:
                     ticker = possible_ticker
-            articles.append({
-                "text":   text,
-                "title":  text[:120],   # use first 120 chars as title fallback
-                "ticker": ticker,
-                "source": "notebook",
-            })
+            articles.append(
+                {
+                    "text": text,
+                    "title": text[:120],  # use first 120 chars as title fallback
+                    "ticker": ticker,
+                    "source": "notebook",
+                }
+            )
         self.add_articles(articles)
 
     def search(self, query: str, k: int = 5, ticker: str = None) -> list:

@@ -103,13 +103,13 @@ class Portfolio:
 class Holding:
     id: int
     portfolio_id: int
-    ticker: str          # yfinance ticker, e.g. "TCS.NS"
-    display_name: str    # e.g. "TCS"
-    exchange: str          # "US" | "IN"
+    ticker: str  # yfinance ticker, e.g. "TCS.NS"
+    display_name: str  # e.g. "TCS"
+    exchange: str  # "US" | "IN"
     quantity: float
     buy_price: float
-    buy_currency: str    # "USD" | "INR"
-    buy_date: str          # "YYYY-MM-DD"
+    buy_currency: str  # "USD" | "INR"
+    buy_date: str  # "YYYY-MM-DD"
     created_at: str
 
     @classmethod

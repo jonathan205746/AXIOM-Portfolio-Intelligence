@@ -44,9 +44,7 @@ def classify_sentiment(
         return SentimentLabel.INSUFFICIENT_EVIDENCE
 
     if not isinstance(score, (int, float)):
-        raise TypeError(
-            "Sentiment score must be a number or None."
-        )
+        raise TypeError("Sentiment score must be a number or None.")
 
     numeric_score = float(score)
 

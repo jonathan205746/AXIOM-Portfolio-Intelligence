@@ -27,15 +27,19 @@ import pandas as pd
 from scipy.optimize import minimize
 from typing import Optional
 from typing import cast
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-TRADING_DAYS = 252         # Annualization factor
-RISK_FREE_RATE = 0.05      # 5% annual risk-free rate (approx US T-bill 2024)
-MIN_WEIGHT = 0.02         # e.g., 2% floor — forces diversification across all held assets
-MAX_WEIGHT = 0.25         # Target cap per stock; optimize() adapts for portfolios with <4 assets
+TRADING_DAYS = 252  # Annualization factor
+RISK_FREE_RATE = 0.05  # 5% annual risk-free rate (approx US T-bill 2024)
+MIN_WEIGHT = 0.02  # e.g., 2% floor — forces diversification across all held assets
+MAX_WEIGHT = (
+    0.25  # Target cap per stock; optimize() adapts for portfolios with <4 assets
+)
 
 
 # ── Portfolio Optimizer ───────────────────────────────────────────────────────
+
 
 class PortfolioOptimizer:
     """
@@ -56,11 +60,7 @@ class PortfolioOptimizer:
         self.n = len(self.tickers)
 
         # Compute daily returns
-        self.returns = (
-            price_data
-            .pct_change(fill_method=None)
-            .dropna()
-       )
+        self.returns = price_data.pct_change(fill_method=None).dropna()
 
         # Annualized expected returns (mean daily return × 252)
         self.expected_returns = self.returns.mean() * TRADING_DAYS
@@ -83,7 +83,9 @@ class PortfolioOptimizer:
         variance = np.dot(weights.T, np.dot(self.cov_matrix.values, weights))
         return float(np.sqrt(variance))
 
-    def sharpe_ratio(self, weights: np.ndarray, risk_free_rate: float = RISK_FREE_RATE) -> float:
+    def sharpe_ratio(
+        self, weights: np.ndarray, risk_free_rate: float = RISK_FREE_RATE
+    ) -> float:
         """Sharpe ratio for given weights."""
         ret = self.portfolio_return(weights)
         vol = self.portfolio_volatility(weights)
@@ -91,7 +93,9 @@ class PortfolioOptimizer:
             return 0.0
         return (ret - risk_free_rate) / vol
 
-    def _negative_sharpe(self, weights: np.ndarray, risk_free_rate: float = RISK_FREE_RATE) -> float:
+    def _negative_sharpe(
+        self, weights: np.ndarray, risk_free_rate: float = RISK_FREE_RATE
+    ) -> float:
         """Objective for scipy minimize: minimize negative Sharpe ratio."""
         if np.any(weights < -1e-8):
             return np.inf
@@ -101,9 +105,12 @@ class PortfolioOptimizer:
 
     # ── Optimization ──────────────────────────────────────────────────────────
 
-    def optimize(self, risk_free_rate: float = RISK_FREE_RATE,
-                 min_weight: float = MIN_WEIGHT,
-                 max_weight: float = MAX_WEIGHT) -> dict:
+    def optimize(
+        self,
+        risk_free_rate: float = RISK_FREE_RATE,
+        min_weight: float = MIN_WEIGHT,
+        max_weight: float = MAX_WEIGHT,
+    ) -> dict:
         """
         Run Sharpe ratio maximization.
 
@@ -122,33 +129,33 @@ class PortfolioOptimizer:
         initial_weights = np.array([1.0 / self.n] * self.n)
 
         # Constraints: weights must sum to 1.0
-        constraints = [
-            {"type": "eq", "fun": lambda w: np.sum(w) - 1.0}
-        ]
+        constraints = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0}]
 
         # Bounds are candidate-specific in Health Score v3.
         # Keep the selected cap feasible for small portfolios.
         effective_max_weight = max(float(max_weight), 1.0 / self.n)
         effective_min_weight = max(0.0, float(min_weight))
         if self.n * effective_min_weight > 1.0 + 1e-9:
-            raise ValueError(f"min_weight={effective_min_weight:.4f} is infeasible for {self.n} assets")
+            raise ValueError(
+                f"min_weight={effective_min_weight:.4f} is infeasible for {self.n} assets"
+            )
         bounds = [(effective_min_weight, effective_max_weight)] * self.n
 
         # Run optimizer
         result = minimize(
             fun=lambda weights: self._negative_sharpe(
-            weights,
-            risk_free_rate,
-        ),
-           x0=initial_weights,
-           method="SLSQP",
-           bounds=bounds,
-           constraints=constraints,
-           options={
+                weights,
+                risk_free_rate,
+            ),
+            x0=initial_weights,
+            method="SLSQP",
+            bounds=bounds,
+            constraints=constraints,
+            options={
                 "maxiter": 1000,
                 "ftol": 1e-9,
             },
-     )
+        )
 
         if not result.success:
             print(f"  [WARNING] Optimizer did not fully converge: {result.message}")
@@ -164,15 +171,16 @@ class PortfolioOptimizer:
         sharpe = self.sharpe_ratio(weights, risk_free_rate)
 
         weights_dict = {
-            ticker: round(float(w), 6)
-            for ticker, w in zip(self.tickers, weights)
+            ticker: round(float(w), 6) for ticker, w in zip(self.tickers, weights)
         }
 
         # Validation checks
         weight_sum = sum(weights_dict.values())
         all_non_negative = all(w >= 0 for w in weights_dict.values())
 
-        print(f"  Weights sum to  : {weight_sum:.6f} ({'✅' if abs(weight_sum - 1.0) < 1e-4 else '❌'})")
+        print(
+            f"  Weights sum to  : {weight_sum:.6f} ({'✅' if abs(weight_sum - 1.0) < 1e-4 else '❌'})"
+        )
         print(f"  All non-negative: {'✅' if all_non_negative else '❌'}")
         print(f"  Expected Return : {ret*100:.2f}%")
         print(f"  Volatility      : {vol*100:.2f}%")
@@ -190,7 +198,7 @@ class PortfolioOptimizer:
             "max_weight_constraint": round(effective_max_weight, 6),
             "tickers": self.tickers,
             "success": bool(result.success),
-            "optimizer_message": str(result.message),# We always return best result
+            "optimizer_message": str(result.message),  # We always return best result
         }
 
     def equal_weight_baseline(self) -> dict:
@@ -204,11 +212,11 @@ class PortfolioOptimizer:
         sharpe = self.sharpe_ratio(weights)
 
         return {
-            "weights": {t: round(1.0/self.n, 6) for t in self.tickers},
+            "weights": {t: round(1.0 / self.n, 6) for t in self.tickers},
             "expected_return": round(ret, 6),
             "volatility": round(vol, 6),
             "sharpe_ratio": round(sharpe, 6),
-            "label": "equal_weight"
+            "label": "equal_weight",
         }
 
     def efficient_frontier(self, n_points: int = 50) -> pd.DataFrame:
@@ -229,11 +237,13 @@ class PortfolioOptimizer:
             vol = self.portfolio_volatility(w)
             sharpe = (ret - RISK_FREE_RATE) / vol if vol > 0 else 0
 
-            results.append({
-                "return": round(ret, 6),
-                "volatility": round(vol, 6),
-                "sharpe": round(sharpe, 6),
-            })
+            results.append(
+                {
+                    "return": round(ret, 6),
+                    "volatility": round(vol, 6),
+                    "sharpe": round(sharpe, 6),
+                }
+            )
 
         return pd.DataFrame(results)
 
@@ -269,10 +279,7 @@ def optimize_portfolio(
         raise ValueError("returns must not be empty")
 
     clean_returns = (
-        returns
-        .replace([np.inf, -np.inf], np.nan)
-        .dropna(how="any")
-        .astype(float)
+        returns.replace([np.inf, -np.inf], np.nan).dropna(how="any").astype(float)
     )
 
     if clean_returns.empty:
@@ -311,6 +318,7 @@ if __name__ == "__main__":
     # Import stock fetcher to get real data
     import sys
     import os
+
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
     from src.data.stock_fetcher import fetch_stock_data
@@ -349,5 +357,7 @@ if __name__ == "__main__":
         bar = "█" * int(weight * 30)
         print(f"  {ticker}: {weight*100:5.1f}% {bar}")
 
-    print(f"\nSharpe improvement: {baseline['sharpe_ratio']:.4f} → {result['sharpe_ratio']:.4f}")
+    print(
+        f"\nSharpe improvement: {baseline['sharpe_ratio']:.4f} → {result['sharpe_ratio']:.4f}"
+    )
     print("\n✅ Portfolio optimization working.")

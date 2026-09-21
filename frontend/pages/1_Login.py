@@ -20,6 +20,7 @@ from src.database.db import (
     reset_password_with_code,
 )
 from src.auth.ses_email import EmailDeliveryError
+
 logger = logging.getLogger(__name__)
 init_db()
 
@@ -274,7 +275,7 @@ with tab_reset:
                     "Please try again shortly."
                 )
             else:
-               st.success(GENERIC_RESPONSE)
+                st.success(GENERIC_RESPONSE)
 
     reset_code = st.text_input("RESET CODE", key="reset_code", max_chars=6)
     reset_password = st.text_input(

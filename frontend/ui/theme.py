@@ -3,6 +3,7 @@ Axiom Design System V1.0.0
 Institutional-grade dark UI tokens for Streamlit.
 Dynamically generated from tokens.py — single source of truth.
 """
+
 import streamlit as st
 from types import SimpleNamespace
 
@@ -139,8 +140,9 @@ THEMES = {
         "shadow_glow_primary": "0 0 12px rgba(255,102,0,0.25)",
         "shadow_glow_success": "0 0 12px rgba(0,208,132,0.15)",
         "shadow_glow_danger": "0 0 12px rgba(255,51,51,0.15)",
-    }
+    },
 }
+
 
 # ── Active Theme Accessor ───────────────────────────────────
 def get_active_theme():
@@ -161,11 +163,7 @@ def get_plotly_template():
         "layout": {
             "paper_bgcolor": "rgba(0,0,0,0)",
             "plot_bgcolor": "rgba(0,0,0,0)",
-            "font": {
-                "family": t("font_mono"),
-                "color": t("text_primary"),
-                "size": 11
-            },
+            "font": {"family": t("font_mono"), "color": t("text_primary"), "size": 11},
             "margin": {"l": 16, "r": 16, "t": 40, "b": 16},
             "xaxis": {
                 "gridcolor": "rgba(255,255,255,0.04)",
@@ -186,13 +184,21 @@ def get_plotly_template():
                 "font": {"size": 10},
             },
             "colorway": [
-                t("accent"), t("cyan"), t("violet"), t("positive"),
-                t("negative"), t("warning"), "#EC4899", "#6366F1"
+                t("accent"),
+                t("cyan"),
+                t("violet"),
+                t("positive"),
+                t("negative"),
+                t("warning"),
+                "#EC4899",
+                "#6366F1",
             ],
         }
     }
 
+
 PLOTLY_TEMPLATE = get_plotly_template()
+
 
 # ── CSS Design System (Dynamic from Tokens) ────────────────
 def generate_css() -> str:
@@ -201,18 +207,26 @@ def generate_css() -> str:
     is_axiom = st.session_state.get("axiom_theme", "axiom") == "axiom"
 
     # Gradient backgrounds only for Axiom theme
-    bg_gradients = """
+    bg_gradients = (
+        """
     background-image: 
       radial-gradient(ellipse 80% 50% at 50% -20%, rgba(255,107,53,0.08), transparent),
       radial-gradient(ellipse 60% 40% at 80% 80%, rgba(0,217,255,0.04), transparent);
-    """ if is_axiom else ""
+    """
+        if is_axiom
+        else ""
+    )
 
     # Font import only for Axiom (Inter + JetBrains Mono)
-    font_import = """
+    font_import = (
+        """
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
-    """ if is_axiom else """
+    """
+        if is_axiom
+        else """
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap');
     """
+    )
 
     return f"""
 <style>
@@ -602,7 +616,7 @@ def theme_toggle():
         format_func=lambda x: options[x],
         index=0 if current == "axiom" else 1,
         key="theme_selector",
-        label_visibility="collapsed"
+        label_visibility="collapsed",
     )
 
     if selected != current:

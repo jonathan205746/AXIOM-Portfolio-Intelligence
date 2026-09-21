@@ -24,17 +24,11 @@ def test_model_adjustment_uses_one_percent_threshold(
     final,
     expected,
 ):
-    assert (
-        classify_model_adjustment(optimized, final)
-        == expected
-    )
+    assert classify_model_adjustment(optimized, final) == expected
 
 
 def test_model_adjustment_excludes_zero_target():
-    assert (
-        classify_model_adjustment(0.10, 0.0005)
-        == "EXCLUDE"
-    )
+    assert classify_model_adjustment(0.10, 0.0005) == "EXCLUDE"
 
 
 @pytest.mark.parametrize(
@@ -50,10 +44,7 @@ def test_actual_rebalance_uses_current_weight(
     target,
     expected,
 ):
-    assert (
-        classify_rebalance_action(current, target)
-        == expected
-    )
+    assert classify_rebalance_action(current, target) == expected
 
 
 @pytest.mark.parametrize(
@@ -133,16 +124,10 @@ def test_current_allocation_converts_mixed_currency():
     tcs_value = 6 * 2369.0
     total = google_value + tcs_value
 
-    assert result["market_values"]["GOOGL"] == pytest.approx(
-        google_value
-    )
-    assert result["market_values"]["TCS.NS"] == pytest.approx(
-        tcs_value
-    )
+    assert result["market_values"]["GOOGL"] == pytest.approx(google_value)
+    assert result["market_values"]["TCS.NS"] == pytest.approx(tcs_value)
     assert result["total_market_value"] == pytest.approx(total)
-    assert result["current_weights"]["GOOGL"] == pytest.approx(
-        google_value / total
-    )
+    assert result["current_weights"]["GOOGL"] == pytest.approx(google_value / total)
     assert sum(result["current_weights"].values()) == pytest.approx(1.0)
 
 

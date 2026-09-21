@@ -2,6 +2,7 @@
 Axiom UI Components V1.0.0
 Reusable glassmorphic layout primitives.
 """
+
 import html
 import streamlit as st
 from typing import List, Dict, Optional, Any
@@ -11,13 +12,19 @@ APP_VERSION = "1.0.0"
 
 # ── Core Injection ──────────────────────────────────────────
 
+
 def inject_design_system():
     from .theme import inject_theme
+
     inject_theme()
+
 
 # ── Layout Primitives ───────────────────────────────────────
 
-def glass_panel(title: str, subtitle: str = "", accent: str = "primary", content: str = "") -> str:
+
+def glass_panel(
+    title: str, subtitle: str = "", accent: str = "primary", content: str = ""
+) -> str:
     """Generate a glassmorphic panel HTML string."""
     accent_map = {
         "primary": ("#FF6B35", "rgba(255,107,53,0.15)"),
@@ -29,9 +36,13 @@ def glass_panel(title: str, subtitle: str = "", accent: str = "primary", content
     }
     color, glow = accent_map.get(accent, accent_map["primary"])
 
-    subtitle_html = f'''<div style="font-size:0.65rem;color:#4a4a5e;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;">{html.escape(subtitle)}</div>''' if subtitle else ""
+    subtitle_html = (
+        f"""<div style="font-size:0.65rem;color:#4a4a5e;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;">{html.escape(subtitle)}</div>"""
+        if subtitle
+        else ""
+    )
 
-    return f'''
+    return f"""
     <div style="
         background: rgba(18,18,26,0.72);
         border: 1px solid rgba(255,255,255,0.06);
@@ -60,7 +71,7 @@ def glass_panel(title: str, subtitle: str = "", accent: str = "primary", content
             {content}
         </div>
     </div>
-    '''
+    """
 
 
 def render_glass_panel(title: str, subtitle: str = "", accent: str = "primary"):
@@ -80,8 +91,10 @@ def glass_container(accent: str = "primary"):
 
 # ── Navigation ──────────────────────────────────────────────
 
+
 def sidebar_brand():
-    st.markdown("""
+    st.markdown(
+        """
     <div style="
         padding: 20px 16px 16px;
         border-bottom: 1px solid rgba(255,255,255,0.06);
@@ -105,12 +118,15 @@ def sidebar_brand():
             Portfolio Intelligence
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def sidebar_user(username: str, role: str = "Investor"):
     initials = "".join([p[0] for p in username.split()[:2]]).upper() or "U"
-    st.markdown(f'''
+    st.markdown(
+        f"""
     <div style="
         margin: 12px 16px;
         padding: 12px;
@@ -135,7 +151,9 @@ def sidebar_user(username: str, role: str = "Investor"):
             <div style="font-size:0.6rem;color:#4a4a5e;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;">{html.escape(role)}</div>
         </div>
     </div>
-    ''', unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def sidebar_nav_item(label: str, icon: str, active: bool = False, href: str = ""):
@@ -145,7 +163,7 @@ def sidebar_nav_item(label: str, icon: str, active: bool = False, href: str = ""
     glow = "box-shadow: 0 0 12px rgba(255,107,53,0.1);" if active else ""
 
     if active:
-        return f'''
+        return f"""
         <div style="
             display: flex; align-items: center; gap: 10px;
             padding: 8px 12px; margin: 2px 12px;
@@ -159,9 +177,9 @@ def sidebar_nav_item(label: str, icon: str, active: bool = False, href: str = ""
             letter-spacing: 0.02em;
             {glow}
         ">{icon}&nbsp;&nbsp;{html.escape(label)}</div>
-        '''
+        """
     else:
-        return f'''
+        return f"""
         <a href="{html.escape(href)}" style="
             display: flex; align-items: center; gap: 10px;
             padding: 8px 12px; margin: 2px 12px;
@@ -178,28 +196,34 @@ def sidebar_nav_item(label: str, icon: str, active: bool = False, href: str = ""
         ">
             {icon}&nbsp;&nbsp;{html.escape(label)}
         </a>
-        '''
+        """
 
 
-def page_sidebar(current_page: str, user: Optional[dict] = None, market_data: Optional[dict] = None):
+def page_sidebar(
+    current_page: str, user: Optional[dict] = None, market_data: Optional[dict] = None
+):
     """Render the complete Axiom sidebar with brand, markets, user, nav, footer."""
     with st.sidebar:
         sidebar_brand()
 
         # Market Data
         if market_data:
-            st.markdown("""
+            st.markdown(
+                """
             <div style="padding: 0 16px; margin: 12px 0;">
                 <div style="font-size:0.6rem;color:#4a4a5e;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">
                     Global Markets
                 </div>
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
             for name, data in market_data.items():
                 color = "#10B981" if data["change"] >= 0 else "#F43F5E"
                 icon = "▲" if data["change"] >= 0 else "▼"
                 sign = "+" if data["change"] >= 0 else ""
-                st.markdown(f'''
+                st.markdown(
+                    f"""
                 <div style="
                     display: flex; justify-content: space-between; align-items: center;
                     padding: 6px 16px; font-size: 0.75rem;
@@ -213,69 +237,98 @@ def page_sidebar(current_page: str, user: Optional[dict] = None, market_data: Op
                         <span style="color: {color}; font-weight: 700; margin-left: 6px;">{icon} {sign}{data['change']:.2f}%</span>
                     </div>
                 </div>
-                ''', unsafe_allow_html=True)
-            st.markdown("<div style='border-top:1px solid rgba(255,255,255,0.06);margin:12px 0;'></div>", unsafe_allow_html=True)
+                """,
+                    unsafe_allow_html=True,
+                )
+            st.markdown(
+                "<div style='border-top:1px solid rgba(255,255,255,0.06);margin:12px 0;'></div>",
+                unsafe_allow_html=True,
+            )
 
         # User & Navigation
         if user:
             sidebar_user(user.get("username", "User"), "Portfolio Manager")
-            st.markdown("""
+            st.markdown(
+                """
             <div style="padding: 0 16px; margin-bottom: 8px;">
                 <div style="font-size:0.6rem;color:#4a4a5e;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;">
                     Navigation
                 </div>
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
             pages = [
                 ("app.py", "◈", "Dashboard"),
                 ("pages/2_Portfolio.py", "◫", "Portfolio"),
                 ("pages/3_Analysis.py", "▣", "Analysis"),
                 ("pages/4_History.py", "◫", "History"),
-                ("pages/5_Compare.py", "⚖", "Benchmark")
+                ("pages/5_Compare.py", "⚖", "Benchmark"),
             ]
             for page, icon, label in pages:
                 is_active = page == current_page
                 if is_active:
-                    st.markdown(sidebar_nav_item(label, icon, active=True), unsafe_allow_html=True)
+                    st.markdown(
+                        sidebar_nav_item(label, icon, active=True),
+                        unsafe_allow_html=True,
+                    )
                 else:
-                    st.page_link(page, label=f"{icon}  {label}", width='stretch')
+                    st.page_link(page, label=f"{icon}  {label}", width="stretch")
 
-            st.markdown("<div style='border-top:1px solid rgba(255,255,255,0.06);margin:12px 0;'></div>", unsafe_allow_html=True)
+            st.markdown(
+                "<div style='border-top:1px solid rgba(255,255,255,0.06);margin:12px 0;'></div>",
+                unsafe_allow_html=True,
+            )
             if st.button("◀ Logout", key=f"logout_{current_page.replace('/', '_')}"):
                 for k in ["logged_in", "user", "current_portfolio", "results"]:
                     st.session_state.pop(k, None)
                 st.switch_page("app.py")
         else:
-            st.markdown("""
+            st.markdown(
+                """
             <div style="padding: 0 16px; margin: 12px 0;">
                 <div style="font-size:0.6rem;color:#4a4a5e;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">
                     Account
                 </div>
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
             st.page_link("pages/1_Login.py", label="🔐  Authenticate", width="stretch")
-            st.markdown("""
+            st.markdown(
+                """
             <div style="padding: 8px 16px; font-size: 0.7rem; color: #4a4a5e; line-height: 1.5;">
                 Sign in to access quantitative analytics, AI recommendations, and portfolio tracking.
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
         # Footer
-        st.markdown("""
+        st.markdown(
+            """
         <div style="padding:  25px 20px 10px 20px; margin-top: auto; border-top: 1px solid rgba(255,255,255,0.06);">
             <div style="font-size:0.6rem;color:#4a4a5e;text-align:center;letter-spacing:0.05em;">
                 AXIOM V1.0.0 · Portfolio Intelligence
             </div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
 
 # ── Command Bar & Ticker ────────────────────────────────────
 
+
 def command_bar(path: str, detail: str = ""):
-    suffix = f" <span style='color:#4a4a5e;margin-left:8px;'>// {html.escape(detail)}</span>" if detail else ""
-    st.markdown(f'''
+    suffix = (
+        f" <span style='color:#4a4a5e;margin-left:8px;'>// {html.escape(detail)}</span>"
+        if detail
+        else ""
+    )
+    st.markdown(
+        f"""
     <div style="
         background: rgba(10,10,15,0.9);
         border-bottom: 1px solid rgba(255,255,255,0.06);
@@ -295,7 +348,9 @@ def command_bar(path: str, detail: str = ""):
             {html.escape(APP_NAME)} v{APP_VERSION}
         </span>
     </div>
-    ''', unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def ticker_tape(items: List[Dict[str, Any]]):
@@ -309,15 +364,16 @@ def ticker_tape(items: List[Dict[str, Any]]):
         color = "#10B981" if is_up else "#F43F5E"
         icon = "▲" if is_up else "▼"
         sign = "+" if is_up else ""
-        cells += f'''
+        cells += f"""
         <span style="display:inline-flex;align-items:center;gap:6px;margin-right:32px;white-space:nowrap;">
             <strong style="color:#f0f0f5;font-weight:600;">{html.escape(name)}</strong>
             <span style="color:#8b8b9e;font-family:'JetBrains Mono',monospace;">{price:,.2f}</span>
             <span style="color:{color};font-weight:700;font-size:0.75rem;">{icon} {sign}{change:.2f}%</span>
         </span>
-        '''
+        """
 
-    st.html(f'''
+    st.html(
+        f"""
     <div style="
         background: rgba(10,10,15,0.8);
         border-bottom: 1px solid rgba(255,255,255,0.06);
@@ -340,12 +396,16 @@ def ticker_tape(items: List[Dict[str, Any]]):
         100% {{ transform: translateX(-100%); }}
     }}
     </style>
-    ''')
+    """
+    )
 
 
 # ── Data Components ─────────────────────────────────────────
 
-def metric_card(label: str, value: str, delta: str = "", tone: str = "neutral", icon: str = ""):
+
+def metric_card(
+    label: str, value: str, delta: str = "", tone: str = "neutral", icon: str = ""
+):
     """tone: neutral, positive, negative, accent, cyan"""
     tone_map = {
         "neutral": ("#f0f0f5", ""),
@@ -357,11 +417,19 @@ def metric_card(label: str, value: str, delta: str = "", tone: str = "neutral", 
         "amber": ("#F59E0B", "rgba(245,158,11,0.15)"),
     }
     color, glow = tone_map.get(tone, tone_map["neutral"])
-    delta_html = f'''<div style="font-size:0.7rem;color:{color};font-weight:600;margin-top:4px;font-family:'JetBrains Mono',monospace;">{html.escape(delta)}</div>''' if delta else ""
-    icon_html = f'''<span style="font-size:1.1rem;margin-bottom:4px;display:block;">{icon}</span>''' if icon else ""
+    delta_html = (
+        f"""<div style="font-size:0.7rem;color:{color};font-weight:600;margin-top:4px;font-family:'JetBrains Mono',monospace;">{html.escape(delta)}</div>"""
+        if delta
+        else ""
+    )
+    icon_html = (
+        f"""<span style="font-size:1.1rem;margin-bottom:4px;display:block;">{icon}</span>"""
+        if icon
+        else ""
+    )
     glow_shadow = f", 0 0 20px {glow}" if glow else ""
 
-    return f'''
+    return f"""
     <div style="
         background: rgba(18,18,26,0.72);
         border: 1px solid rgba(255,255,255,0.06);
@@ -381,20 +449,32 @@ def metric_card(label: str, value: str, delta: str = "", tone: str = "neutral", 
         </div>
         {delta_html}
     </div>
-    '''
+    """
 
 
 def metric_grid(items: List[Dict[str, Any]], columns: int = 4):
     """items: [{"label": "", "value": "", "delta": "", "tone": "", "icon": ""}, ...]"""
     cells = [metric_card(**item) for item in items]
     grid_style = f"display:grid;grid-template-columns:repeat({columns},1fr);gap:12px;"
-    st.html(f'''<div style="{grid_style}">{"".join(cells)}</div>''')
+    st.html(f"""<div style="{grid_style}">{"".join(cells)}</div>""")
 
 
 def section_header(title: str, subtitle: str = "", accent: str = "primary"):
-    color = {"primary": "#FF6B35", "cyan": "#00D9FF", "green": "#10B981", "red": "#F43F5E", "violet": "#8B5CF6", "amber": "#F59E0B"}.get(accent, "#FF6B35")
-    subtitle_html = f'''<div style="font-size:0.7rem;color:#4a4a5e;margin-top:2px;font-weight:500;">{html.escape(subtitle)}</div>''' if subtitle else ""
-    st.markdown(f'''
+    color = {
+        "primary": "#FF6B35",
+        "cyan": "#00D9FF",
+        "green": "#10B981",
+        "red": "#F43F5E",
+        "violet": "#8B5CF6",
+        "amber": "#F59E0B",
+    }.get(accent, "#FF6B35")
+    subtitle_html = (
+        f"""<div style="font-size:0.7rem;color:#4a4a5e;margin-top:2px;font-weight:500;">{html.escape(subtitle)}</div>"""
+        if subtitle
+        else ""
+    )
+    st.markdown(
+        f"""
     <div style="margin: 24px 0 12px;">
         <div style="display:flex;align-items:center;gap:8px;">
             <div style="width:4px;height:18px;background:{color};border-radius:2px;box-shadow:0 0 8px {color}40;"></div>
@@ -402,7 +482,9 @@ def section_header(title: str, subtitle: str = "", accent: str = "primary"):
         </div>
         {subtitle_html}
     </div>
-    ''', unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def badge(label: str, tone: str = "neutral") -> str:
@@ -416,12 +498,19 @@ def badge(label: str, tone: str = "neutral") -> str:
         "violet": ("#8B5CF6", "rgba(139,92,246,0.12)"),
     }
     color, bg = tone_map.get(tone, tone_map["neutral"])
-    return f'''<span style="background:{bg};color:{color};padding:2px 8px;border-radius:6px;font-size:0.65rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border:1px solid {color}30;">{html.escape(label)}</span>'''
+    return f"""<span style="background:{bg};color:{color};padding:2px 8px;border-radius:6px;font-size:0.65rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;border:1px solid {color}30;">{html.escape(label)}</span>"""
 
 
 def info_card(title: str, body: str, badge_html: str = "", accent: str = "primary"):
-    color = {"primary": "#FF6B35", "cyan": "#00D9FF", "green": "#10B981", "amber": "#F59E0B", "violet": "#8B5CF6"}.get(accent, "#FF6B35")
-    st.markdown(f'''
+    color = {
+        "primary": "#FF6B35",
+        "cyan": "#00D9FF",
+        "green": "#10B981",
+        "amber": "#F59E0B",
+        "violet": "#8B5CF6",
+    }.get(accent, "#FF6B35")
+    st.markdown(
+        f"""
     <div style="
         background: rgba(18,18,26,0.72);
         border: 1px solid rgba(255,255,255,0.06);
@@ -440,36 +529,43 @@ def info_card(title: str, body: str, badge_html: str = "", accent: str = "primar
             {badge_html}
         </div>
     </div>
-    ''', unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 # ── Table Components ────────────────────────────────────────
+
 
 def data_table_header(columns: List[str], flexes: Optional[List[int]] = None) -> str:
     flexes = flexes or [1] * len(columns)
     cells = ""
     for col, flex in zip(columns, flexes):
-        cells += f'''<div style="flex:{flex};color:#FF6B35;font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;font-family:'Inter',sans-serif;">{html.escape(col)}</div>'''
-    return f'''<div style="display:flex;background:rgba(255,255,255,0.02);border-bottom:1px solid rgba(255,255,255,0.06);padding:8px 12px;border-radius:8px 8px 0 0;">{cells}</div>'''
+        cells += f"""<div style="flex:{flex};color:#FF6B35;font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;font-family:'Inter',sans-serif;">{html.escape(col)}</div>"""
+    return f"""<div style="display:flex;background:rgba(255,255,255,0.02);border-bottom:1px solid rgba(255,255,255,0.06);padding:8px 12px;border-radius:8px 8px 0 0;">{cells}</div>"""
 
 
-def data_table_row(cells: List[str], flexes: Optional[List[int]] = None, highlight: bool = False) -> str:
+def data_table_row(
+    cells: List[str], flexes: Optional[List[int]] = None, highlight: bool = False
+) -> str:
     flexes = flexes or [1] * len(cells)
     bg = "rgba(255,107,53,0.03)" if highlight else "transparent"
     html_cells = ""
     for cell, flex in zip(cells, flexes):
-        html_cells += f'''<div style="flex:{flex};color:#8b8b9e;font-size:0.78rem;font-family:'JetBrains Mono',monospace;padding:2px 0;">{cell}</div>'''
-    return f'''<div style="display:flex;padding:8px 12px;background:{bg};border-bottom:1px solid rgba(255,255,255,0.03);transition:all 0.15s;">{html_cells}</div>'''
+        html_cells += f"""<div style="flex:{flex};color:#8b8b9e;font-size:0.78rem;font-family:'JetBrains Mono',monospace;padding:2px 0;">{cell}</div>"""
+    return f"""<div style="display:flex;padding:8px 12px;background:{bg};border-bottom:1px solid rgba(255,255,255,0.03);transition:all 0.15s;">{html_cells}</div>"""
 
 
 # ── Status & Loading ────────────────────────────────────────
 
+
 def live_dot() -> str:
-    return '''<span style="display:inline-block;width:6px;height:6px;background:#10B981;border-radius:50%;box-shadow:0 0 8px rgba(16,185,129,0.5);margin-right:6px;animation:pulse 2s infinite;"></span>'''
+    return """<span style="display:inline-block;width:6px;height:6px;background:#10B981;border-radius:50%;box-shadow:0 0 8px rgba(16,185,129,0.5);margin-right:6px;animation:pulse 2s infinite;"></span>"""
 
 
 def status_pill(status: str, environment: str = "Production"):
-    st.markdown(f'''
+    st.markdown(
+        f"""
     <div style="
         display: inline-flex;
         align-items: center;
@@ -487,7 +583,9 @@ def status_pill(status: str, environment: str = "Production"):
         {live_dot()}
         <span>{html.escape(status)} · {html.escape(environment)}</span>
     </div>
-    ''', unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def loading_skeleton(height: int = 120, lines: int = 3):
@@ -495,8 +593,9 @@ def loading_skeleton(height: int = 120, lines: int = 3):
     bars = ""
     for i in range(lines):
         width = 100 - (i * 15)
-        bars += f'''<div style="height:10px;width:{width}%;background:linear-gradient(90deg,rgba(255,255,255,0.03),rgba(255,255,255,0.08),rgba(255,255,255,0.03));background-size:200% 100%;border-radius:4px;margin-bottom:10px;animation:shimmer 1.5s infinite;"></div>'''
-    st.markdown(f'''
+        bars += f"""<div style="height:10px;width:{width}%;background:linear-gradient(90deg,rgba(255,255,255,0.03),rgba(255,255,255,0.08),rgba(255,255,255,0.03));background-size:200% 100%;border-radius:4px;margin-bottom:10px;animation:shimmer 1.5s infinite;"></div>"""
+    st.markdown(
+        f"""
     <div style="padding:16px;background:rgba(18,18,26,0.5);border:1px solid rgba(255,255,255,0.04);border-radius:12px;min-height:{height}px;">
         {bars}
     </div>
@@ -506,10 +605,13 @@ def loading_skeleton(height: int = 120, lines: int = 3):
         100% {{ background-position: 200% 0; }}
     }}
     </style>
-    ''', unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 # ── Toast & Modal ───────────────────────────────────────────
+
 
 def toast_notification(message: str, tone: str = "accent"):
     tone_map = {
@@ -519,7 +621,8 @@ def toast_notification(message: str, tone: str = "accent"):
         "cyan": ("#00D9FF", "rgba(0,217,255,0.12)"),
     }
     color, bg = tone_map.get(tone, tone_map["accent"])
-    st.markdown(f'''
+    st.markdown(
+        f"""
     <div style="
         position: fixed;
         top: 20px;
@@ -544,12 +647,20 @@ def toast_notification(message: str, tone: str = "accent"):
         to {{ opacity: 1; transform: translateY(0); }}
     }}
     </style>
-    ''', unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def modal_overlay(title: str, content: str, accent: str = "primary"):
-    color = {"primary": "#FF6B35", "cyan": "#00D9FF", "green": "#10B981", "red": "#F43F5E"}.get(accent, "#FF6B35")
-    st.markdown(f'''
+    color = {
+        "primary": "#FF6B35",
+        "cyan": "#00D9FF",
+        "green": "#10B981",
+        "red": "#F43F5E",
+    }.get(accent, "#FF6B35")
+    st.markdown(
+        f"""
     <div style="
         background: rgba(18,18,26,0.9);
         border: 1px solid rgba(255,255,255,0.08);
@@ -562,10 +673,13 @@ def modal_overlay(title: str, content: str, accent: str = "primary"):
         <div style="font-size:1rem;font-weight:700;color:{color};margin-bottom:12px;font-family:'Inter',sans-serif;">{html.escape(title)}</div>
         <div style="color:#8b8b9e;font-size:0.85rem;line-height:1.6;">{content}</div>
     </div>
-    ''', unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 # ── Chart Wrapper ───────────────────────────────────────────
+
 
 def chart_container(title: str, subtitle: str = ""):
     section_header(title, subtitle)
@@ -573,13 +687,15 @@ def chart_container(title: str, subtitle: str = ""):
 
 # ── Command Palette ─────────────────────────────────────────
 
+
 def command_palette():
     """
     Render a Command Palette search interface.
     In Streamlit, true global keyboard shortcuts are limited, so this renders
     a prominent search bar that acts as the command hub.
     """
-    st.markdown("""
+    st.markdown(
+        """
     <style>
     .cmd-palette-container {
         position: relative;
@@ -632,7 +748,9 @@ def command_palette():
         <input type="text" class="cmd-palette-input" placeholder="Search commands, pages, actions..." readonly onclick="document.querySelector('[data-testid=\'stTextInput\'] input').focus()">
         <span class="cmd-palette-kbd">CTRL+K</span>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def command_palette_modal():
@@ -649,7 +767,7 @@ def command_palette_modal():
         "",
         placeholder="⌘ Type a command... (e.g. 'run analysis', 'go to portfolio')",
         key="cmd_palette_query",
-        label_visibility="collapsed"
+        label_visibility="collapsed",
     )
 
     if query:
@@ -676,12 +794,15 @@ def command_palette_modal():
         if any(k in query_lower for k in ["logout", "sign out"]):
             actions.append(("action", "logout", "◀ Logout"))
         if any(k in query_lower for k in ["theme", "dark", "light", "terminal"]):
-            actions.append(("action", "toggle_theme", "◈ Toggle Theme (Axiom / Legacy)"))
+            actions.append(
+                ("action", "toggle_theme", "◈ Toggle Theme (Axiom / Legacy)")
+            )
         if any(k in query_lower for k in ["report", "export", "download"]):
             actions.append(("action", "export_report", "◉ Export Full Report"))
 
         if actions:
-            st.markdown("""
+            st.markdown(
+                """
             <div style="
                 background: rgba(18,18,26,0.95);
                 border: 1px solid rgba(255,255,255,0.08);
@@ -694,12 +815,15 @@ def command_palette_modal():
                 max-height: 300px;
                 overflow-y: auto;
             ">
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
             for i, (atype, target, label) in enumerate(actions[:6]):
                 icon = "→" if atype == "nav" else "⚡"
                 color = "#FF6B35" if atype == "nav" else "#00D9FF"
-                st.markdown(f"""
+                st.markdown(
+                    f"""
                 <div style="
                     display: flex;
                     align-items: center;
@@ -715,29 +839,43 @@ def command_palette_modal():
                     <span style="font-family: 'Inter', sans-serif;">{label}</span>
                     <span style="margin-left: auto; font-size: 0.65rem; color: #4a4a5e; font-family: 'JetBrains Mono', monospace;">{atype.upper()}</span>
                 </div>
-                """, unsafe_allow_html=True)
+                """,
+                    unsafe_allow_html=True,
+                )
 
             st.markdown("</div>", unsafe_allow_html=True)
 
             # Execute the first action if Enter is pressed (simulated via button)
             for atype, target, label in actions[:1]:
                 if atype == "nav":
-                    if st.button(f"Go to {label}", key="cmd_nav", width='stretch'):
+                    if st.button(f"Go to {label}", key="cmd_nav", width="stretch"):
                         st.switch_page(target)
                 elif atype == "action":
                     if target == "logout":
-                        if st.button("Logout", key="cmd_logout", width='stretch'):
-                            for k in ["logged_in", "user", "current_portfolio", "results"]:
+                        if st.button("Logout", key="cmd_logout", width="stretch"):
+                            for k in [
+                                "logged_in",
+                                "user",
+                                "current_portfolio",
+                                "results",
+                            ]:
                                 st.session_state.pop(k, None)
                             st.switch_page("app.py")
                     elif target == "toggle_theme":
                         from frontend.ui.theme import theme_toggle
+
                         theme_toggle()
                     elif target == "run_analysis":
-                        if st.button("▶ Run Analysis", key="cmd_run", type="primary", width='stretch'):
+                        if st.button(
+                            "▶ Run Analysis",
+                            key="cmd_run",
+                            type="primary",
+                            width="stretch",
+                        ):
                             st.switch_page("pages/3_Analysis.py")
         else:
-            st.markdown("""
+            st.markdown(
+                """
             <div style="
                 background: rgba(18,18,26,0.9);
                 border: 1px solid rgba(255,255,255,0.06);
@@ -750,20 +888,31 @@ def command_palette_modal():
             ">
                 No commands found. Try: "go to portfolio", "run analysis", "toggle theme"
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
 
 # ── Theme Toggle in Sidebar ─────────────────────────────────
+
 
 def sidebar_theme_toggle():
     """Render a compact theme toggle in the sidebar."""
     current = st.session_state.get("axiom_theme", "axiom")
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("◈ Axiom", width='stretch', type="primary" if current == "axiom" else "secondary"):
+        if st.button(
+            "◈ Axiom",
+            width="stretch",
+            type="primary" if current == "axiom" else "secondary",
+        ):
             st.session_state["axiom_theme"] = "axiom"
             st.rerun()
     with col2:
-        if st.button("◫ Terminal", width='stretch', type="primary" if current == "legacy" else "secondary"):
+        if st.button(
+            "◫ Terminal",
+            width="stretch",
+            type="primary" if current == "legacy" else "secondary",
+        ):
             st.session_state["axiom_theme"] = "legacy"
             st.rerun()

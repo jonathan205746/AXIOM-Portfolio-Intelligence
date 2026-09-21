@@ -27,11 +27,12 @@ from typing import cast
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 TRADING_DAYS = 252
-CONFIDENCE_95 = 0.05    # 5% tail → 95% VaR
-CONFIDENCE_99 = 0.01    # 1% tail → 99% VaR
+CONFIDENCE_95 = 0.05  # 5% tail → 95% VaR
+CONFIDENCE_99 = 0.01  # 1% tail → 99% VaR
 
 
 # ── Risk Analyzer ─────────────────────────────────────────────────────────────
+
 
 class RiskAnalyzer:
     """
@@ -46,7 +47,12 @@ class RiskAnalyzer:
                   Used only for display symbols in interpretation strings.
     """
 
-    def __init__(self, price_data: pd.DataFrame, market_data: Optional[pd.DataFrame] = None, currency: str = "USD"):
+    def __init__(
+        self,
+        price_data: pd.DataFrame,
+        market_data: Optional[pd.DataFrame] = None,
+        currency: str = "USD",
+    ):
         self.price_data = price_data
         self.price_data = self.price_data.loc[:, ~self.price_data.columns.duplicated()]
         self.tickers = list(self.price_data.columns)
@@ -54,7 +60,8 @@ class RiskAnalyzer:
         self.market_data = market_data
         self.market_returns = (
             market_data.pct_change(fill_method=None).dropna()
-            if market_data is not None else None
+            if market_data is not None
+            else None
         )
         self.currency = currency.upper()
         self.currency_symbol = "₹" if self.currency == "INR" else "$"
@@ -89,8 +96,9 @@ class RiskAnalyzer:
 
     # ── Value at Risk ─────────────────────────────────────────────────────────
 
-    def historical_var(self, weights: dict, confidence: float = 0.95,
-                       portfolio_value: float = 100_000) -> dict:
+    def historical_var(
+        self, weights: dict, confidence: float = 0.95, portfolio_value: float = 100_000
+    ) -> dict:
         """
         Historical VaR — uses actual return distribution.
 
@@ -116,17 +124,18 @@ class RiskAnalyzer:
         return {
             "method": "historical",
             "confidence": confidence,
-            "var_pct": round(var_pct, 6),         # negative = loss
-            "var_usd": round(var_amount, 2),      # key kept for backward compat
-            "var_amount": round(var_amount, 2),   # currency-agnostic key
+            "var_pct": round(var_pct, 6),  # negative = loss
+            "var_usd": round(var_amount, 2),  # key kept for backward compat
+            "var_amount": round(var_amount, 2),  # currency-agnostic key
             "interpretation": (
-                    f"With {int(confidence*100)}% confidence, max 1-day loss = "
-                    f"{sym}{var_amount:,.0f} ({abs(var_pct)*100:.2f}%)"
-            )
+                f"With {int(confidence*100)}% confidence, max 1-day loss = "
+                f"{sym}{var_amount:,.0f} ({abs(var_pct)*100:.2f}%)"
+            ),
         }
 
-    def parametric_var(self, weights: dict, confidence: float = 0.95,
-                       portfolio_value: float = 100_000) -> dict:
+    def parametric_var(
+        self, weights: dict, confidence: float = 0.95, portfolio_value: float = 100_000
+    ) -> dict:
         """
         Parametric VaR — assumes normal distribution of returns.
         Formula: VaR = -(mean + z_score * std) * portfolio_value
@@ -146,7 +155,7 @@ class RiskAnalyzer:
         std = portfolio_returns.std()
         z_score = stats.norm.ppf(1 - confidence)
 
-        var_pct = mean + z_score * std   # Will be negative (loss)
+        var_pct = mean + z_score * std  # Will be negative (loss)
         var_amount = abs(var_pct) * portfolio_value
         sym = self.currency_symbol
 
@@ -159,7 +168,7 @@ class RiskAnalyzer:
             "interpretation": (
                 f"Parametric {int(confidence*100)}% 1-day VaR = "
                 f"{sym}{var_amount:,.0f} ({abs(var_pct)*100:.2f}%)"
-            )
+            ),
         }
 
     # ── Drawdown ──────────────────────────────────────────────────────────────
@@ -190,14 +199,14 @@ class RiskAnalyzer:
                 "scope": "portfolio",
                 "max_drawdown_pct": round(mdd * 100, 4),
                 "max_drawdown_decimal": round(mdd, 6),
-                "interpretation": f"Worst peak-to-trough drop: {mdd*100:.2f}%"
+                "interpretation": f"Worst peak-to-trough drop: {mdd*100:.2f}%",
             }
 
         else:
             # Per-ticker
             results = {}
             for ticker in self.tickers:
-                cumulative = (1 + self.returns[ticker]).cumprod()  
+                cumulative = (1 + self.returns[ticker]).cumprod()
                 rolling_max = cumulative.cummax()
                 drawdown = (cumulative - rolling_max) / rolling_max
                 mdd = float(drawdown.min())
@@ -256,14 +265,13 @@ class RiskAnalyzer:
             # Align
             aligned = pd.concat([self.returns[ticker], market], axis=1).dropna()
             aligned.columns = ["stock", "market"]
-            
+
             cov = cast(float, aligned.cov().at["stock", "market"])
             var = cast(float, aligned["market"].var())
             beta_val = cov / var if var != 0.0 else 0.0
             betas[ticker] = round(float(beta_val), 4)
 
         return betas
-
 
     # ── Downside / Tail Risk v3 ───────────────────────────────────────────────
 
@@ -275,14 +283,15 @@ class RiskAnalyzer:
             return 0.0
         daily_target = target_return / TRADING_DAYS
         downside = np.minimum(port - daily_target, 0.0)
-        downside_dev = float(np.sqrt(np.mean(downside ** 2)) * np.sqrt(TRADING_DAYS))
+        downside_dev = float(np.sqrt(np.mean(downside**2)) * np.sqrt(TRADING_DAYS))
         annual_return = float(np.mean(port) * TRADING_DAYS)
         if downside_dev <= 1e-12:
             return 0.0
         return round((annual_return - target_return) / downside_dev, 6)
 
-    def expected_shortfall(self, weights: dict, confidence: float = 0.95,
-                           portfolio_value: float = 100_000) -> dict:
+    def expected_shortfall(
+        self, weights: dict, confidence: float = 0.95, portfolio_value: float = 100_000
+    ) -> dict:
         """Historical Expected Shortfall / CVaR beyond the VaR threshold."""
         w = np.array([weights.get(t, 0.0) for t in self.tickers], dtype=float)
         port = self.returns.values @ w
@@ -320,7 +329,7 @@ class RiskAnalyzer:
             dict with HHI score and risk label
         """
         w = np.array(list(weights.values()))
-        hhi = float(np.sum(w ** 2))
+        hhi = float(np.sum(w**2))
         min_hhi = 1.0 / len(self.tickers)  # perfectly diversified
 
         if hhi < 0.15:
@@ -334,7 +343,7 @@ class RiskAnalyzer:
             "hhi": round(hhi, 6),
             "min_possible_hhi": round(min_hhi, 6),
             "label": label,
-            "interpretation": f"HHI={hhi:.3f} ({label}) | min={min_hhi:.3f}"
+            "interpretation": f"HHI={hhi:.3f} ({label}) | min={min_hhi:.3f}",
         }
 
     # ── Full Report ───────────────────────────────────────────────────────────
@@ -368,24 +377,21 @@ class RiskAnalyzer:
         report = {
             "volatility": {
                 "per_ticker_annualized": vol_per_ticker,
-                "portfolio_annualized": port_vol
+                "portfolio_annualized": port_vol,
             },
             "value_at_risk": {
                 "historical_95": hist_var_95,
                 "historical_99": hist_var_99,
-                "parametric_95": param_var_95
+                "parametric_95": param_var_95,
             },
-            "drawdown": {
-                "portfolio": mdd_portfolio,
-                "per_ticker": mdd_tickers
-            },
+            "drawdown": {"portfolio": mdd_portfolio, "per_ticker": mdd_tickers},
             "correlation": {
                 "matrix": corr.to_dict(),
-                "high_correlation_pairs": high_corr
+                "high_correlation_pairs": high_corr,
             },
             "concentration": concentration,
             "downside": {"sortino_ratio": sortino},
-            "tail_risk": {"expected_shortfall_95": es95}
+            "tail_risk": {"expected_shortfall_95": es95},
         }
 
         # Print summary
@@ -413,6 +419,7 @@ if __name__ == "__main__":
 
     import sys
     import os
+
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
     from src.data.stock_fetcher import fetch_stock_data
