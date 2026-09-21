@@ -93,6 +93,7 @@ def generate_axiom_report(portfolio, results, display_names):
     sentiment_scores = results.get("sentiment_scores", {})
     risk_report = results.get("risk_report", {})
     recommendations = results.get("recommendations", [])
+    rebalance_plan = results.get("rebalance_plan", {})
     frontier_df = results.get(
         "frontier_df",
         pd.DataFrame(),
@@ -137,7 +138,6 @@ def generate_axiom_report(portfolio, results, display_names):
     score_label = f'{health["label"]} · {health["grade"]}'
 
     pf_curr = portfolio.get("currency", "USD")
-    currency_symbol = "₹" if pf_curr == "INR" else "$"
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     gen_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     pf_name = portfolio.get("name", "PORTFOLIO").upper()
