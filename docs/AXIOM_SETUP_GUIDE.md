@@ -213,7 +213,7 @@ docker compose exec frontend python -c 'import os, sqlite3; from src.database.db
 
 ## Optional FastAPI service
 
-The public AWS demo uses Streamlit directly. If the repository’s optional API profile is configured:
+The operator-restricted AWS EC2 demonstration uses Streamlit directly. If the repository’s optional API profile is configured:
 
 ```bash
 docker compose --profile api up -d --build
@@ -231,7 +231,7 @@ Or run locally when `backend/app/main.py` exists:
 uvicorn backend.app.main:app --reload --port 8000
 ```
 
-Always compare `docs/api_reference.md` with the running `/openapi.json` schema.
+Always compare [`AXIOM_API_REFERENCE.md`](AXIOM_API_REFERENCE.md) with the running `/openapi.json` schema.
 
 The optional API requires `SECRET_KEY` and rejects empty, short, or placeholder
 values during startup. Existing application accounts do not need a schema
@@ -382,7 +382,9 @@ Use a manual host-side build only as a documented emergency procedure. It is
 not equivalent to the immutable image tested by CI and should not be described
 as the successful production release.
 
-## Upload `.env` to EC2
+## Manual `.env` recovery path
+
+The supported deployment path is GitHub Actions + IAM OIDC + ECR + Systems Manager. The procedure below is a controlled manual recovery/debugging path for the current single-host demonstration, not the preferred long-term production secret-delivery model.
 
 Run `scp` from Windows PowerShell, not inside EC2:
 
