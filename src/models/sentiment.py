@@ -72,7 +72,7 @@ class SentimentAnalyzer:
         Example:
             result = analyzer.analyze("Apple beats earnings")
             print(result["label"])    # "positive"
-            print(headline_result["positive"]) # 0.9123
+            print(result["positive"]) # 0.9123
         """
         # Tokenize — convert text to token IDs FinBERT understands
         inputs = self.tokenizer(
@@ -234,7 +234,7 @@ def get_sentiment_score(text: str) -> float:
     Negative values = bearish
     """
     result = _get_analyzer().analyze(text)
-    return round(headline_result["positive"] - result["negative"], 4)
+    return round(result["positive"] - result["negative"], 4)
 
 
 def aggregate_sentiment(texts):
@@ -295,7 +295,7 @@ if __name__ == "__main__":
     aggregate_result = analyzer.aggregate_sentiment(apple_texts)
     print(f"\n  Articles analyzed: {aggregate_result['article_count']}")
     print(f"  Overall score: {aggregate_result['score']} (range: -1.0 to +1.0)")
-    print(f"  Overall label: {headline_result['label'].upper()}")
+    print(f"  Overall label: {aggregate_result['label'].upper()}")
     print("\n  Individual article scores:")
     for i, (text, breakdown) in enumerate(
         zip(apple_texts, aggregate_result["breakdown"])
@@ -313,7 +313,7 @@ if __name__ == "__main__":
             real_result = analyzer.aggregate_sentiment(texts)
             print("\n  Real AAPL news sentiment:")
             print(
-                f"  Score: {real_result['score']} | Label: {real_headline_result['label'].upper()}"
+                f"  Score: {real_result['score']} | Label: {real_result['label'].upper()}"
             )
             print(f"  Based on {real_result['article_count']} real articles")
         else:
