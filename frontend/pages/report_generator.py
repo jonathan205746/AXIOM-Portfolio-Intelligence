@@ -93,12 +93,6 @@ def generate_axiom_report(portfolio, results, display_names):
     sentiment_scores = results.get("sentiment_scores", {})
     risk_report = results.get("risk_report", {})
     recommendations = results.get("recommendations", [])
-    combined = results.get("combined", {})
-    rebalance_plan = results.get("rebalance_plan", {})
-    current_allocation = results.get(
-        "current_allocation",
-        {},
-    )
     frontier_df = results.get(
         "frontier_df",
         pd.DataFrame(),

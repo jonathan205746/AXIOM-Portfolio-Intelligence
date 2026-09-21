@@ -415,7 +415,6 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
         prices = prices[available]
         if isinstance(prices, pd.Series):
             prices = prices.to_frame()
-        returns = prices.pct_change(fill_method=None).dropna()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Price fetch failed: {str(e)}")
 
@@ -563,7 +562,6 @@ def benchmark_spy(portfolio_id: int, user: dict = Depends(get_current_user)):
     import pandas as pd
     import numpy as np
 
-    results = {}  # In real impl, fetch from session or re-run analysis
     require_portfolio(portfolio_id, user["id"])
     holdings = get_portfolio_holdings(portfolio_id, user_id=user["id"])
     tickers = [h["ticker"] for h in holdings]

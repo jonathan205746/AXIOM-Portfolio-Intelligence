@@ -8,4 +8,12 @@ select = ["E4", "E7", "E9", "F", "I"]
 ignore = []
 
 [lint.per-file-ignores]
+# FastAPI adjusts sys.path before project imports; Streamlit requires page
+# configuration before design-system imports. Keep these exceptions narrow.
+"backend/app/main.py" = ["E402"]
+"frontend/app.py" = ["E402"]
+"frontend/pages/1_Login.py" = ["E402"]
+"frontend/pages/2_Portfolio.py" = ["E402"]
+"frontend/pages/3_Analysis.py" = ["E402"]
+"frontend/pages/4_History.py" = ["E402"]
 "tests/**" = ["F401"]
