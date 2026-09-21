@@ -16,7 +16,7 @@ No scanner coverage was disabled or globally excluded.
 
 | Package | Advisory | Installed | Fixed | Exposure path | Mitigation / decision |
 |---|---|---:|---:|---|---|
-| msgpack | GHSA-6v7p-g79w-8964 | 1.1.2 | 1.2.1 | Packaging/tooling dependency detected in the runtime image; not an AXIOM application-level pinned dependency | Accepted temporarily pending upstream/base-image packaging refresh. Application does not directly process MessagePack input through this dependency. Continue scanning and upgrade when dependency owner/base image provides fixed copy. |
+| msgpack | GHSA-6v7p-g79w-8964 | 1.1.2 | 1.2.1 | Vendored inside `pip 26.2.1` under `pip/_vendor/msgpack`; not installed or importable as an AXIOM application dependency | Accepted residual tooling exposure. AXIOM does not directly import or process MessagePack through this vendored copy. Continue monitoring pip/base-image updates and re-scan when the vendored version is refreshed. |
 | setuptools | CVE-2025-47273 | 70.3.0 | 78.1.1 | Residual packaging metadata detected by Trivy despite AXIOM explicitly installing setuptools 84.0.0 | Accepted as residual packaging/base-image exposure. AXIOM's active setuptools is pinned to 84.0.0. Continue monitoring and remove stale/vendored copy when upstream image/tooling permits. |
 
 ## Remediated runtime findings
