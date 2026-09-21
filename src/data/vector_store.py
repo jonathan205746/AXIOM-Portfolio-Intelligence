@@ -6,14 +6,15 @@ Run this file directly to test:
     python src/data/vector_store.py
 """
 
+import logging
+import os
+import pickle
+from typing import Dict, List
+
 import faiss
 import numpy as np
-import pickle
-import os
-import logging
-from typing import List, Dict, Tuple, Optional
-from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
+from sentence_transformers import SentenceTransformer
 
 load_dotenv()
 
@@ -247,8 +248,8 @@ if __name__ == "__main__":
 
     # ── Test 2: Fetch and add news ──
     print("\n[2] Fetching news to embed...")
+
     from src.data.news_fetcher import fetch_news_batch
-    import time
 
     tickers = ["AAPL", "MSFT", "GOOGL", "AMZN"]
     company_names = {

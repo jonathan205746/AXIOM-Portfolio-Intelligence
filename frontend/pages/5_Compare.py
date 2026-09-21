@@ -3,29 +3,29 @@ Axiom Benchmark Comparison V1.0.0
 Portfolio vs SPY & equal-weight with glassmorphic terminal aesthetic.
 """
 
-import sys, os
+import os
+import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-from typing import Any
-from src.database.db import get_portfolio_holdings
-from src.data.stock_fetcher import fetch_stock_data
 
-# ── Design System ───────────────────────────────────────────
-from frontend.ui.theme import inject_theme, apply_plotly_theme
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+
 from frontend.ui.components import (
-    page_sidebar,
+    badge,
     command_bar,
-    section_header,
-    metric_grid,
     glass_container,
     info_card,
-    badge,
+    page_sidebar,
+    section_header,
 )
+
+# ── Design System ───────────────────────────────────────────
+from frontend.ui.theme import apply_plotly_theme, inject_theme
+from src.data.stock_fetcher import fetch_stock_data
 
 st.set_page_config(
     page_title="Portfolio | Axiom",

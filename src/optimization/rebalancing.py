@@ -13,7 +13,6 @@ from typing import Any, Final
 
 from src.data.market_data import market_currency
 
-
 REBALANCE_THRESHOLD: Final[float] = 0.01
 EXCLUSION_THRESHOLD: Final[float] = 0.001
 FLOAT_TOLERANCE: Final[float] = 1e-12

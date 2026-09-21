@@ -4,9 +4,10 @@ Tests for data fetching modules.
 Run: pytest tests/
 """
 
-import pytest
+from unittest.mock import MagicMock, patch
+
 import pandas as pd
-from unittest.mock import patch, MagicMock
+import pytest
 
 
 class TestStockFetcher:
@@ -30,7 +31,7 @@ class TestStockFetcher:
 
     def test_calculate_returns_no_nan(self):
         """Returns DataFrame should not have NaN after dropna."""
-        from src.data.stock_fetcher import fetch_stock_data, calculate_returns
+        from src.data.stock_fetcher import calculate_returns, fetch_stock_data
 
         prices = fetch_stock_data(["AAPL", "MSFT"], period="1mo")
         returns = calculate_returns(prices)
@@ -38,7 +39,7 @@ class TestStockFetcher:
 
     def test_calculate_returns_range(self):
         """Daily returns should be between -50% and +50% for normal stocks."""
-        from src.data.stock_fetcher import fetch_stock_data, calculate_returns
+        from src.data.stock_fetcher import calculate_returns, fetch_stock_data
 
         prices = fetch_stock_data(["AAPL"], period="6mo")
         returns = calculate_returns(prices)
@@ -50,7 +51,7 @@ class TestPortfolioOptimization:
 
     def test_weights_sum_to_one(self):
         """Optimized weights must sum to 1.0."""
-        from src.data.stock_fetcher import fetch_stock_data, calculate_returns
+        from src.data.stock_fetcher import calculate_returns, fetch_stock_data
         from src.optimization.portfolio import optimize_portfolio
 
         prices = fetch_stock_data(["AAPL", "MSFT", "GOOGL"], period="6mo")
@@ -61,7 +62,7 @@ class TestPortfolioOptimization:
 
     def test_weights_non_negative(self):
         """No short selling — all weights must be >= 0."""
-        from src.data.stock_fetcher import fetch_stock_data, calculate_returns
+        from src.data.stock_fetcher import calculate_returns, fetch_stock_data
         from src.optimization.portfolio import optimize_portfolio
 
         prices = fetch_stock_data(["AAPL", "MSFT", "GOOGL"], period="6mo")
@@ -72,7 +73,7 @@ class TestPortfolioOptimization:
 
     def test_sharpe_ratio_positive(self):
         """Optimized Sharpe ratio should be positive for reasonable stocks."""
-        from src.data.stock_fetcher import fetch_stock_data, calculate_returns
+        from src.data.stock_fetcher import calculate_returns, fetch_stock_data
         from src.optimization.portfolio import optimize_portfolio
 
         prices = fetch_stock_data(["AAPL", "MSFT"], period="1y")

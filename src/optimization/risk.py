@@ -18,11 +18,11 @@ Usage:
     print(report)
 """
 
+from typing import Optional, cast
+
 import numpy as np
 import pandas as pd
 from scipy import stats
-from typing import Optional
-from typing import cast
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -359,7 +359,7 @@ class RiskAnalyzer:
         Returns:
             dict with all risk metrics
         """
-        print(f"\n[RiskAnalyzer] Generating full risk report...")
+        print("\n[RiskAnalyzer] Generating full risk report...")
 
         vol_per_ticker = self.annualized_volatility()
         port_vol = self.portfolio_volatility(weights)
@@ -405,7 +405,7 @@ class RiskAnalyzer:
         if high_corr:
             print(f"  High Corr Pairs      : {high_corr}")
         else:
-            print(f"  High Corr Pairs      : None above 0.8 threshold ✅")
+            print("  High Corr Pairs      : None above 0.8 threshold ✅")
 
         return report
 
@@ -417,8 +417,8 @@ if __name__ == "__main__":
     print("RISK ANALYZER TEST")
     print("=" * 60)
 
-    import sys
     import os
+    import sys
 
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
@@ -452,7 +452,7 @@ if __name__ == "__main__":
     for t, mdd in report["drawdown"]["per_ticker"].items():
         print(f"  {t}: {mdd:.2f}%")
 
-    print(f"\nCorrelation Matrix:")
+    print("\nCorrelation Matrix:")
     print(pd.DataFrame(report["correlation"]["matrix"]).round(3))
 
     print("\n✅ Risk analysis working.")

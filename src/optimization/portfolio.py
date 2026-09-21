@@ -22,11 +22,11 @@ Usage:
     print(result)
 """
 
+from typing import cast
+
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
-from typing import Optional
-from typing import cast
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -123,7 +123,7 @@ class PortfolioOptimizer:
                 - sharpe_ratio: Sharpe ratio
                 - success: bool
         """
-        print(f"\n[PortfolioOptimizer] Running Sharpe ratio optimization...")
+        print("\n[PortfolioOptimizer] Running Sharpe ratio optimization...")
 
         # Equal weight starting point
         initial_weights = np.array([1.0 / self.n] * self.n)
@@ -159,7 +159,7 @@ class PortfolioOptimizer:
 
         if not result.success:
             print(f"  [WARNING] Optimizer did not fully converge: {result.message}")
-            print(f"  Using best weights found so far.")
+            print("  Using best weights found so far.")
 
         # Clean up weights (remove floating point noise below 0.001)
         weights = np.clip(result.x, 0, 1)
@@ -316,8 +316,8 @@ if __name__ == "__main__":
     print("=" * 60)
 
     # Import stock fetcher to get real data
-    import sys
     import os
+    import sys
 
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 

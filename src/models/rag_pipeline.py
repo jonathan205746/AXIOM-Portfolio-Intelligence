@@ -8,13 +8,13 @@ LLM: Groq-hosted model configured through GROQ_MODEL.
 
 import os
 import time
-from dotenv import load_dotenv
 from typing import Any
-from langchain_groq import ChatGroq
+
+from dotenv import load_dotenv
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_groq import ChatGroq
 
 from src.utils.sentiment import classify_sentiment
-
 
 load_dotenv()
 

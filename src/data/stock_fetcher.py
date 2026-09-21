@@ -7,15 +7,12 @@ Run this file directly to test:
     python src/data/stock_fetcher.py
 """
 
-import yfinance as yf
-import pandas as pd
-import numpy as np
-from typing import List, Dict, Optional
-from datetime import datetime
 import logging
-import os
-import warnings
-from pathlib import Path
+from typing import Dict, List
+
+import numpy as np
+import pandas as pd
+import yfinance as yf
 
 # Set up logging
 logging.basicConfig(

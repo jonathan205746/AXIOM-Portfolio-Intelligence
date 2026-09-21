@@ -3,7 +3,8 @@ Axiom Dashboard V1.0.0
 Institutional-grade portfolio intelligence hub.
 """
 
-import sys, os
+import os
+import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -22,20 +23,18 @@ st.set_page_config(
 )
 
 # ── Inject Design System ────────────────────────────────────
-from frontend.ui.theme import inject_theme
 from frontend.ui.components import (
-    sidebar_brand,
-    sidebar_user,
-    sidebar_nav_item,
+    badge,
     command_bar,
-    ticker_tape,
+    info_card,
     metric_grid,
     section_header,
-    info_card,
-    badge,
-    status_pill,
-    glass_panel,
+    sidebar_brand,
+    sidebar_nav_item,
+    sidebar_user,
+    ticker_tape,
 )
+from frontend.ui.theme import inject_theme
 
 inject_theme()
 

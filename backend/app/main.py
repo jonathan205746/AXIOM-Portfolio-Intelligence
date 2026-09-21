@@ -5,9 +5,9 @@ REST API with JWT auth that wraps your existing src.* modules.
 Endpoints: Auth, Portfolios, Holdings, Analysis, History, Benchmark
 """
 
+import logging
 import os
 import sys
-import logging
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -18,9 +18,9 @@ from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, EmailStr, Field
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from pydantic import BaseModel, EmailStr, Field
 
 from backend.config import get_settings
 from src.auth.password_reset import GENERIC_RESPONSE, request_password_reset
@@ -28,33 +28,25 @@ from src.auth.password_reset import GENERIC_RESPONSE, request_password_reset
 logger = logging.getLogger(__name__)
 # ── Import your existing src modules ─────────────────────────────────────────
 try:
-    from src.database.db import (
-        init_db,
-        authenticate_user,
-        create_user,
-        get_user_by_id,
-        get_user_portfolios,
-        create_portfolio,
-        delete_portfolio,
-        get_portfolio_for_user,
-        get_portfolio_holdings,
-        add_holding,
-        delete_holding,
-        get_portfolio_history,
-        save_optimization_run,
-        reset_password_with_code,
-    )
-    from src.data.stock_fetcher import fetch_stock_data
-    from src.models.sentiment import aggregate_sentiment
-    from src.optimization.portfolio import PortfolioOptimizer
-    from src.optimization.risk import RiskAnalyzer
-    from src.optimization.combined_signal import CombinedSignal
-    from src.optimization.health_score import HealthScoreEngine
-    from src.optimization.adaptive_optimizer import AdaptiveHealthOptimizer
-    from src.models.rag_pipeline import RAGPipeline
     from src.auth.ses_email import (
         EmailDeliveryError,
-        send_password_reset_template,
+    )
+    from src.data.stock_fetcher import fetch_stock_data
+    from src.database.db import (
+        add_holding,
+        authenticate_user,
+        create_portfolio,
+        create_user,
+        delete_holding,
+        delete_portfolio,
+        get_portfolio_for_user,
+        get_portfolio_history,
+        get_portfolio_holdings,
+        get_user_by_id,
+        get_user_portfolios,
+        init_db,
+        reset_password_with_code,
+        save_optimization_run,
     )
 
     SRC_AVAILABLE = True
@@ -380,18 +372,16 @@ def run_analysis(req: AnalysisRequest, user: dict = Depends(get_current_user)):
     if not SRC_AVAILABLE:
         raise HTTPException(status_code=503, detail="Backend modules not loaded")
 
-    import pandas as pd
     import numpy as np
+    import pandas as pd
 
     # ── LAZY IMPORT: only load heavy ML libs when this endpoint is hit ──
     from src.data.stock_fetcher import fetch_stock_data
+    from src.models.rag_pipeline import RAGPipeline
     from src.models.sentiment import aggregate_sentiment
+    from src.optimization.adaptive_optimizer import AdaptiveHealthOptimizer
     from src.optimization.portfolio import PortfolioOptimizer
     from src.optimization.risk import RiskAnalyzer
-    from src.optimization.combined_signal import CombinedSignal
-    from src.optimization.health_score import HealthScoreEngine
-    from src.optimization.adaptive_optimizer import AdaptiveHealthOptimizer
-    from src.models.rag_pipeline import RAGPipeline
 
     require_portfolio(req.portfolio_id, user["id"])
     holdings = get_portfolio_holdings(req.portfolio_id, user_id=user["id"])
@@ -559,8 +549,8 @@ def benchmark_spy(portfolio_id: int, user: dict = Depends(get_current_user)):
     if not SRC_AVAILABLE:
         raise HTTPException(status_code=503, detail="Backend modules not loaded")
 
-    import pandas as pd
     import numpy as np
+    import pandas as pd
 
     require_portfolio(portfolio_id, user["id"])
     holdings = get_portfolio_holdings(portfolio_id, user_id=user["id"])

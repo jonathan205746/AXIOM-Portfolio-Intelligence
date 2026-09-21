@@ -3,28 +3,32 @@ Axiom Portfolio Manager V1.0.0
 Holdings management with institutional terminal aesthetic.
 """
 
-import sys, os
+import os
+import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import math
+from datetime import date, datetime
+
+import plotly.express as px
 import streamlit as st
 import yfinance as yf
-from datetime import datetime, date
-import plotly.express as px
-from src.database.db import (
-    get_user_portfolios,
-    create_portfolio,
-    delete_portfolio,
-    get_portfolio_holdings,
-    add_holding,
-    delete_holding,
-)
+
 from src.data.market_data import (
     get_fx_rate as fetch_fx_rate,
+)
+from src.data.market_data import (
     market_currency,
 )
-
+from src.database.db import (
+    add_holding,
+    create_portfolio,
+    delete_holding,
+    delete_portfolio,
+    get_portfolio_holdings,
+    get_user_portfolios,
+)
 
 st.set_page_config(
     page_title="Portfolio | Axiom",
@@ -38,18 +42,16 @@ if not st.session_state.get("logged_in"):
 
 user = st.session_state["user"]
 
-from frontend.ui.theme import inject_theme, apply_plotly_theme
 from frontend.ui.components import (
-    sidebar_brand,
-    sidebar_user,
-    sidebar_nav_item,
-    command_bar,
-    section_header,
-    metric_grid,
     badge,
+    command_bar,
     info_card,
-    glass_panel,
+    section_header,
+    sidebar_brand,
+    sidebar_nav_item,
+    sidebar_user,
 )
+from frontend.ui.theme import inject_theme
 
 inject_theme()
 

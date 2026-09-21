@@ -8,7 +8,6 @@ from src.database.db import (
     generate_password_reset_code,
 )
 
-
 GENERIC_RESPONSE = (
     "If the account details match, a reset code has been sent. "
     "The code expires shortly."

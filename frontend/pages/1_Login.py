@@ -3,23 +3,23 @@ Axiom Authentication V1.0.0
 Secure access with glassmorphic terminal aesthetic.
 """
 
-import smtplib
-import sys, os
 import logging
-import smtplib
+import os
+import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import streamlit as st
+
 from src.auth.password_reset import GENERIC_RESPONSE, request_password_reset
+from src.auth.ses_email import EmailDeliveryError
 from src.database.db import (
+    create_portfolio,
     create_user,
     get_user,
-    create_portfolio,
     init_db,
     reset_password_with_code,
 )
-from src.auth.ses_email import EmailDeliveryError
 
 logger = logging.getLogger(__name__)
 init_db()
@@ -31,15 +31,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-from frontend.ui.theme import inject_theme
 from frontend.ui.components import (
+    command_bar,
     sidebar_brand,
     sidebar_nav_item,
-    command_bar,
-    section_header,
-    info_card,
-    badge,
 )
+from frontend.ui.theme import inject_theme
 
 inject_theme()
 

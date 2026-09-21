@@ -4,8 +4,9 @@ Reusable glassmorphic layout primitives.
 """
 
 import html
+from typing import Any, Dict, List, Optional
+
 import streamlit as st
-from typing import List, Dict, Optional, Any
 
 APP_NAME = "Axiom Portfolio Intelligence"
 APP_VERSION = "1.0.0"

@@ -5,8 +5,8 @@ Usage: key_manager = APIKeyManager("NEWS_API_KEY")
        api_key = key_manager.get_key()
 """
 
-import os
 import logging
+import os
 from typing import List
 
 logger = logging.getLogger(__name__)

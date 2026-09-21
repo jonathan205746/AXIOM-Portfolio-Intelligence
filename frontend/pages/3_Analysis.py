@@ -3,40 +3,37 @@ Axiom Quantitative Analysis V1.0.0
 AI-driven portfolio optimization with glassmorphic terminal aesthetic.
 """
 
-import sys, os
+import os
+import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-import streamlit as st
-import pandas as pd
+import math
+from typing import Any
+
 import numpy as np
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import json
-import math
-from typing import Any, cast
+import streamlit as st
+from pages.report_generator import generate_axiom_report
+
 from src.data.market_data import get_fx_rate as fetch_fx_rate
 from src.database.db import (
     get_portfolio_holdings,
     save_optimization_run,
 )
-from pages.report_generator import generate_axiom_report
-from src.data.market_data import (
-    get_fx_rate as fetch_fx_rate,
-)
-from src.optimization.health_score import HealthScoreEngine
 from src.optimization.adaptive_optimizer import AdaptiveHealthOptimizer
-from src.utils.sentiment import (
-    SentimentLabel,
-    classify_sentiment,
-)
-
+from src.optimization.health_score import HealthScoreEngine
 from src.optimization.rebalancing import (
     build_rebalance_plan,
     calculate_current_allocation,
     classify_model_adjustment,
 )
-
+from src.utils.sentiment import (
+    SentimentLabel,
+    classify_sentiment,
+)
 
 st.set_page_config(
     page_title="Portfolio | Axiom",
@@ -59,17 +56,17 @@ if not portfolio:
 base_currency = str(portfolio.get("currency") or "USD").upper()
 
 # ── Design System ───────────────────────────────────────────
-from frontend.ui.theme import inject_theme, apply_plotly_theme
 from frontend.ui.components import (
-    page_sidebar,
+    badge,
     command_bar,
-    section_header,
-    metric_grid,
     glass_container,
     info_card,
-    badge,
     loading_skeleton,
+    metric_grid,
+    page_sidebar,
+    section_header,
 )
+from frontend.ui.theme import apply_plotly_theme, inject_theme
 
 inject_theme()
 
@@ -269,13 +266,12 @@ run_button = st.button("▶ Run Optimization", type="primary", use_container_wid
 # ── Pipeline ────────────────────────────────────────────────
 def run_pipeline(tickers, alpha, portfolio_value, use_llm):
     try:
-        from src.data.stock_fetcher import fetch_stock_data
         from src.data.news_fetcher import fetch_news
+        from src.data.stock_fetcher import fetch_stock_data
+        from src.models.rag_pipeline import RAGPipeline
         from src.models.sentiment import aggregate_sentiment
         from src.optimization.portfolio import PortfolioOptimizer
         from src.optimization.risk import RiskAnalyzer
-        from src.optimization.combined_signal import CombinedSignal
-        from src.models.rag_pipeline import RAGPipeline
     except Exception as exc:
         st.error(f"Import error: {exc}")
         return None

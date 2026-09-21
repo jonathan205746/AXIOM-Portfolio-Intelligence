@@ -4,8 +4,9 @@ Institutional-grade dark UI tokens for Streamlit.
 Dynamically generated from tokens.py — single source of truth.
 """
 
-import streamlit as st
 from types import SimpleNamespace
+
+import streamlit as st
 
 from .tokens import COLORS
 

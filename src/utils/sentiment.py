@@ -9,7 +9,6 @@ same sentiment label for the same score.
 from enum import Enum
 from typing import Optional
 
-
 POSITIVE_THRESHOLD = 0.10
 NEGATIVE_THRESHOLD = -0.10
 

@@ -11,8 +11,7 @@ quality.
 
 from __future__ import annotations
 
-from typing import Dict, Any, Iterable
-
+from typing import Any, Dict, Iterable
 
 WEIGHTS = {
     "risk_adjusted_return": 0.18,

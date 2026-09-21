@@ -21,8 +21,8 @@ Usage:
     print(final)
 """
 
-import numpy as np
 from typing import Optional
+
 from src.optimization.rebalancing import (
     classify_model_adjustment,
 )

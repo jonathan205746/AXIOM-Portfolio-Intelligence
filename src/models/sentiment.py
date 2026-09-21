@@ -7,12 +7,13 @@ Run this file directly to test:
     python src/models/sentiment.py
 """
 
-import torch
 import logging
-import time
-from typing import Any, Dict, List, Optional, TypedDict
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from typing import Any, Dict, List, TypedDict
+
+import torch
 from torch.nn.functional import softmax
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
 from src.utils.sentiment import classify_sentiment
 
 logging.basicConfig(
@@ -308,7 +309,7 @@ if __name__ == "__main__":
         if articles:
             texts = [a["text"] for a in articles]
             real_result = analyzer.aggregate_sentiment(texts)
-            print(f"\n  Real AAPL news sentiment:")
+            print("\n  Real AAPL news sentiment:")
             print(
                 f"  Score: {real_result['score']} | Label: {real_result['label'].upper()}"
             )

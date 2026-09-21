@@ -5,7 +5,6 @@ from frontend.pages.report_generator import (
     render_ai_commentary,
 )
 
-
 TEST_COLORS = {
     "green": "#00ff00",
     "red": "#ff0000",

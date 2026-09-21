@@ -34,7 +34,7 @@ database. Wanting final_weights in History later means changing
 db.py + init_db(), not something this file can paper over.
 """
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 

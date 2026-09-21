@@ -3,16 +3,17 @@ Axiom Performance History V1.0.0
 Optimization run tracking with glassmorphic terminal aesthetic.
 """
 
-import sys, os
+import os
+import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-import streamlit as st
+
 import pandas as pd
 import plotly.graph_objects as go
-from typing import Any
-from src.database.db import get_portfolio_history
+import streamlit as st
 
+from src.database.db import get_portfolio_history
 
 st.set_page_config(
     page_title="Portfolio | Axiom",
@@ -33,16 +34,16 @@ if not portfolio:
     st.switch_page("pages/2_Portfolio.py")
 
 # ── Design System ───────────────────────────────────────────
-from frontend.ui.theme import inject_theme, apply_plotly_theme
 from frontend.ui.components import (
-    page_sidebar,
+    badge,
     command_bar,
-    section_header,
-    metric_grid,
     glass_container,
     info_card,
-    badge,
+    metric_grid,
+    page_sidebar,
+    section_header,
 )
+from frontend.ui.theme import apply_plotly_theme, inject_theme
 
 inject_theme()
 

@@ -9,18 +9,16 @@ from html import escape
 import bleach
 import markdown
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 
 from src.optimization.health_score import HealthScoreEngine
+from src.optimization.rebalancing import (
+    classify_model_adjustment,
+)
 from src.utils.sentiment import (
     SentimentLabel,
     classify_sentiment,
 )
-from src.optimization.rebalancing import (
-    classify_model_adjustment,
-)
-
 
 ALLOWED_AI_HTML_TAGS = [
     "p",

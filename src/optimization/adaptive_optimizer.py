@@ -7,11 +7,11 @@ highest AI Health Score v3 instead of blindly forcing one hard cap.
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable
+
 import numpy as np
 
 from src.optimization.combined_signal import CombinedSignal
 from src.optimization.health_score import HealthScoreEngine
-
 
 DEFAULT_CAPS = (0.25, 0.275, 0.30, 0.325, 0.35)
 
