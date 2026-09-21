@@ -47,8 +47,8 @@ Do not bypass a failing gate by deleting tests, weakening assertions, or marking
 Pull requests also run:
 
 - Gitleaks against Git history;
-- Trivy dependency scanning for high/critical vulnerabilities; and
-- Trivy scanning of the built runtime container.
+- Trivy dependency scanning that reports high/critical findings and blocks critical vulnerabilities; and
+- Trivy scanning of the built runtime container with the same policy.
 
 Third-party GitHub Actions are pinned to full commit SHAs. When updating an action, verify the upstream release/tag and pin the resolved commit rather than a mutable tag.
 
