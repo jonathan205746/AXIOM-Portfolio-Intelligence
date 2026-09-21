@@ -1,17 +1,18 @@
 # AXIOM Portfolio Intelligence
 
-> An end-to-end portfolio research platform combining constrained optimization, risk analytics, financial NLP, semantic retrieval, and evidence-grounded AI commentary.
+> A production-oriented portfolio research platform combining constrained optimization, risk analytics, financial NLP, semantic retrieval, and evidence-grounded AI commentary.
 
 <p align="center">
   <a href="https://parmodk2310.vercel.app/projects/portfolio"><strong>Case Study</strong></a> ·
-  <a href="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer"><strong>Source</strong></a>
+  <a href="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/releases"><strong>Releases</strong></a> ·
+  <a href="docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md"><strong>Release Guide</strong></a>
 </p>
 
 <p align="center">
   <a href="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/actions/workflows/deploy-production.yml"><img alt="Quality and deployment" src="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/actions/workflows/deploy-production.yml/badge.svg"></a>
   <a href="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/actions/workflows/security.yml/badge.svg"></a>
+  <a href="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Parmodk2310/AI-Powered-Portfolio-Optimizer?display_name=tag&sort=semver"></a>
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white">
-  <img alt="Streamlit" src="https://img.shields.io/badge/UI-Streamlit-FF4B4B?logo=streamlit&logoColor=white">
   <img alt="Docker" src="https://img.shields.io/badge/Runtime-Docker-2496ED?logo=docker&logoColor=white">
   <img alt="AWS" src="https://img.shields.io/badge/Cloud-AWS_EC2-FF9900?logo=amazonaws&logoColor=white">
   <img alt="License" src="https://img.shields.io/badge/License-MIT-green">
@@ -19,48 +20,54 @@
 
 ![AXIOM — AI-powered portfolio intelligence](docs/screenshots/axiom-hero.png)
 
+## Project snapshot
+
+| Area | Evidence |
+|---|---|
+| Portfolio engine | Constrained MPT, efficient frontier, equal-weight baseline, turnover-aware walk-forward evaluation |
+| Risk analytics | Volatility, VaR, drawdown, concentration, correlation, risk-adjusted performance |
+| AI/NLP | FinBERT sentiment, FAISS retrieval, LangChain/Groq commentary |
+| Reliability | Graceful degradation when news or LLM providers are unavailable |
+| Quality | 84 automated tests plus Black, Ruff, mypy, and compile checks |
+| Security | 0 CRITICAL findings; runtime HIGH findings reduced from 15 to 2 with residual risk documented |
+| Delivery | GitHub Actions OIDC → immutable ECR image → AWS Systems Manager → EC2 |
+| Runtime | Dockerized Streamlit service running as non-root UID/GID 10001 |
+
+AXIOM is designed as an engineering portfolio project rather than a claim that AI automatically improves investment performance. Quantitative allocation remains deterministic and separate from generated commentary, and the evaluation reports cases where simpler baselines outperform the optimizer.
+
 ## Why AXIOM
 
-Portfolio tools often separate allocation, risk, news, and AI commentary. AXIOM connects them in one reproducible workflow: it retrieves market data, estimates portfolio risk, creates constrained allocations, evaluates company news with FinBERT, retrieves relevant evidence with FAISS, and generates a portfolio report through an LLM.
+Many portfolio demos stop at an optimizer notebook. AXIOM connects the full workflow:
 
-This repository demonstrates production-oriented ML engineering beyond model experimentation: modular pipelines, persistent state, failure handling, walk-forward evaluation, automated quality gates, container hardening, and infrastructure as code.
+1. ingest and validate holdings;
+2. retrieve and normalize historical market data;
+3. calculate portfolio risk and constrained allocations;
+4. evaluate relevant company news with FinBERT;
+5. retrieve supporting context with FAISS;
+6. generate evidence-grounded commentary without allowing the LLM to alter portfolio weights;
+7. produce an interactive dashboard and downloadable HTML report;
+8. persist analysis state for later review;
+9. package and deploy the application through a tested CI/CD path.
 
-## What it delivers
-
-- Portfolio creation, holdings management, and analysis history
-- Adaptive Modern Portfolio Theory with allocation constraints
-- Equal-weight and efficient-frontier comparisons
-- Volatility, Value at Risk, maximum drawdown, and correlation analysis
-- Ticker-aware financial-news retrieval and FinBERT sentiment scoring
-- FAISS retrieval with LangChain/Groq commentary grounded in available context
-- Interactive Plotly dashboards and downloadable HTML reports
-- Graceful degradation when news or LLM providers are unavailable
-- SQLite and FAISS persistence through a Docker volume
-- Dockerized deployment on AWS EC2 provisioned by CloudFormation
+The result is a compact example of quantitative engineering, ML/NLP integration, application design, testing, security hardening, and cloud delivery in one repository.
 
 ## Product walkthrough
 
-### Portfolio construction
+### Portfolio construction and optimization
 
-Create a multi-market portfolio and review currency-normalized allocation across US and Indian equities.
-
-![Portfolio allocation](docs/screenshots/02-portfolio-allocation.png)
-
-### AI-powered optimization
-
-Compare constrained optimized targets against an equal-weight baseline and review the resulting portfolio KPIs.
+Create a multi-market portfolio, inspect normalized allocation, and compare constrained optimized targets with an equal-weight baseline.
 
 ![Optimization overview](docs/screenshots/03-optimization-overview.png)
 
 ### Risk intelligence
 
-Inspect Value at Risk, maximum drawdown, concentration, correlation, volatility, and risk-adjusted performance.
+Review volatility, Value at Risk, maximum drawdown, concentration, correlation, and risk-adjusted performance.
 
 ![Risk analytics](docs/screenshots/04-risk-analytics.png)
 
 ### Evidence-grounded AI research
 
-Review ticker-level sentiment, supporting financial-news evidence, risk scenarios, and quantitative next steps.
+Inspect ticker-level sentiment, supporting news evidence, risk scenarios, and AI commentary grounded in retrieved context.
 
 ![AI research commentary](docs/screenshots/05-ai-research.png)
 
@@ -77,40 +84,30 @@ Compare the final target portfolio with equal-weight allocation and the S&P 500 
 ```mermaid
 flowchart TB
     U["Streamlit experience"] --> O["Analysis orchestrator"]
-    O --> M["Market and news data"]
-    O --> Q["Optimization and risk"]
+    O --> M["Market + news data"]
+    O --> Q["Optimization + risk engine"]
     O --> A["FinBERT · FAISS · LLM"]
-    Q --> R["Dashboard and HTML report"]
+    Q --> R["Dashboard + HTML report"]
     A --> R
-    O --> P["SQLite and FAISS persistence"]
+    O --> P["SQLite + FAISS persistence"]
 ```
 
-The application keeps quantitative calculations separate from probabilistic AI output. Optimized weights come from the portfolio engine; the LLM explains the result using retrieved context rather than determining the allocation itself.
-
-### Analysis flow
-
-1. Validate holdings and download adjusted historical prices.
-2. Calculate returns, covariance, volatility, drawdown, VaR, and correlations.
-3. Generate allocations under weight and concentration constraints.
-4. Fetch company news and score relevant headlines with FinBERT.
-5. Retrieve supporting context from FAISS.
-6. Generate evidence-grounded commentary and a portable HTML report.
-7. Persist the run for later review.
+The important design boundary is between quantitative decisions and probabilistic text generation. Portfolio weights come from the optimization engine. The LLM explains the result using retrieved context; it does not silently rewrite the allocation.
 
 ## Engineering decisions
 
-| Concern | Design choice | Reason |
+| Concern | Design choice | Why |
 |---|---|---|
-| Explainability | Quantitative results remain separate from LLM commentary | Prevents generated text from silently changing portfolio weights |
-| Reliability | External AI/news failures degrade gracefully | Core portfolio analytics remain usable |
-| Reproducibility | Walk-forward evaluation with costs and turnover | Avoids presenting an in-sample optimizer result as performance evidence |
-| Persistence | Named Docker volume mounted at `/data` | Survives container recreation on the current single-host deployment |
-| Runtime security | Streamlit XSRF/CORS protections enabled; containers run as UID/GID 10001 | Reduces browser and container privilege risk |
-| Delivery security | GitHub Actions use OIDC; third-party actions are commit-SHA pinned | Avoids long-lived AWS keys and mutable action tags |
-| Release images | ECR images use immutable Git commit SHA tags | Makes deployments and rollbacks traceable |
-| Remote delivery | AWS Systems Manager runs deployment on EC2 | Removes SSH credentials from the CI/CD path |
+| Explainability | Keep optimizer outputs separate from LLM commentary | Generated text cannot silently change quantitative targets |
+| Reliability | Degrade gracefully when external AI/news services fail | Core portfolio analytics remain available |
+| Evaluation | Walk-forward testing with turnover and transaction costs | Reduces the risk of presenting an in-sample result as evidence |
+| Persistence | Named Docker volume mounted at `/data` | Preserves SQLite and FAISS state across container recreation |
+| Runtime security | XSRF/CORS protections and non-root container user | Reduces browser and container privilege risk |
+| CI/CD identity | GitHub OIDC with temporary AWS credentials | Avoids long-lived AWS access keys in GitHub |
+| Release images | Immutable ECR tags based on Git commit SHA | Makes deployments and rollback targets traceable |
+| Remote delivery | AWS Systems Manager instead of SSH-based CI deployment | Removes SSH credentials from the deployment path |
 
-## Verified evaluation
+## Verified quantitative evaluation
 
 A price-only walk-forward backtest covers **4 January 2021–31 December 2025** using AAPL, MSFT, GOOGL, AMZN, and META. It uses a 252-trading-day lookback, monthly rebalancing, 2–35% asset bounds, a 5% annual risk-free rate, and 15 bps transaction costs.
 
@@ -123,20 +120,43 @@ A price-only walk-forward backtest covers **4 January 2021–31 December 2025** 
 | Annual one-way turnover | 167.46% | 25.03% | N/A |
 | CAGR cost drag | 0.59% | 0.09% | 0.00% |
 
-Equal weighting led on return and Sharpe ratio in this concentrated universe. The quantitative strategy reduced drawdown versus equal weight, but higher turnover created meaningful cost drag. Optimization complexity did not automatically produce superior out-of-sample performance.
+Equal weighting led on return and Sharpe ratio in this concentrated universe. The quantitative strategy reduced drawdown versus equal weight, but higher turnover created meaningful cost drag. The repository therefore does not claim that optimization complexity automatically produces superior out-of-sample performance.
 
-The combined price-and-sentiment strategy is intentionally **not** reported as historically validated because the repository does not yet include a point-in-time news dataset. Using current news to simulate past decisions would introduce look-ahead bias. See [`backtesting.md`](backtesting.md) for the complete methodology.
+The combined price-and-sentiment strategy is intentionally **not** reported as historically validated because the repository does not include a point-in-time news dataset. Using current news to simulate past decisions would introduce look-ahead bias. See [`backtesting.md`](backtesting.md) for the methodology.
+
+## Security and quality evidence
+
+The repository uses separate scans for the broad development snapshot and the deployed Streamlit image.
+
+| Scan scope | Before hardening | Current documented state |
+|---|---:|---:|
+| Repository dependencies | 22 HIGH / 0 CRITICAL | 16 HIGH / 0 CRITICAL |
+| Runtime container | 15 HIGH / 0 CRITICAL | 2 HIGH / 0 CRITICAL |
+
+The remaining HIGH findings are documented rather than hidden or excluded. See [`docs/security/dependency-risk-register.md`](docs/security/dependency-risk-register.md).
+
+The quality contract runs:
+
+```text
+compileall
+Black --check
+Ruff
+mypy
+pytest
+```
+
+The current validated suite contains **84 tests**, including authentication/security behavior, portfolio calculations, backtesting, sentiment classification, Transformers compatibility, RAG fallback behavior, news relevance, rebalancing, and safe report generation.
 
 ## Technology
 
 | Layer | Tools |
 |---|---|
 | Application | Python, Streamlit, Plotly, pandas, NumPy |
-| Quantitative | SciPy/scikit-learn, MPT, risk and performance analytics |
-| AI/NLP | FinBERT, Hugging Face Transformers, FAISS, LangChain, Groq |
-| Data | Yahoo Finance, NewsAPI |
+| Quantitative | SciPy, scikit-learn, constrained MPT, risk/performance analytics |
+| AI/NLP | FinBERT, Transformers 5.x, Sentence Transformers, FAISS, LangChain, Groq |
+| Data | Yahoo Finance, financial-news providers |
 | Persistence | SQLite, FAISS index |
-| Delivery | Docker, Docker Compose, AWS EC2, CloudFormation, GitHub Actions |
+| Delivery | Docker, Docker Compose, AWS EC2, ECR, Systems Manager, CloudFormation, GitHub Actions |
 
 ## Run locally
 
@@ -144,7 +164,7 @@ The combined price-and-sentiment strategy is intentionally **not** reported as h
 
 - Python 3.10+
 - Git
-- NewsAPI and Groq keys for the corresponding optional features
+- NewsAPI and Groq keys for optional external-provider features
 
 ```bash
 git clone https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer.git
@@ -169,7 +189,7 @@ DB_DIR=/data
 FAISS_INDEX_PATH=/data/faiss_index
 ```
 
-Never commit `.env`, AWS credentials, API keys, databases containing user data, or private keys.
+Never commit `.env`, AWS credentials, API keys, private keys, databases containing user data, or generated reports containing private portfolio information.
 
 ## Run with Docker
 
@@ -179,22 +199,9 @@ docker compose ps
 curl --fail http://localhost:8501/_stcore/health
 ```
 
-The runtime image uses a dedicated non-root user. Existing persistent volumes created by older root-running images may need their `/data` ownership migrated to UID/GID `10001`; the production deployment script performs that migration before recreation.
+The runtime image uses a dedicated non-root user. Existing volumes created by older root-running images may need `/data` ownership migrated to UID/GID `10001`; the production deployment script performs this migration before container recreation.
 
-## Quality gate
-
-The Makefile is the local and CI quality contract:
-
-```bash
-make install-dev
-make check
-```
-
-`make check` runs Python compilation, Black format verification, Ruff linting, mypy type checking, and the complete pytest suite. Pull requests must pass the same gate before merge.
-
-Security CI separately runs secret scanning, reports high/critical dependency and container findings, and blocks critical vulnerabilities. See [`SECURITY.md`](SECURITY.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
-
-## Deployment and infrastructure
+## CI/CD and deployment
 
 ```mermaid
 flowchart LR
@@ -204,19 +211,22 @@ flowchart LR
     S --> C["Docker on EC2"]
 ```
 
-The demo infrastructure is an Amazon Linux 2023 EC2 instance provisioned through [`deploy/aws/ec2-stack.yaml`](deploy/aws/ec2-stack.yaml). Docker Compose runs Streamlit while a named volume persists SQLite and FAISS data under `/data`.
+Pull requests run quality and security gates. A push to `main` receives temporary AWS credentials through IAM OIDC, builds or reuses an immutable image tagged with the exact Git commit SHA, stores it in ECR, and deploys through Systems Manager.
 
-Pull requests run quality and security gates. A push to `main` receives temporary AWS credentials through IAM OIDC, builds an image tagged with the exact Git commit SHA, stores it in ECR, and deploys it through Systems Manager. The instance checks `/_stcore/health`; a failed deployment restores the previously running image and keeps the workflow failed for visibility.
+The EC2 deployment polls the Streamlit health endpoint and restores the previously running image if the candidate fails health validation.
 
-The CloudFormation security group restricts port `8501` to `AllowedCidr`. AXIOM therefore does **not** advertise the current raw EC2 IP as a public live demo. A public recruiter-facing endpoint should be added only after a stable domain, HTTPS termination, and appropriate ingress controls are in place.
+AWS implementation details are documented in [`deploy/aws/README.md`](deploy/aws/README.md).
 
-Operational commands and AWS details live in [`deploy/aws/README.md`](deploy/aws/README.md).
+## Release
 
-## Release status
+The first stable release line is **v1.0.0**.
 
-No GitHub Release is currently published. The repository keeps a clearly labeled [release-note template](docs/release-notes-template.md); completed release evidence should be created from that template only after every required gate has passed.
+- [v1.0.0 release notes](docs/release-notes-v1.0.0.md)
+- [Production release and rollback guide](docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md)
+- [Dependency residual-risk register](docs/security/dependency-risk-register.md)
+- [GitHub Releases](https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/releases)
 
-See [`docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md`](docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md) for the release and rollback runbook.
+Release tags must point to a verified commit on protected `main`. Do not move a published tag; use a new semantic version for subsequent releases.
 
 ## Current limitations
 
@@ -224,24 +234,10 @@ See [`docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md`](docs/AXIOM_PRODUCTION_RELEASE_GUI
 - FinBERT can misclassify ambiguous or context-poor headlines.
 - Retrieved context reduces, but cannot eliminate, LLM hallucination.
 - The current single-EC2/SQLite design is not highly available or horizontally scalable.
-- The current demo is operator-restricted HTTP on port 8501; it is not a stable public HTTPS endpoint.
-- Managed secrets, centralized monitoring/alerting, and database-aware rollback remain production hardening work.
+- The current operator-restricted HTTP demo is not a stable public HTTPS endpoint.
 - Point-in-time news data is not yet available, so historical sentiment performance is intentionally not claimed.
-
-## Roadmap
-
-- [x] Leakage-aware walk-forward backtesting with turnover and costs
-- [x] Containerized EC2 deployment with persistent application data
-- [x] GitHub Actions deployment using IAM OIDC and immutable ECR tags
-- [x] Health-gated application rollback to the previous container image
-- [x] Full CI quality gate matching `make check`
-- [x] Commit-SHA-pinned third-party GitHub Actions
-- [x] Secret, dependency, and container security scans
-- [x] Streamlit XSRF protection and non-root container runtime
-- [ ] Point-in-time news dataset and sentiment backtesting
-- [ ] Retrieval relevance and groundedness evaluation
-- [ ] HTTPS, stable domain, managed secrets, CloudWatch metrics, and alarms
-- [ ] PostgreSQL migrations and managed backups for multi-user scale
+- Managed secrets, centralized monitoring/alerting, and database-aware rollback remain further production-hardening work.
+- Residual HIGH dependency findings remain documented and monitored; the project does not describe the current scan as vulnerability-free.
 
 ## Repository map
 
@@ -254,7 +250,7 @@ src/optimization Portfolio construction and risk logic
 src/database/    Persistence layer
 tests/           Automated test suite
 deploy/aws/      CloudFormation and deployment documentation
-docs/            Architecture, setup, release, and API documentation
+docs/            Architecture, security, setup, release, and API documentation
 ```
 
 ## Responsible use
