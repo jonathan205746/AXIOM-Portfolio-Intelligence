@@ -325,7 +325,7 @@ def fetch_news(
 
     from_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
 
-    params = {
+    params: dict[str, str | int] = {
         "q": f"{query} stock",
         "from": from_date,
         "sortBy": "relevancy",
@@ -482,9 +482,14 @@ def check_api_status() -> Dict:
 
     try:
         # Make a minimal request to check quota
+        status_params: dict[str, str | int] = {
+            "q": "test",
+            "pageSize": 1,
+            "apiKey": NEWS_API_KEY,
+        }
         response = requests.get(
             BASE_URL,
-            params={"q": "test", "pageSize": 1, "apiKey": NEWS_API_KEY},
+            params=status_params,
             timeout=5,
         )
         data = response.json()
