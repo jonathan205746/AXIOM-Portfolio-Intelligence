@@ -2,7 +2,7 @@
 
 ## Status
 
-The public AWS deployment currently runs Streamlit on port `8501`. FastAPI is
+The operator-restricted AWS EC2 demonstration runs Streamlit on port `8501`. FastAPI is
 an optional local or Docker-profile interface. Start it and inspect its schema:
 
 ```powershell

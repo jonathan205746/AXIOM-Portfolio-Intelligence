@@ -117,7 +117,7 @@ Sharpe ratio    = (expected return - risk-free rate) / volatility
 
 The optimizer applies full-investment and no-short/concentration constraints. AXIOM also evaluates an equal-weight baseline and adaptive blend settings rather than displaying one unexplained weight vector. The repository includes a leakage-aware walk-forward evaluation with drift-adjusted turnover, complete traded notional, transaction costs, and separate gross and net NAV.
 
-MPT outputs are sensitive to historical estimates. Recommended future improvements include covariance shrinkage, turnover penalties, transaction costs, robust optimization, and walk-forward evaluation.
+MPT outputs are sensitive to historical estimates. Recommended future improvements include covariance shrinkage, explicit turnover-constrained optimization, robust covariance estimation, broader out-of-sample universes, and more extensive capacity/stress testing.
 
 ### Risk layer
 
