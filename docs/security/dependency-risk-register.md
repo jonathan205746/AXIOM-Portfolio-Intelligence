@@ -5,6 +5,8 @@
 Security hardening was evaluated independently for the complete repository
 dependency snapshot and the deployed Streamlit runtime image.
 
+**Verified snapshot:** 2026-09-21 on `main` commit `0a28dd6886e1a381193b03cb621bb3a960ba7c57`. The counts below are point-in-time scanner evidence, not a live vulnerability dashboard.
+
 | Scope | Original | Final |
 |---|---:|---:|
 | Repository dependency scan | 22 HIGH / 0 CRITICAL | 16 HIGH / 0 CRITICAL |
@@ -34,7 +36,7 @@ The deployed runtime remains non-root using UID/GID 10001.
 
 ## Repository/development residual findings
 
-The complete repository snapshot still reports 16 HIGH findings in development
+This verified repository snapshot reports 16 HIGH findings in development
 or notebook dependencies that are not used to construct the deployed Streamlit
 runtime image.
 
