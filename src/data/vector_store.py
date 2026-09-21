@@ -6,18 +6,21 @@ Run this file directly to test:
     python src/data/vector_store.py
 """
 
+import logging
+import os
+import pickle
+from typing import Dict, List
+
 import faiss
 import numpy as np
-import pickle
-import os
-import logging
-from typing import List, Dict, Tuple, Optional
-from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
+from sentence_transformers import SentenceTransformer
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 # Model choice: fast + lightweight + good quality for semantic search
@@ -72,17 +75,15 @@ class FinancialNewsStore:
             return
 
         logger.info(f"Embedding {len(texts)} articles...")
-        embeddings = self.model.encode(
-            texts,
-            show_progress_bar=True,
-            batch_size=32
-        )
+        embeddings = self.model.encode(texts, show_progress_bar=True, batch_size=32)
         embeddings = np.array(embeddings).astype("float32")
 
         self.index.add(embeddings)
         self.documents.extend(articles)
 
-        logger.info(f"Added {len(articles)} articles. Total in store: {len(self.documents)}")
+        logger.info(
+            f"Added {len(articles)} articles. Total in store: {len(self.documents)}"
+        )
 
     def add_articles_batch(self, news_by_ticker: Dict[str, List[Dict]]) -> None:
         """
@@ -97,10 +98,7 @@ class FinancialNewsStore:
             self.add_articles(articles)
 
     def search(
-        self,
-        query: str,
-        ticker: str = None,
-        top_k: int = 5
+        self, query: str, ticker: str | None = None, top_k: int = 5
     ) -> List[Dict]:
         """
         Find the most relevant articles for a query.
@@ -174,7 +172,7 @@ class FinancialNewsStore:
         Returns:
             Dict with total articles, articles per ticker, index size
         """
-        ticker_counts = {}
+        ticker_counts: Dict[str, int] = {}
         for doc in self.documents:
             ticker = doc.get("ticker", "unknown")
             ticker_counts[ticker] = ticker_counts.get(ticker, 0) + 1
@@ -184,7 +182,7 @@ class FinancialNewsStore:
             "articles_per_ticker": ticker_counts,
             "index_size": self.index.ntotal,
             "embedding_dimension": self.dimension,
-            "model": EMBED_MODEL
+            "model": EMBED_MODEL,
         }
 
     def save(self, path: str = INDEX_PATH) -> None:
@@ -252,17 +250,15 @@ if __name__ == "__main__":
 
     # ── Test 2: Fetch and add news ──
     print("\n[2] Fetching news to embed...")
-    from src.data.news_fetcher import fetch_news_batch
-    import time
 
-    tickers = [
-        "AAPL", "MSFT", "GOOGL", "AMZN"
-    ]
+    from src.data.news_fetcher import fetch_news_batch
+
+    tickers = ["AAPL", "MSFT", "GOOGL", "AMZN"]
     company_names = {
         "AAPL": "Apple",
         "MSFT": "Microsoft",
         "GOOGL": "Google",
-        "AMZN": "Amazon"
+        "AMZN": "Amazon",
     }
 
     news_by_ticker = fetch_news_batch(tickers, company_names)
@@ -320,6 +316,7 @@ if __name__ == "__main__":
 # This class does NOT change FinancialNewsStore at all.
 # It is a thin adapter so the notebooks work without any import change.
 
+
 class VectorStore(FinancialNewsStore):
     """
     Drop-in adapter over FinancialNewsStore.
@@ -354,28 +351,40 @@ class VectorStore(FinancialNewsStore):
                 possible_ticker = text.split(": ")[0].strip()
                 if possible_ticker.isupper() and len(possible_ticker) <= 5:
                     ticker = possible_ticker
-            articles.append({
-                "text":   text,
-                "title":  text[:120],   # use first 120 chars as title fallback
-                "ticker": ticker,
-                "source": "notebook",
-            })
+            articles.append(
+                {
+                    "text": text,
+                    "title": text[:120],  # use first 120 chars as title fallback
+                    "ticker": ticker,
+                    "source": "notebook",
+                }
+            )
         self.add_articles(articles)
 
-    def search(self, query: str, k: int = 5, ticker: str = None) -> list:
+    def search(
+        self,
+        query: str,
+        ticker: str | None = None,
+        top_k: int = 5,
+        *,
+        k: int | None = None,
+    ) -> list:
         """
         Search wrapper that returns plain strings (as notebooks expect)
         instead of the dict list that FinancialNewsStore.search() returns.
 
         Args:
             query:  Search string
-            k:      Number of results (notebooks use keyword arg k=)
             ticker: Optional ticker filter (passed through to parent)
+            top_k:  Parent-compatible result limit
+            k:      Legacy notebook keyword alias for the result limit
 
         Returns:
             List of text strings, not dicts.
         """
-        # FinancialNewsStore.search() signature: search(query, ticker, top_k)
-        results = super().search(query, ticker=ticker, top_k=k)
+        # Preserve the parent search contract while supporting the notebooks'
+        # legacy keyword alias, k=.
+        limit = k if k is not None else top_k
+        results = super().search(query, ticker=ticker, top_k=limit)
         # Return the "text" field of each result dict as a plain string.
         return [r.get("text", r.get("title", str(r))) for r in results]

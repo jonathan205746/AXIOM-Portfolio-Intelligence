@@ -23,9 +23,9 @@ def make_article(
 
 
 def test_normalize_news_text():
-    assert normalize_news_text(
-        "  Google—launches   Gemini! "
-    ) == "google launches gemini"
+    assert (
+        normalize_news_text("  Google—launches   Gemini! ") == "google launches gemini"
+    )
 
 
 def test_google_headline_is_relevant():
@@ -138,9 +138,7 @@ def test_irrelevant_articles_are_removed():
     )
 
     assert len(filtered) == 1
-    assert filtered[0]["title"] == (
-        "Google launches Gemini update"
-    )
+    assert filtered[0]["title"] == ("Google launches Gemini update")
 
 
 def test_article_schema_is_preserved():
@@ -165,10 +163,7 @@ def test_article_schema_is_preserved():
 
 
 def test_max_articles_is_enforced():
-    articles = [
-        make_article(f"Microsoft Azure update {number}")
-        for number in range(5)
-    ]
+    articles = [make_article(f"Microsoft Azure update {number}") for number in range(5)]
 
     filtered = filter_relevant_articles(
         ticker="MSFT",

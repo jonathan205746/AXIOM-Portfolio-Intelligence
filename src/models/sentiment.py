@@ -7,15 +7,18 @@ Run this file directly to test:
     python src/models/sentiment.py
 """
 
-import torch
 import logging
-import time
-from typing import Any, Dict, List, Optional, TypedDict
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from typing import Any, Dict, List, TypedDict
+
+import torch
 from torch.nn.functional import softmax
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
 from src.utils.sentiment import classify_sentiment
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 MODEL_NAME = "ProsusAI/finbert"
@@ -74,10 +77,10 @@ class SentimentAnalyzer:
         # Tokenize — convert text to token IDs FinBERT understands
         inputs = self.tokenizer(
             text,
-            return_tensors="pt",    # PyTorch tensors
-            truncation=True,         # Cut off at 512 tokens max
+            return_tensors="pt",  # PyTorch tensors
+            truncation=True,  # Cut off at 512 tokens max
             max_length=512,
-            padding=True
+            padding=True,
         )
 
         # Run through FinBERT — no gradient needed for inference.  The explicit
@@ -148,7 +151,7 @@ class SentimentAnalyzer:
                 "score": 0.0,
                 "label": "neutral",
                 "article_count": 0,
-                "breakdown": []
+                "breakdown": [],
             }
 
         results = self.analyze_batch(texts)
@@ -165,12 +168,11 @@ class SentimentAnalyzer:
             "score": score,
             "label": label,
             "article_count": len(texts),
-            "breakdown": results
+            "breakdown": results,
         }
 
     def analyze_portfolio(
-        self,
-        news_by_ticker: Dict[str, List[Dict]]
+        self, news_by_ticker: Dict[str, List[Dict]]
     ) -> Dict[str, Dict]:
         """
         Run sentiment analysis for all tickers in the portfolio.
@@ -195,7 +197,7 @@ class SentimentAnalyzer:
                     "score": 0.0,
                     "label": "neutral",
                     "article_count": 0,
-                    "breakdown": []
+                    "breakdown": [],
                 }
                 continue
 
@@ -210,11 +212,13 @@ class SentimentAnalyzer:
 
         return sentiments
 
+
 # ============================================================================
 # Compatibility wrappers for notebooks
 # ============================================================================
 
 _analyzer = None
+
 
 def _get_analyzer():
     global _analyzer
@@ -243,6 +247,8 @@ def aggregate_sentiment(texts):
     if not texts:
         return 0.0
     return _get_analyzer().aggregate_sentiment(texts)["score"]
+
+
 # ── Main — Run this to test ────────────────────────────────────────────────────
 
 
@@ -268,11 +274,13 @@ if __name__ == "__main__":
 
     print("\nResults:")
     for headline in test_headlines:
-        result = analyzer.analyze(headline)
-        bar = "+" * int(result["positive"] * 20)
+        headline_result = analyzer.analyze(headline)
+        bar = "+" * int(headline_result["positive"] * 20)
         print(f"\n  Text: {headline[:60]}")
-        print(f"  Label: {result['label'].upper()}")
-        print(f"  Positive: {result['positive']:.4f} | Negative: {result['negative']:.4f} | Neutral: {result['neutral']:.4f}")
+        print(f"  Label: {headline_result['label'].upper()}")
+        print(
+            f"  Positive: {headline_result['positive']:.4f} | Negative: {headline_result['negative']:.4f} | Neutral: {headline_result['neutral']:.4f}"
+        )
 
     # ── Test 2: Aggregate sentiment ──
     print("\n[3] Testing aggregate sentiment for AAPL...")
@@ -281,15 +289,17 @@ if __name__ == "__main__":
         "Apple Vision Pro faces tough competition from Samsung and Meta",
         "Apple services revenue grows 14 percent year over year",
         "Apple supply chain faces challenges due to geopolitical tensions",
-        "Apple announces new MacBook Pro with M4 chip to strong demand"
+        "Apple announces new MacBook Pro with M4 chip to strong demand",
     ]
 
-    result = analyzer.aggregate_sentiment(apple_texts)
-    print(f"\n  Articles analyzed: {result['article_count']}")
-    print(f"  Overall score: {result['score']} (range: -1.0 to +1.0)")
-    print(f"  Overall label: {result['label'].upper()}")
+    aggregate_result = analyzer.aggregate_sentiment(apple_texts)
+    print(f"\n  Articles analyzed: {aggregate_result['article_count']}")
+    print(f"  Overall score: {aggregate_result['score']} (range: -1.0 to +1.0)")
+    print(f"  Overall label: {aggregate_result['label'].upper()}")
     print("\n  Individual article scores:")
-    for i, (text, breakdown) in enumerate(zip(apple_texts, result["breakdown"])):
+    for i, (text, breakdown) in enumerate(
+        zip(apple_texts, aggregate_result["breakdown"])
+    ):
         print(f"  {i+1}. [{breakdown['label']}] {text[:55]}")
 
     # ── Test 3: Real news (if NewsAPI key available) ──
@@ -301,8 +311,10 @@ if __name__ == "__main__":
         if articles:
             texts = [a["text"] for a in articles]
             real_result = analyzer.aggregate_sentiment(texts)
-            print(f"\n  Real AAPL news sentiment:")
-            print(f"  Score: {real_result['score']} | Label: {real_result['label'].upper()}")
+            print("\n  Real AAPL news sentiment:")
+            print(
+                f"  Score: {real_result['score']} | Label: {real_result['label'].upper()}"
+            )
             print(f"  Based on {real_result['article_count']} real articles")
         else:
             print("  No real articles fetched — check NEWS_API_KEY")

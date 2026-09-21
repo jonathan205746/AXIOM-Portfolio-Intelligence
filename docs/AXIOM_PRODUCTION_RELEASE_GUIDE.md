@@ -1,7 +1,7 @@
 # AXIOM Production Release Guide
 
 This runbook covers SES, IAM OIDC, ECR, SSM deployment, rollback, mobile
-testing, demo production, and publishing `v1.0.0`.
+testing, demo production, and publishing a versioned release.
 
 ## 1. Release gates
 
@@ -292,20 +292,16 @@ visual-production instructions out of this operational release runbook.
 
 ## 10. Publish `v1.0.0`
 
-Copy these files into the repository:
-
-```text
-README.md
-RELEASE_NOTES_v1.0.0.md
-docs/production-release-guide.md
-docs/demo/axiom-v1-demo.gif
-docs/screenshots/**
-```
-
-Commit documentation, then deploy this new exact commit:
+Start from the repository release-note template. Do not publish placeholders as completed release evidence:
 
 ```powershell
-git add README.md RELEASE_NOTES_v1.0.0.md docs
+Copy-Item docs\release-notes-template.md docs\release-notes-v1.0.0.md
+```
+
+Fill every placeholder, check every required evidence item, and review the completed notes before tagging. Commit documentation, then deploy this new exact commit:
+
+```powershell
+git add README.md docs
 git diff --cached --check
 git diff --cached --name-status
 git commit -m "Prepare AXIOM v1.0.0 documentation"
@@ -330,7 +326,7 @@ git push origin v1.0.0
 
 gh release create v1.0.0 `
   --title "AXIOM Portfolio Intelligence v1.0.0" `
-  --notes-file RELEASE_NOTES_v1.0.0.md `
+  --notes-file docs/release-notes-v1.0.0.md `
   --verify-tag `
   --latest
 ```

@@ -6,21 +6,22 @@ This is a temporary test file — delete before final deployment.
 Run: python src/data/pipeline_test.py
 """
 
-import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import sys
 
-from src.data.stock_fetcher import fetch_stock_data, calculate_returns, fetch_stock_info
+sys.path.append(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
+
+
 from src.data.news_fetcher import fetch_news_batch, get_article_texts
-import time
+from src.data.stock_fetcher import calculate_returns, fetch_stock_data, fetch_stock_info
 
 print("=" * 60)
 print("PIPELINE TEST — Stock Data + News Data Combined")
 print("=" * 60)
 
-tickers = [
-    "AAPL", "MSFT", "GOOGL", "AMZN"
-]
+tickers = ["AAPL", "MSFT", "GOOGL", "AMZN"]
 
 # ── STEP 1: Stock Prices ──────────────────────────────────
 print("\n[STEP 1] Fetching stock prices...")

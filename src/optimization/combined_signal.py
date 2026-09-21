@@ -21,25 +21,30 @@ Usage:
     print(final)
 """
 
-import numpy as np
 from typing import Optional
+
 from src.optimization.rebalancing import (
     classify_model_adjustment,
 )
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-DEFAULT_ALPHA = 0.6         # 60% weight on quant, 40% on sentiment
+DEFAULT_ALPHA = 0.6  # 60% weight on quant, 40% on sentiment
 MAX_SENTIMENT_SHIFT = 0.04  # v3: sentiment is a supporting signal, max ±4%
-DEFAULT_MAX_WEIGHT = 0.25   # Target cap per ticker; caller should adapt for portfolios with <4 assets
+DEFAULT_MAX_WEIGHT = (
+    0.25  # Target cap per ticker; caller should adapt for portfolios with <4 assets
+)
 
 
 # ── Helper Functions ──────────────────────────────────────────────────────────
 
-def sentiment_to_weight_adjustment(sentiment_score: float,
-                                    max_shift: float = MAX_SENTIMENT_SHIFT,
-                                    confidence: float | None = None,
-                                    relevance: float = 1.0) -> float:
+
+def sentiment_to_weight_adjustment(
+    sentiment_score: float,
+    max_shift: float = MAX_SENTIMENT_SHIFT,
+    confidence: float | None = None,
+    relevance: float = 1.0,
+) -> float:
     """
     Convert a FinBERT sentiment score to a weight adjustment.
 
@@ -119,6 +124,7 @@ def _apply_max_weight(weights: dict, max_weight: float) -> dict:
 
 # ── Combined Signal Class ─────────────────────────────────────────────────────
 
+
 class CombinedSignal:
     """
     Merges quantitative portfolio weights with sentiment signals.
@@ -140,14 +146,19 @@ class CombinedSignal:
         # Validate inputs
         missing = [t for t in self.tickers if t not in sentiment_scores]
         if missing:
-            print(f"[CombinedSignal] WARNING: No sentiment for {missing}. Using 0.0 (neutral).")
+            print(
+                f"[CombinedSignal] WARNING: No sentiment for {missing}. Using 0.0 (neutral)."
+            )
             for t in missing:
                 self.sentiment_scores[t] = 0.0
 
         print(f"[CombinedSignal] Initialized with {len(self.tickers)} assets.")
 
-    def combine(self, alpha: float = DEFAULT_ALPHA,
-                max_weight: Optional[float] = DEFAULT_MAX_WEIGHT) -> dict:
+    def combine(
+        self,
+        alpha: float = DEFAULT_ALPHA,
+        max_weight: Optional[float] = DEFAULT_MAX_WEIGHT,
+    ) -> dict:
         """
         Combine optimized weights with sentiment-adjusted weights.
 
@@ -178,7 +189,9 @@ class CombinedSignal:
             raise ValueError(f"alpha must be between 0.0 and 1.0, got {alpha}")
 
         print(f"\n[CombinedSignal] Combining signals (alpha={alpha})...")
-        print(f"  Alpha meaning: {alpha*100:.0f}% quant + {(1-alpha)*100:.0f}% sentiment")
+        print(
+            f"  Alpha meaning: {alpha*100:.0f}% quant + {(1-alpha)*100:.0f}% sentiment"
+        )
         if max_weight is not None:
             print(f"  Max weight cap: {max_weight*100:.1f}% per ticker")
 
@@ -239,35 +252,46 @@ class CombinedSignal:
                     original,
                     final,
                 ),
-                "exclusion_reason": reason
+                "exclusion_reason": reason,
             }
 
         # Print summary
-        print(f"\n  {'Ticker':<8} {'Sentiment':>10} {'Opt Weight':>12} {'Final Weight':>13} {'Change':>8}")
+        print(
+            f"\n  {'Ticker':<8} {'Sentiment':>10} {'Opt Weight':>12} {'Final Weight':>13} {'Change':>8}"
+        )
         print("  " + "─" * 55)
         for ticker in self.tickers:
             score = self.sentiment_scores[ticker]
             opt = optimized_weights[ticker]
             final = final_weights[ticker]
             chg = weight_changes[ticker]
-            print(f"  {ticker:<8} {score:>+10.3f} {opt*100:>11.1f}% {final*100:>12.1f}% "
-                  f"  {chg['direction']} {chg['change']*100:+.1f}%")
+            print(
+                f"  {ticker:<8} {score:>+10.3f} {opt*100:>11.1f}% {final*100:>12.1f}% "
+                f"  {chg['direction']} {chg['change']*100:+.1f}%"
+            )
 
         total = sum(final_weights.values())
-        print(f"\n  Final weights sum: {total:.6f} ({'✅' if abs(total - 1.0) < 1e-4 else '❌'})")
+        print(
+            f"\n  Final weights sum: {total:.6f} ({'✅' if abs(total - 1.0) < 1e-4 else '❌'})"
+        )
 
         return {
             "final_weights": {k: round(v, 6) for k, v in final_weights.items()},
             "optimized_weights": optimized_weights,
-            "sentiment_adjusted_weights": {k: round(v, 6) for k, v in sentiment_adjusted.items()},
+            "sentiment_adjusted_weights": {
+                k: round(v, 6) for k, v in sentiment_adjusted.items()
+            },
             "sentiment_scores": self.sentiment_scores,
             "alpha": alpha,
             "weight_changes": weight_changes,
-            "tickers": self.tickers
+            "tickers": self.tickers,
         }
 
-    def sensitivity_analysis(self, alphas: Optional[list] = None,
-                             max_weight: Optional[float] = DEFAULT_MAX_WEIGHT) -> dict:
+    def sensitivity_analysis(
+        self,
+        alphas: Optional[list] = None,
+        max_weight: Optional[float] = DEFAULT_MAX_WEIGHT,
+    ) -> dict:
         """
         Run combine() at multiple alpha values to see sensitivity.
         Useful for understanding how much sentiment affects the final portfolio.
@@ -314,23 +338,18 @@ if __name__ == "__main__":
     # Simulated output from PortfolioOptimizer.optimize()
     mock_optimized = {
         "tickers": ["AAPL", "MSFT", "GOOGL", "AMZN"],
-        "weights": {
-            "AAPL": 0.35,
-            "MSFT": 0.30,
-            "GOOGL": 0.20,
-            "AMZN": 0.15
-        },
+        "weights": {"AAPL": 0.35, "MSFT": 0.30, "GOOGL": 0.20, "AMZN": 0.15},
         "sharpe_ratio": 1.42,
         "expected_return": 0.18,
-        "volatility": 0.22
+        "volatility": 0.22,
     }
 
     # Simulated FinBERT sentiment scores
     mock_sentiment = {
-        "AAPL": 0.72,    # Strong positive → should increase weight
-        "MSFT": 0.55,    # Positive → slight increase
+        "AAPL": 0.72,  # Strong positive → should increase weight
+        "MSFT": 0.55,  # Positive → slight increase
         "GOOGL": -0.40,  # Negative → should decrease weight
-        "AMZN": 0.30     # Mildly positive → slight increase
+        "AMZN": 0.30,  # Mildly positive → slight increase
     }
 
     signal = CombinedSignal(mock_optimized, mock_sentiment)

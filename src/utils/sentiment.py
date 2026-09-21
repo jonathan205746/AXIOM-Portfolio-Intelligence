@@ -9,7 +9,6 @@ same sentiment label for the same score.
 from enum import Enum
 from typing import Optional
 
-
 POSITIVE_THRESHOLD = 0.10
 NEGATIVE_THRESHOLD = -0.10
 
@@ -44,9 +43,7 @@ def classify_sentiment(
         return SentimentLabel.INSUFFICIENT_EVIDENCE
 
     if not isinstance(score, (int, float)):
-        raise TypeError(
-            "Sentiment score must be a number or None."
-        )
+        raise TypeError("Sentiment score must be a number or None.")
 
     numeric_score = float(score)
 

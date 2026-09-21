@@ -8,19 +8,20 @@ LLM: Groq-hosted model configured through GROQ_MODEL.
 
 import os
 import time
-from dotenv import load_dotenv
 from typing import Any
-from langchain_groq import ChatGroq
+
+from dotenv import load_dotenv
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_groq import ChatGroq
 
 from src.utils.sentiment import classify_sentiment
-
 
 load_dotenv()
 
 # ── Prompt Template ───────────────────────────────────────────────────────────
 
-RECOMMENDATION_PROMPT = ChatPromptTemplate.from_template("""
+RECOMMENDATION_PROMPT = ChatPromptTemplate.from_template(
+    """
 You are the research-explanation layer of AXIOM Portfolio Intelligence.
 
 The quantitative optimizer is the only component allowed to calculate
@@ -56,23 +57,41 @@ Model observation: one concise sentence
 Risk scenario to test: one sentence
 Quantitative next step: suggest a constraint or stress test, without
 providing a new target weight
-""")
+"""
+)
 
 # ── Helper Functions ──────────────────────────────────────────────────────────
+
 
 def format_articles(articles: list) -> str:
     if not articles:
         return "No recent news articles available."
-    return "\n".join(
-        f"{i+1}. {a.strip()}" for i, a in enumerate(articles[:5])
-    )
+    return "\n".join(f"{i+1}. {a.strip()}" for i, a in enumerate(articles[:5]))
 
 
 def weight_to_percent(weight: float) -> str:
     return f"{round(weight * 100, 1)}"
 
 
+def _response_text(response: Any) -> str:
+    """Normalize LangChain/Groq response variants to plain text."""
+    content: Any
+    if hasattr(response, "content"):
+        content = response.content
+    elif isinstance(response, list) and response:
+        first_item = response[0]
+        content = first_item.content if hasattr(first_item, "content") else first_item
+    else:
+        content = response
+
+    if isinstance(content, list):
+        content = content[0] if content else ""
+
+    return str(content).strip()
+
+
 # ── RAG Pipeline Class ────────────────────────────────────────────────────────
+
 
 class RAGPipeline:
     """
@@ -80,11 +99,7 @@ class RAGPipeline:
     Uses prompt | llm chain syntax (replaces deprecated LLMChain)
     """
 
-    def __init__(
-        self,
-        model_name: str | None = None,
-        temperature: float = 0.3
-    ):
+    def __init__(self, model_name: str | None = None, temperature: float = 0.3):
         api_key = os.getenv("GROQ_API_KEY", "").strip()
 
         if not api_key:
@@ -94,10 +109,7 @@ class RAGPipeline:
                 "Get free key: console.groq.com"
             )
 
-        model_name = model_name or os.getenv(
-            "GROQ_MODEL",
-            "openai/gpt-oss-120b"
-        )
+        model_name = model_name or os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
         self.model_name = model_name
 
@@ -119,7 +131,7 @@ class RAGPipeline:
         ticker: str,
         sentiment_score: float,
         portfolio_weight: float,
-        retrieved_articles: list
+        retrieved_articles: list,
     ) -> dict:
         """
         Generate evidence-grounded research commentary.
@@ -146,26 +158,17 @@ class RAGPipeline:
         print(f"  Articles  : {len(retrieved_articles)}")
 
         try:
-            response = self.chain.invoke({
-                "ticker": ticker,
-                "sentiment_score": round(sentiment_score, 3),
-                "sentiment_label": sentiment_label,
-                "portfolio_weight": weight_pct,
-                "articles": formatted_articles
-            })
+            response = self.chain.invoke(
+                {
+                    "ticker": ticker,
+                    "sentiment_score": round(sentiment_score, 3),
+                    "sentiment_label": sentiment_label,
+                    "portfolio_weight": weight_pct,
+                    "articles": formatted_articles,
+                }
+            )
 
-            if hasattr(response, "content"):
-                content = response.content
-            elif isinstance(response, list) and response:
-                first_item = response[0]
-                content = first_item.content if hasattr(first_item, "content") else first_item
-            else:
-                content = str(response)
-
-            if isinstance(content, list):
-                content = content[0] if content else ""
-
-            recommendation_text = str(content).strip()
+            recommendation_text = _response_text(response)
 
         except Exception as e:
             print(f"[RAGPipeline] LLM call failed for {ticker}: {e}")
@@ -175,7 +178,7 @@ class RAGPipeline:
                 f"({round(sentiment_score, 3)})\n"
                 f"- Quantitative optimizer target: {weight_pct}%\n"
                 "- The optimizer result remains available without AI commentary."
-      )
+            )
 
         return {
             "ticker": ticker,
@@ -209,17 +212,7 @@ class RAGPipeline:
 
         try:
             response = self.llm.invoke(prompt)
-            if hasattr(response, "content"):
-                content = response.content
-            elif isinstance(response, list) and response:
-                first_item = response[0]
-                content = first_item.content if hasattr(first_item, "content") else first_item
-            else:
-                content = str(response)
-
-            if isinstance(content, list):
-                content = content[0] if content else ""
-            return str(content).strip()
+            return _response_text(response)
         except Exception as e:
             print(f"[RAGPipeline] Summary failed: {e}")
             return "Portfolio summary unavailable — check GROQ_API_KEY."
@@ -232,7 +225,7 @@ if __name__ == "__main__":
     print("RAG PIPELINE TEST — Groq + LangChain 1.3.0")
     print("=" * 60)
 
-    test_tickers = [
+    test_tickers: list[dict[str, Any]] = [
         {
             "ticker": "AAPL",
             "sentiment_score": 0.72,
@@ -240,8 +233,8 @@ if __name__ == "__main__":
             "articles": [
                 "Apple reports record iPhone sales in Q4 2024.",
                 "Apple Vision Pro receives mixed reviews from developers.",
-                "Apple increases dividend payout for third consecutive year."
-            ]
+                "Apple increases dividend payout for third consecutive year.",
+            ],
         },
         {
             "ticker": "MSFT",
@@ -250,7 +243,7 @@ if __name__ == "__main__":
             "articles": [
                 "Microsoft Azure cloud revenue grows 28% year-over-year.",
                 "Microsoft Copilot integration drives Office 365 adoption.",
-            ]
+            ],
         },
         {
             "ticker": "GOOGL",
@@ -259,8 +252,8 @@ if __name__ == "__main__":
             "articles": [
                 "Google faces antitrust scrutiny in EU over search dominance.",
                 "Google Cloud gains market share in AI infrastructure deals.",
-            ]
-        }
+            ],
+        },
     ]
 
     pipeline = RAGPipeline()
@@ -272,7 +265,7 @@ if __name__ == "__main__":
             ticker=data["ticker"],
             sentiment_score=data["sentiment_score"],
             portfolio_weight=data["portfolio_weight"],
-            retrieved_articles=data["articles"]
+            retrieved_articles=data["articles"],
         )
         if result:
             all_recommendations.append(result)

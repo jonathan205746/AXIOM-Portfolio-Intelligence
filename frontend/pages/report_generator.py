@@ -2,24 +2,23 @@
 Axiom Report Generator V1.0.0
 Self-contained HTML reports in institutional glassmorphic aesthetic.
 """
+
 from datetime import datetime
 from html import escape
 
 import bleach
 import markdown
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 
 from src.optimization.health_score import HealthScoreEngine
+from src.optimization.rebalancing import (
+    classify_model_adjustment,
+)
 from src.utils.sentiment import (
     SentimentLabel,
     classify_sentiment,
 )
-from src.optimization.rebalancing import (
-    classify_model_adjustment,
-)
-
 
 ALLOWED_AI_HTML_TAGS = [
     "p",
@@ -83,6 +82,7 @@ def get_report_sentiment(
         bar_width,
     )
 
+
 def generate_axiom_report(portfolio, results, display_names):
     """Generate a self-contained HTML report in Axiom glassmorphic style."""
     opt_result = results.get("opt_result", {})
@@ -91,12 +91,7 @@ def generate_axiom_report(portfolio, results, display_names):
     sentiment_scores = results.get("sentiment_scores", {})
     risk_report = results.get("risk_report", {})
     recommendations = results.get("recommendations", [])
-    combined = results.get("combined", {})
     rebalance_plan = results.get("rebalance_plan", {})
-    current_allocation = results.get(
-        "current_allocation",
-        {},
-    )
     frontier_df = results.get(
         "frontier_df",
         pd.DataFrame(),
@@ -104,7 +99,11 @@ def generate_axiom_report(portfolio, results, display_names):
     returns_df = results.get("returns", pd.DataFrame())
     correlation_matrix = results.get("correlation_matrix")
     available = results.get("tickers", [])
-    all_news = results.get("all_news", {}) or results.get("news", {}) or results.get("articles", {})
+    all_news = (
+        results.get("all_news", {})
+        or results.get("news", {})
+        or results.get("articles", {})
+    )
 
     sharpe = opt_result.get("sharpe_ratio", 0)
     var95 = risk_report.get("value_at_risk", {}).get("historical_95", {})
@@ -112,21 +111,19 @@ def generate_axiom_report(portfolio, results, display_names):
     vol = risk_report.get("volatility", {}).get("portfolio_annualized", 0)
     mdd = risk_report.get("drawdown", {}).get("portfolio", {})
     available_sentiments = [
-        float(score)
-        for score in sentiment_scores.values()
-        if score is not None
+        float(score) for score in sentiment_scores.values() if score is not None
     ]
 
     avg_sent = (
-        sum(available_sentiments)
-        / len(available_sentiments)
+        sum(available_sentiments) / len(available_sentiments)
         if available_sentiments
         else None
     )
 
     news_counts = {t: len(all_news.get(t, [])) for t in available}
     health = results.get("health_score") or HealthScoreEngine.calculate(
-        sharpe=sharpe, volatility=vol,
+        sharpe=sharpe,
+        volatility=vol,
         var95=var95.get("var_pct", 0.0),
         max_drawdown_pct=mdd.get("max_drawdown_pct", 0.0),
         sentiment_scores=sentiment_scores,
@@ -139,7 +136,6 @@ def generate_axiom_report(portfolio, results, display_names):
     score_label = f'{health["label"]} · {health["grade"]}'
 
     pf_curr = portfolio.get("currency", "USD")
-    currency_symbol = "₹" if pf_curr == "INR" else "$"
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     gen_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     pf_name = portfolio.get("name", "PORTFOLIO").upper()
@@ -169,20 +165,12 @@ def generate_axiom_report(portfolio, results, display_names):
     weights_rows = []
 
     for ticker in available:
-        optimized_weight = float(
-            opt_result
-            .get("weights", {})
-            .get(ticker, 0.0)
-        )
-        final_weight = float(
-            final_weights.get(ticker, 0.0)
-        )
+        optimized_weight = float(opt_result.get("weights", {}).get(ticker, 0.0))
+        final_weight = float(final_weights.get(ticker, 0.0))
 
         optimized_pct = optimized_weight * 100
         final_pct = final_weight * 100
-        model_change_pct = (
-            final_weight - optimized_weight
-        ) * 100
+        model_change_pct = (final_weight - optimized_weight) * 100
 
         model_action = classify_model_adjustment(
             optimized_weight,
@@ -233,7 +221,8 @@ def generate_axiom_report(portfolio, results, display_names):
         else:
             gap_color = C["red"]
 
-        weights_rows.append(f"""
+        weights_rows.append(
+            f"""
         <tr>
           <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};color:{C['text_primary']};font-weight:600;">{escape(str(display_names.get(ticker, ticker)))}</td>
           <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{C['text_primary']};font-family:'JetBrains Mono',monospace;">{current_text}</td>
@@ -245,7 +234,8 @@ def generate_axiom_report(portfolio, results, display_names):
           <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{action_color};font-weight:700;">{rebalance_action}</td>
           <td style="padding:8px 10px;border-bottom:1px solid {C['border_subtle']};color:{C['text_tertiary']};font-size:0.70rem;">{escape(str(reason))}</td>
         </tr>
-        """)
+        """
+        )
 
     weights_html = "\n".join(weights_rows)
 
@@ -254,10 +244,11 @@ def generate_axiom_report(portfolio, results, display_names):
     for t in available:
         score = sentiment_scores.get(t)
         label, color, score_text, bar_width = get_report_sentiment(
-          score,
-          C,
+            score,
+            C,
         )
-        sentiment_rows.append(f"""
+        sentiment_rows.append(
+            f"""
         <tr>
             <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};color:{C['text_primary']};font-weight:600;font-family:'Inter',sans-serif;">{display_names.get(t, t)}</td>
             <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};width:120px;">
@@ -267,30 +258,28 @@ def generate_axiom_report(portfolio, results, display_names):
             </td>
             <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{color};font-weight:700;font-family:'JetBrains Mono',monospace;">{score_text}</td>
             <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{color};font-size:0.75rem;font-weight:600;">{label}</td>
-        </tr>""")
+        </tr>"""
+        )
     sentiment_html = "\n".join(sentiment_rows)
 
     # ── Risk Per Ticker ───────────────────────────────────────
-    vols = (
-        risk_report
-        .get("volatility", {})
-        .get("per_ticker_annualized", {})
-    )
-
+    vols = risk_report.get("volatility", {}).get("per_ticker_annualized", {})
 
     risk_rows = []
     for t in available:
         v = vols.get(t, 0) * 100
         c = C["red"] if v > vol * 100 else C["green"]
-        risk_rows.append(f"""
+        risk_rows.append(
+            f"""
         <tr>
             <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};color:{C['text_primary']};font-family:'Inter',sans-serif;">{display_names.get(t, t)}</td>
             <td style="padding:8px 12px;border-bottom:1px solid {C['border_subtle']};text-align:right;color:{c};font-family:'JetBrains Mono',monospace;font-weight:600;">{v:.2f}%</td>
-        </tr>""")
+        </tr>"""
+        )
     risk_html = "\n".join(risk_rows)
 
     # ── Recommendations ───────────────────────────────────────
-        # ── AI Research Commentary ─────────────────────────────────
+    # ── AI Research Commentary ─────────────────────────────────
     rec_parts = []
 
     if recommendations:
@@ -303,32 +292,18 @@ def generate_axiom_report(portfolio, results, display_names):
                 C,
             )
 
-            optimizer_weight_pct = escape(
-                str(rec.get("portfolio_weight_pct", "N/A"))
-            )
-            commentary_html = render_ai_commentary(
-                str(rec.get("recommendation", ""))
-            )
+            optimizer_weight_pct = escape(str(rec.get("portfolio_weight_pct", "N/A")))
+            commentary_html = render_ai_commentary(str(rec.get("recommendation", "")))
 
             glow_by_label = {
-                SentimentLabel.POSITIVE.value: (
-                    "rgba(16,185,129,0.08)"
-                ),
-                SentimentLabel.NEGATIVE.value: (
-                    "rgba(244,63,94,0.08)"
-                ),
-                SentimentLabel.NEUTRAL.value: (
-                    "rgba(255,255,255,0.02)"
-                ),
-                SentimentLabel.INSUFFICIENT_EVIDENCE.value: (
-                    "rgba(245,158,11,0.08)"
-                ),
+                SentimentLabel.POSITIVE.value: ("rgba(16,185,129,0.08)"),
+                SentimentLabel.NEGATIVE.value: ("rgba(244,63,94,0.08)"),
+                SentimentLabel.NEUTRAL.value: ("rgba(255,255,255,0.02)"),
+                SentimentLabel.INSUFFICIENT_EVIDENCE.value: ("rgba(245,158,11,0.08)"),
             }
             glow = glow_by_label[label]
 
-            ticker_name = escape(
-                str(display_names.get(ticker, ticker))
-            )
+            ticker_name = escape(str(display_names.get(ticker, ticker)))
 
             rec_parts.append(
                 f"""
@@ -416,28 +391,24 @@ def generate_axiom_report(portfolio, results, display_names):
         if not articles:
             continue
 
-        ticker_name = escape(
-            str(display_names.get(ticker, ticker))
-        )
+        ticker_name = escape(str(display_names.get(ticker, ticker)))
 
         news_parts.append(
             f'<div style="margin-bottom:14px;">'
             f'<div style="font-size:0.78rem;font-weight:700;'
             f'color:{C["accent"]};margin-bottom:6px;'
-            f'font-family:\'Inter\',sans-serif;">'
+            f"font-family:'Inter',sans-serif;\">"
             f"{ticker_name} — {len(articles)} articles"
             "</div>"
         )
 
         for article in articles[:5]:
-            title = escape(
-                str(article.get("title", ""))
-            )
+            title = escape(str(article.get("title", "")))
 
             news_parts.append(
                 f'<div style="font-size:0.74rem;'
                 f'color:{C["text_secondary"]};padding:3px 0;'
-                f'border-bottom:1px solid '
+                f"border-bottom:1px solid "
                 f'{C["border_subtle"]};">'
                 f"• {title}"
                 "</div>"
@@ -457,90 +428,108 @@ def generate_axiom_report(portfolio, results, display_names):
 
     # ── Charts ────────────────────────────────────────────────
 
-    final_sharpe = float(
-        opt_result.get("sharpe_ratio", 0.0)
-    )
-    baseline_sharpe = float(
-        baseline.get("sharpe_ratio", 0.0)
-    )
+    final_sharpe = float(opt_result.get("sharpe_ratio", 0.0))
+    baseline_sharpe = float(baseline.get("sharpe_ratio", 0.0))
     frontier_div = ""
     frontier_fig = None
     if not frontier_df.empty:
         try:
             fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=frontier_df["volatility"]*100, y=frontier_df["return"]*100, mode='markers',
-                marker=dict(color=frontier_df["sharpe"], colorscale=[[0, C["red"]], [0.5, C["accent"]], [1, C["green"]]], size=4, opacity=0.5),
-                name="Frontier"
-            ))
-            fig.add_trace(go.Scatter(
-                x=[opt_result.get("volatility", 0) * 100],
-                y=[
-                    opt_result.get(
-                        "expected_return",
-                        0,
-                    ) * 100
-                ],
-                mode="markers+text",
-                marker=dict(
-                    color=C["accent"],
-                    size=14,
-                    symbol="star",
-                    line=dict(
-                        color="white",
-                        width=1,
+            fig.add_trace(
+                go.Scatter(
+                    x=frontier_df["volatility"] * 100,
+                    y=frontier_df["return"] * 100,
+                    mode="markers",
+                    marker=dict(
+                        color=frontier_df["sharpe"],
+                        colorscale=[[0, C["red"]], [0.5, C["accent"]], [1, C["green"]]],
+                        size=4,
+                        opacity=0.5,
                     ),
-                ),
-                text=[
-                    f"FINAL<br>Sharpe {final_sharpe:.3f}"
-                ],
-                textposition="top center",
-                name=(
-                    f"Final "
-                    f"(Sharpe={final_sharpe:.3f})"
-                ),
-            ))
-            fig.add_trace(go.Scatter(
-                x=[
-                    baseline.get(
-                        "volatility",
-                        0,
-                    ) * 100
-                ],
-                y=[
-                    baseline.get(
-                        "expected_return",
-                        0,
-                    ) * 100
-                ],
-                mode="markers+text",
-                marker=dict(
-                    color=C["text_secondary"],
-                    size=10,
-                    symbol="diamond",
-                ),
-                text=[
-                    (
-                        "BASELINE"
-                        f"<br>Sharpe {baseline_sharpe:.3f}"
-                    )
-                ],
-                textposition="bottom center",
-                name=(
-                    f"Baseline "
-                    f"<br>Sharpe {baseline_sharpe:.3f}"
-                ),
-            ))
+                    name="Frontier",
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=[opt_result.get("volatility", 0) * 100],
+                    y=[
+                        opt_result.get(
+                            "expected_return",
+                            0,
+                        )
+                        * 100
+                    ],
+                    mode="markers+text",
+                    marker=dict(
+                        color=C["accent"],
+                        size=14,
+                        symbol="star",
+                        line=dict(
+                            color="white",
+                            width=1,
+                        ),
+                    ),
+                    text=[f"FINAL<br>Sharpe {final_sharpe:.3f}"],
+                    textposition="top center",
+                    name=(f"Final " f"(Sharpe={final_sharpe:.3f})"),
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=[
+                        baseline.get(
+                            "volatility",
+                            0,
+                        )
+                        * 100
+                    ],
+                    y=[
+                        baseline.get(
+                            "expected_return",
+                            0,
+                        )
+                        * 100
+                    ],
+                    mode="markers+text",
+                    marker=dict(
+                        color=C["text_secondary"],
+                        size=10,
+                        symbol="diamond",
+                    ),
+                    text=[("BASELINE" f"<br>Sharpe {baseline_sharpe:.3f}")],
+                    textposition="bottom center",
+                    name=(f"Baseline " f"<br>Sharpe {baseline_sharpe:.3f}"),
+                )
+            )
             fig.update_layout(
-                title="EFFICIENT FRONTIER", xaxis_title="VOLATILITY (%)", yaxis_title="RETURN (%)",
-                height=400, paper_bgcolor=C["bg_elevated"], plot_bgcolor=C["bg_elevated"],
-                font=dict(family="JetBrains Mono, monospace", color=C["text_primary"], size=10),
+                title="EFFICIENT FRONTIER",
+                xaxis_title="VOLATILITY (%)",
+                yaxis_title="RETURN (%)",
+                height=400,
+                paper_bgcolor=C["bg_elevated"],
+                plot_bgcolor=C["bg_elevated"],
+                font=dict(
+                    family="JetBrains Mono, monospace", color=C["text_primary"], size=10
+                ),
                 margin=dict(l=60, r=35, t=75, b=50),
                 uniformtext_minsize=8,
                 uniformtext_mode="show",
-                xaxis=dict(gridcolor=C["border_subtle"], linecolor=C["border_active"],automargin=True,),
-                yaxis=dict(gridcolor=C["border_subtle"], linecolor=C["border_active"],automargin=True,),
-                legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor=C["border_subtle"], borderwidth=1, font=dict(size=9))
+                xaxis=dict(
+                    gridcolor=C["border_subtle"],
+                    linecolor=C["border_active"],
+                    automargin=True,
+                ),
+                yaxis=dict(
+                    gridcolor=C["border_subtle"],
+                    linecolor=C["border_active"],
+                    automargin=True,
+                ),
+                legend=dict(
+                    bgcolor="rgba(0,0,0,0)",
+                    bordercolor=C["border_subtle"],
+                    borderwidth=1,
+                    font=dict(size=9),
+                ),
             )
             frontier_fig = fig
             frontier_div = fig.to_html(full_html=False, include_plotlyjs=False)
@@ -552,35 +541,69 @@ def generate_axiom_report(portfolio, results, display_names):
     if final_weights and baseline:
         try:
             from plotly.subplots import make_subplots
+
             tickers_list = list(final_weights.keys())
             final_vals = [final_weights.get(t, 0) * 100 for t in tickers_list]
             equal_val = 100 / len(tickers_list) if tickers_list else 0
             equal_vals = [equal_val] * len(tickers_list)
 
-            fig_w = make_subplots(rows=1, cols=2, subplot_titles=(
-                "FINAL WEIGHTS",
-                f"EQUAL WEIGHT (SHARPE={baseline.get('sharpe_ratio', 0):.3f})"
-            ))
-            fig_w.add_trace(go.Bar(
-                y=[display_names.get(t, t) for t in tickers_list], x=final_vals,
-                orientation='h', marker=dict(color=C["accent"], line=dict(color=C["accent"], width=1)),
-                text=[f"{v:.1f}%" for v in final_vals], textposition='outside',
-                textfont=dict(color=C["text_primary"], size=9)
-            ), row=1, col=1)
-            fig_w.add_trace(go.Bar(
-                y=[display_names.get(t, t) for t in tickers_list], x=equal_vals,
-                orientation='h', marker=dict(color=C["text_secondary"], line=dict(color=C["text_secondary"], width=1)),
-                text=[f"{v:.1f}%" for v in equal_vals], textposition='outside',
-                textfont=dict(color=C["text_primary"], size=9)
-            ), row=1, col=2)
-            fig_w.update_layout(
-                showlegend=False, height=max(320, 45 * len(tickers_list)),
-                paper_bgcolor=C["bg_elevated"], plot_bgcolor=C["bg_elevated"],
-                font=dict(family="JetBrains Mono, monospace", color=C["text_primary"], size=10),
-                margin=dict(l=100, r=20, t=40, b=40)
+            fig_w = make_subplots(
+                rows=1,
+                cols=2,
+                subplot_titles=(
+                    "FINAL WEIGHTS",
+                    f"EQUAL WEIGHT (SHARPE={baseline.get('sharpe_ratio', 0):.3f})",
+                ),
             )
-            fig_w.update_xaxes(title_text="WEIGHT (%)", gridcolor=C["border_subtle"], linecolor=C["border_active"])
-            fig_w.update_yaxes(gridcolor=C["border_subtle"], linecolor=C["border_active"])
+            fig_w.add_trace(
+                go.Bar(
+                    y=[display_names.get(t, t) for t in tickers_list],
+                    x=final_vals,
+                    orientation="h",
+                    marker=dict(
+                        color=C["accent"], line=dict(color=C["accent"], width=1)
+                    ),
+                    text=[f"{v:.1f}%" for v in final_vals],
+                    textposition="outside",
+                    textfont=dict(color=C["text_primary"], size=9),
+                ),
+                row=1,
+                col=1,
+            )
+            fig_w.add_trace(
+                go.Bar(
+                    y=[display_names.get(t, t) for t in tickers_list],
+                    x=equal_vals,
+                    orientation="h",
+                    marker=dict(
+                        color=C["text_secondary"],
+                        line=dict(color=C["text_secondary"], width=1),
+                    ),
+                    text=[f"{v:.1f}%" for v in equal_vals],
+                    textposition="outside",
+                    textfont=dict(color=C["text_primary"], size=9),
+                ),
+                row=1,
+                col=2,
+            )
+            fig_w.update_layout(
+                showlegend=False,
+                height=max(320, 45 * len(tickers_list)),
+                paper_bgcolor=C["bg_elevated"],
+                plot_bgcolor=C["bg_elevated"],
+                font=dict(
+                    family="JetBrains Mono, monospace", color=C["text_primary"], size=10
+                ),
+                margin=dict(l=100, r=20, t=40, b=40),
+            )
+            fig_w.update_xaxes(
+                title_text="WEIGHT (%)",
+                gridcolor=C["border_subtle"],
+                linecolor=C["border_active"],
+            )
+            fig_w.update_yaxes(
+                gridcolor=C["border_subtle"], linecolor=C["border_active"]
+            )
             weights_bar_fig = fig_w
             weights_bar_div = fig_w.to_html(full_html=False, include_plotlyjs=False)
         except Exception:
@@ -588,32 +611,48 @@ def generate_axiom_report(portfolio, results, display_names):
 
     corr_div = ""
     corr_fig = None
-    if correlation_matrix is None and isinstance(returns_df, pd.DataFrame) and not returns_df.empty:
+    if (
+        correlation_matrix is None
+        and isinstance(returns_df, pd.DataFrame)
+        and not returns_df.empty
+    ):
         correlation_matrix = returns_df.corr()
     if isinstance(correlation_matrix, pd.DataFrame) and not correlation_matrix.empty:
         try:
             corr = correlation_matrix.copy()
             corr.columns = [display_names.get(t, t) for t in corr.columns]
             corr.index = corr.columns
-            fig_c = go.Figure(go.Heatmap(
-                z=corr.values,
-                x=corr.columns.tolist(),
-                y=corr.index.tolist(),
-                colorscale=[[0, C["red"]], [0.5, C["bg_elevated"]], [1, C["green"]]],
-                zmin=-1,
-                zmax=1,
-                text=corr.round(2).values,
-                texttemplate="%{text}",
-                textfont=dict(size=8, color=C["text_primary"]),
-                colorbar=dict(
-                    title=dict(text="Correlation", font=dict(color=C["text_secondary"])),
-                    tickfont=dict(color=C["text_secondary"]),
-                ),
-            ))
+            fig_c = go.Figure(
+                go.Heatmap(
+                    z=corr.values,
+                    x=corr.columns.tolist(),
+                    y=corr.index.tolist(),
+                    colorscale=[
+                        [0, C["red"]],
+                        [0.5, C["bg_elevated"]],
+                        [1, C["green"]],
+                    ],
+                    zmin=-1,
+                    zmax=1,
+                    text=corr.round(2).values,
+                    texttemplate="%{text}",
+                    textfont=dict(size=8, color=C["text_primary"]),
+                    colorbar=dict(
+                        title=dict(
+                            text="Correlation", font=dict(color=C["text_secondary"])
+                        ),
+                        tickfont=dict(color=C["text_secondary"]),
+                    ),
+                )
+            )
             fig_c.update_layout(
-                title="CORRELATION MATRIX", height=350,
-                paper_bgcolor=C["bg_elevated"], plot_bgcolor=C["bg_elevated"],
-                font=dict(family="JetBrains Mono, monospace", color=C["text_primary"], size=10),
+                title="CORRELATION MATRIX",
+                height=350,
+                paper_bgcolor=C["bg_elevated"],
+                plot_bgcolor=C["bg_elevated"],
+                font=dict(
+                    family="JetBrains Mono, monospace", color=C["text_primary"], size=10
+                ),
                 margin=dict(l=50, r=20, t=50, b=40),
             )
             corr_fig = fig_c
@@ -625,7 +664,9 @@ def generate_axiom_report(portfolio, results, display_names):
     # the inline Plotly library. This keeps reports fully offline-capable and
     # ensures Plotly is defined before any chart script executes.
     if weights_bar_fig is not None:
-        weights_bar_div = weights_bar_fig.to_html(full_html=False, include_plotlyjs="inline")
+        weights_bar_div = weights_bar_fig.to_html(
+            full_html=False, include_plotlyjs="inline"
+        )
     elif frontier_fig is not None:
         frontier_div = frontier_fig.to_html(full_html=False, include_plotlyjs="inline")
     elif corr_fig is not None:
@@ -640,7 +681,7 @@ def generate_axiom_report(portfolio, results, display_names):
     )
 
     score_improvements_html = "\n".join(
-        f'<div style="padding:4px 0;color:{C["text_secondary"]};font-size:0.75rem;">• {tip}</div>' 
+        f'<div style="padding:4px 0;color:{C["text_secondary"]};font-size:0.75rem;">• {tip}</div>'
         for tip in health.get("improvements", [])
     )
 
@@ -661,11 +702,12 @@ def generate_axiom_report(portfolio, results, display_names):
         f'<th style="text-align:right;color:{C["text_tertiary"]};font-weight:600;">HEALTH</th>'
         f'<th style="text-align:right;color:{C["text_tertiary"]};font-weight:600;">SHARPE</th>'
         f'<th style="text-align:right;color:{C["text_tertiary"]};font-weight:600;">VOL</th></tr></thead>'
-        f'<tbody>{adaptive_rows}</tbody></table>'
+        f"<tbody>{adaptive_rows}</tbody></table>"
         f'<div style="margin-top:8px;color:{C["text_secondary"]};font-size:0.72rem;font-family:\'JetBrains Mono\',monospace;">'
         f'SELECTED CAP: <strong style="color:{C["text_primary"]}">{(selected_cap or 0)*100:.1f}%</strong> | '
         f'POTENTIAL SCORE: <strong style="color:{C["text_primary"]}">{health.get("potential_score", ai_score):.1f}/100</strong></div></div>'
-        if adaptive_candidates else ''
+        if adaptive_candidates
+        else ""
     )
 
     exp_ret = opt_result.get("expected_return", 0)
@@ -683,9 +725,7 @@ def generate_axiom_report(portfolio, results, display_names):
         avg_sent_cls = "accent"
         avg_sent_text = f"{avg_sent:+.3f}"
 
-
     risk_currency_symbol = "$"
-
 
     # ── HTML Assembly ─────────────────────────────────────────
     html = f"""<!DOCTYPE html>

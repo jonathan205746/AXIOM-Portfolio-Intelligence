@@ -5,7 +5,7 @@ VENV ?= .venv
 PIP := $(VENV)/bin/pip
 PY := $(VENV)/bin/python
 STREAMLIT := $(VENV)/bin/streamlit
-PYTEST := $(VENV)/bin/pytest
+PYTEST := $(PY) -m pytest
 RUFF := $(VENV)/bin/ruff
 BLACK := $(VENV)/bin/black
 MYPY := $(VENV)/bin/mypy
@@ -13,6 +13,8 @@ MYPY := $(VENV)/bin/mypy
 APP ?= frontend/app.py
 FRONTEND_REQUIREMENTS ?= requirements-frontend.txt
 DEV_REQUIREMENTS ?= requirements-dev.txt
+TORCH_VERSION ?= 2.6.0+cpu
+TORCH_INDEX_URL ?= https://download.pytorch.org/whl/cpu
 COMPOSE ?= docker compose
 SERVICE ?= frontend
 STACK_NAME ?= portfolio-optimizer
@@ -58,6 +60,7 @@ venv:
 	$(PY) -m pip install --upgrade pip setuptools wheel
 
 install: venv
+	$(PIP) install torch==$(TORCH_VERSION) --extra-index-url $(TORCH_INDEX_URL)
 	$(PIP) install -r $(FRONTEND_REQUIREMENTS)
 
 install-dev: install

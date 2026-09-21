@@ -1,7 +1,6 @@
-# AI-Powered Portfolio Optimizer — Streamlit Dashboard Dockerfile
+# AXIOM Portfolio Intelligence — Streamlit runtime
 FROM python:3.10-slim-bookworm
 
-# ── System dependencies ──
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
@@ -9,37 +8,37 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Set working directory ──
 WORKDIR /app
 
-# ── Copy requirements first (for layer caching) ──
 COPY requirements-frontend.txt .
 
-RUN pip install --no-cache-dir torch==2.2.0+cpu \
+RUN pip install --no-cache-dir torch==2.6.0+cpu \
     --extra-index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements-frontend.txt \
     && pip install --no-cache-dir --upgrade "streamlit>=1.36.0"
 
-# ── Copy application code ──
 COPY frontend/ ./frontend/
 COPY src/ ./src/
 COPY data/ ./data/
 
-# ── Create directories for runtime data ──
-RUN mkdir -p /tmp/faiss_index /tmp/plots
+# Fixed UID/GID keeps runtime ownership predictable across Docker and EC2.
+RUN groupadd --gid 10001 axiom \
+    && useradd --uid 10001 --gid axiom --create-home --home-dir /home/axiom \
+        --shell /usr/sbin/nologin axiom \
+    && mkdir -p /data /tmp/faiss_index /tmp/plots \
+    && chown -R axiom:axiom /app /data /tmp/faiss_index /tmp/plots
 
-# ── Environment variables ──
 ENV PYTHONPATH=/app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8501
+ENV HOME=/home/axiom
 
-# ── Expose port ──
 EXPOSE 8501
 
-# ── Health check ──
+USER axiom
+
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8501}/_stcore/health || exit 1
 
-# ── Start Streamlit (Render injects $PORT) ──
-CMD ["sh", "-c", "streamlit run frontend/app.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true --server.enableCORS=false --server.enableXsrfProtection=false"]
+CMD ["sh", "-c", "streamlit run frontend/app.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true --server.enableCORS=true --server.enableXsrfProtection=true"]

@@ -34,7 +34,7 @@ database. Wanting final_weights in History later means changing
 db.py + init_db(), not something this file can paper over.
 """
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -103,13 +103,13 @@ class Portfolio:
 class Holding:
     id: int
     portfolio_id: int
-    ticker: str          # yfinance ticker, e.g. "TCS.NS"
-    display_name: str    # e.g. "TCS"
-    exchange: str          # "US" | "IN"
+    ticker: str  # yfinance ticker, e.g. "TCS.NS"
+    display_name: str  # e.g. "TCS"
+    exchange: str  # "US" | "IN"
     quantity: float
     buy_price: float
-    buy_currency: str    # "USD" | "INR"
-    buy_date: str          # "YYYY-MM-DD"
+    buy_currency: str  # "USD" | "INR"
+    buy_date: str  # "YYYY-MM-DD"
     created_at: str
 
     @classmethod

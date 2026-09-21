@@ -2,11 +2,15 @@
 Axiom Dashboard V1.0.0
 Institutional-grade portfolio intelligence hub.
 """
-import sys, os
+
+import os
+import sys
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import streamlit as st
 from dotenv import load_dotenv
+
 load_dotenv()
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
@@ -15,16 +19,23 @@ st.set_page_config(
     page_title="Axiom | Portfolio Intelligence",
     page_icon="◈",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 # ── Inject Design System ────────────────────────────────────
-from frontend.ui.theme import inject_theme
 from frontend.ui.components import (
-    sidebar_brand, sidebar_user, sidebar_nav_item,
-    command_bar, ticker_tape, metric_grid, section_header,
-    info_card, badge, status_pill, glass_panel
+    badge,
+    command_bar,
+    info_card,
+    metric_grid,
+    section_header,
+    sidebar_brand,
+    sidebar_nav_item,
+    sidebar_user,
+    ticker_tape,
 )
+from frontend.ui.theme import inject_theme
+
 inject_theme()
 
 # ── Database Init ───────────────────────────────────────────
@@ -44,6 +55,7 @@ except Exception:
 logged_in = st.session_state.get("logged_in", False)
 user = st.session_state.get("user", None)
 
+
 # ── Market Data ─────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def _market_snapshot():
@@ -58,8 +70,15 @@ def _market_snapshot():
     out = {}
     try:
         import yfinance as yf
-        for t, n in [("^GSPC", "SPX"), ("^NSEI", "NIFTY"), ("^IXIC", "NDX"),
-                     ("BTC-USD", "BTC"), ("ETH-USD", "ETH"), ("GC=F", "GOLD")]:
+
+        for t, n in [
+            ("^GSPC", "SPX"),
+            ("^NSEI", "NIFTY"),
+            ("^IXIC", "NDX"),
+            ("BTC-USD", "BTC"),
+            ("ETH-USD", "ETH"),
+            ("GC=F", "GOLD"),
+        ]:
             try:
                 h = yf.Ticker(t).history(period="2d")
                 if len(h) >= 2:
@@ -73,26 +92,31 @@ def _market_snapshot():
         return fallback
     return out
 
+
 market_data = _market_snapshot()
 
 # ── SIDEBAR ─────────────────────────────────────────────────
 with st.sidebar:
     sidebar_brand()
-    
+
     # Market snapshot mini-cards
-    st.markdown("""
+    st.markdown(
+        """
     <div style="padding: 0 16px; margin: 12px 0;">
         <div style="font-size:0.6rem;color:#4a4a5e;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">
             Global Markets
         </div>
     </div>
-    """, unsafe_allow_html=True)
-    
+    """,
+        unsafe_allow_html=True,
+    )
+
     for name, data in market_data.items():
         color = "#10B981" if data["change"] >= 0 else "#F43F5E"
         icon = "▲" if data["change"] >= 0 else "▼"
         sign = "+" if data["change"] >= 0 else ""
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div style="
             display: flex; justify-content: space-between; align-items: center;
             padding: 6px 16px; font-size: 0.75rem;
@@ -106,21 +130,29 @@ with st.sidebar:
                 <span style="color: {color}; font-weight: 700; margin-left: 6px;">{icon} {sign}{data['change']:.2f}%</span>
             </div>
         </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("<div style='border-top:1px solid rgba(255,255,255,0.06);margin:12px 0;'></div>", unsafe_allow_html=True)
-    
+        """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown(
+        "<div style='border-top:1px solid rgba(255,255,255,0.06);margin:12px 0;'></div>",
+        unsafe_allow_html=True,
+    )
+
     if logged_in and user:
         sidebar_user(user.get("username", "User"), "Portfolio Manager")
-        
-        st.markdown("""
+
+        st.markdown(
+            """
         <div style="padding: 0 16px; margin-bottom: 8px;">
             <div style="font-size:0.6rem;color:#4a4a5e;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;">
                 Navigation
             </div>
         </div>
-        """, unsafe_allow_html=True)
-        
+        """,
+            unsafe_allow_html=True,
+        )
+
         pages = [
             ("app.py", "◈", "Dashboard", True),
             ("pages/2_Portfolio.py", "◫", "Portfolio", False),
@@ -130,38 +162,52 @@ with st.sidebar:
         ]
         for page, icon, label, is_active in pages:
             if is_active:
-                st.markdown(sidebar_nav_item(label, icon, active=True), unsafe_allow_html=True)
+                st.markdown(
+                    sidebar_nav_item(label, icon, active=True), unsafe_allow_html=True
+                )
             else:
-                st.page_link(page, label=f"{icon}  {label}", width='stretch')
-        
-        st.markdown("<div style='border-top:1px solid rgba(255,255,255,0.06);margin:12px 0;'></div>", unsafe_allow_html=True)
-        
+                st.page_link(page, label=f"{icon}  {label}", width="stretch")
+
+        st.markdown(
+            "<div style='border-top:1px solid rgba(255,255,255,0.06);margin:12px 0;'></div>",
+            unsafe_allow_html=True,
+        )
+
         if st.button("◀ Logout", key="logout_main"):
             for k in ["logged_in", "user", "current_portfolio", "results"]:
                 st.session_state.pop(k, None)
             st.rerun()
     else:
-        st.markdown("""
+        st.markdown(
+            """
         <div style="padding: 0 16px; margin: 12px 0;">
             <div style="font-size:0.6rem;color:#4a4a5e;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">
                 Account
             </div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
         st.page_link("pages/1_Login.py", label="🔐  Authenticate", width="stretch")
-        st.markdown("""
+        st.markdown(
+            """
         <div style="padding: 8px 16px; font-size: 0.7rem; color: #4a4a5e; line-height: 1.5;">
             Sign in to access quantitative analytics, AI recommendations, and portfolio tracking.
         </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("""
+        """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown(
+        """
     <div style="padding: 12px 16px; margin-top: auto; border-top: 1px solid rgba(255,255,255,0.06);">
         <div style="font-size:0.6rem;color:#4a4a5e;text-align:center;letter-spacing:0.05em;">
             AXIOM V1.0.0 · Portfolio Intelligence
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 # ── COMMAND BAR ─────────────────────────────────────────────
 status = "LIVE" if logged_in else "GUEST"
@@ -174,7 +220,8 @@ ticker_tape([{"name": k, **v} for k, v in market_data.items()])
 if not DB_AVAILABLE:
     st.error("⚠ Database offline — ensure SQLite is writable")
 
-st.markdown("""
+st.markdown(
+    """
 <div style="padding: 20px 0 12px;">
     <div style="font-size:1.8rem;font-weight:800;color:#f0f0f5;letter-spacing:-0.03em;font-family:'Inter',sans-serif;line-height:1.1;">
         Portfolio Intelligence
@@ -183,12 +230,14 @@ st.markdown("""
         Quantitative analysis, sentiment engine, and AI-driven optimization
     </div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 if logged_in and user and DB_AVAILABLE:
     portfolios = get_user_portfolios(user["id"])
     results = st.session_state.get("results")
-    
+
     # KPI Section
     if results and portfolios:
         try:
@@ -200,15 +249,10 @@ if logged_in and user and DB_AVAILABLE:
             all_news = results.get("all_news", {})
 
             sharpe = opt.get("sharpe_ratio", 0)
-            vol = (
-                risk.get("volatility", {})
-                .get("portfolio_annualized", 0)
-            )
+            vol = risk.get("volatility", {}).get("portfolio_annualized", 0)
 
             valid_sentiment = {
-                ticker: score
-                for ticker, score in sent.items()
-                if score is not None
+                ticker: score for ticker, score in sent.items() if score is not None
             }
             avg_sent = (
                 sum(valid_sentiment.values()) / len(valid_sentiment)
@@ -216,91 +260,126 @@ if logged_in and user and DB_AVAILABLE:
                 else 0
             )
 
-            health = (
-                results.get("health_score")
-                or HealthScoreEngine.calculate(
-                    sharpe=sharpe,
-                    volatility=vol,
-                    var95=(
-                        risk
-                        .get("value_at_risk", {})
-                        .get("historical_95", {})
-                        .get("var_pct", 0.0)
-                    ),
-                    max_drawdown_pct=(
-                        risk
-                        .get("drawdown", {})
-                        .get("portfolio", {})
-                        .get("max_drawdown_pct", 0.0)
-                    ),
-                    sentiment_scores=valid_sentiment,
-                    final_weights=final_weights,
-                    risk_report=risk,
-                    baseline_sharpe=baseline.get("sharpe_ratio"),
-                    news_counts={
-                        ticker: len(all_news.get(ticker, []))
-                        for ticker in final_weights
-                    },
-                )
+            health = results.get("health_score") or HealthScoreEngine.calculate(
+                sharpe=sharpe,
+                volatility=vol,
+                var95=(
+                    risk.get("value_at_risk", {})
+                    .get("historical_95", {})
+                    .get("var_pct", 0.0)
+                ),
+                max_drawdown_pct=(
+                    risk.get("drawdown", {})
+                    .get("portfolio", {})
+                    .get("max_drawdown_pct", 0.0)
+                ),
+                sentiment_scores=valid_sentiment,
+                final_weights=final_weights,
+                risk_report=risk,
+                baseline_sharpe=baseline.get("sharpe_ratio"),
+                news_counts={
+                    ticker: len(all_news.get(ticker, [])) for ticker in final_weights
+                },
             )
 
-            portfolio_health_score = float(
-                health.get("score", 0)
-            )
+            portfolio_health_score = float(health.get("score", 0))
         except Exception:
             portfolio_health_score = 0
             sharpe = 0
             vol = 0
             avg_sent = 0
-        
-        section_header("Portfolio Health", "Real-time composite metrics", accent="primary")
-        
+
+        section_header(
+            "Portfolio Health", "Real-time composite metrics", accent="primary"
+        )
+
         metrics = [
-            {"label": "Portfolio Health", "value": f"{portfolio_health_score:.0f}", "tone": "accent", "icon": "◈", "delta": f"{portfolio_health_score:.0f}/100"},
-            {"label": "Sharpe Ratio", "value": f"{sharpe:.2f}", "tone": "cyan", "icon": "◉"},
-            {"label": "Exp Return", "value": f"{opt.get('expected_return', 0)*100:.1f}%", "tone": "positive" if opt.get('expected_return', 0) > 0 else "negative", "icon": "▲"},
-            {"label": "Volatility", "value": f"{vol*100:.1f}%", "tone": "negative", "icon": "◊"},
-            {"label": "Sentiment", "value": f"{avg_sent:+.2f}", "tone": "positive" if avg_sent > 0 else "negative", "icon": "◎"},
+            {
+                "label": "Portfolio Health",
+                "value": f"{portfolio_health_score:.0f}",
+                "tone": "accent",
+                "icon": "◈",
+                "delta": f"{portfolio_health_score:.0f}/100",
+            },
+            {
+                "label": "Sharpe Ratio",
+                "value": f"{sharpe:.2f}",
+                "tone": "cyan",
+                "icon": "◉",
+            },
+            {
+                "label": "Exp Return",
+                "value": f"{opt.get('expected_return', 0)*100:.1f}%",
+                "tone": "positive" if opt.get("expected_return", 0) > 0 else "negative",
+                "icon": "▲",
+            },
+            {
+                "label": "Volatility",
+                "value": f"{vol*100:.1f}%",
+                "tone": "negative",
+                "icon": "◊",
+            },
+            {
+                "label": "Sentiment",
+                "value": f"{avg_sent:+.2f}",
+                "tone": "positive" if avg_sent > 0 else "negative",
+                "icon": "◎",
+            },
         ]
         metric_grid(metrics, columns=5)
-        
+
         # Quick Actions
         st.markdown("<div style='height:16px;'></div>", unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         with c1:
-            if st.button("◫ Open Portfolio", width='stretch'):
+            if st.button("◫ Open Portfolio", width="stretch"):
                 st.switch_page("pages/2_Portfolio.py")
         with c2:
-            if st.button("▣ Run Analysis", type="primary", width='stretch'):
+            if st.button("▣ Run Analysis", type="primary", width="stretch"):
                 st.switch_page("pages/3_Analysis.py")
         with c3:
-            if st.button("⚖ Benchmark", width='stretch'):
+            if st.button("⚖ Benchmark", width="stretch"):
                 st.switch_page("pages/5_Compare.py")
     else:
         info_card(
             "No Analysis Data",
             "Build a portfolio and run your first optimization to unlock the AI health dashboard.",
             badge("GET STARTED", "accent"),
-            accent="cyan"
+            accent="cyan",
         )
-        if st.button("▶ Initialize Portfolio", type="primary", width='stretch'):
+        if st.button("▶ Initialize Portfolio", type="primary", width="stretch"):
             st.switch_page("pages/2_Portfolio.py")
-    
+
     # Active Portfolios
     if portfolios:
-        section_header("Active Portfolios", f"{len(portfolios)} records", accent="green")
-        
+        section_header(
+            "Active Portfolios", f"{len(portfolios)} records", accent="green"
+        )
+
         cols = st.columns(min(len(portfolios), 3))
         for i, pf in enumerate(portfolios[:3]):
             hist = get_portfolio_history(pf["id"], limit=1)
             last = hist[0] if hist else None
-            sh = f"{last['sharpe_ratio']:.3f}" if last and last.get("sharpe_ratio") else "—"
-            ret = f"{last['expected_return']*100:.1f}%" if last and last.get("expected_return") else "—"
-            vol_ = f"{last['volatility']*100:.1f}%" if last and last.get("volatility") else "—"
+            sh = (
+                f"{last['sharpe_ratio']:.3f}"
+                if last and last.get("sharpe_ratio")
+                else "—"
+            )
+            ret = (
+                f"{last['expected_return']*100:.1f}%"
+                if last and last.get("expected_return")
+                else "—"
+            )
+            vol_ = (
+                f"{last['volatility']*100:.1f}%"
+                if last and last.get("volatility")
+                else "—"
+            )
             rd = last["run_date"][:10] if last else "NO RUNS"
-            
+
             with cols[i]:
-                st.markdown(f"""
+                st.markdown(
+                    f"""
                 <div style="
                     background: rgba(18,18,26,0.72);
                     border: 1px solid rgba(255,255,255,0.06);
@@ -330,49 +409,58 @@ if logged_in and user and DB_AVAILABLE:
                         </div>
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
+                """,
+                    unsafe_allow_html=True,
+                )
 else:
     # Guest Landing
     section_header("System Overview", "Capabilities & architecture", accent="cyan")
-    
+
     feats = [
-    (
-        "◫",
-        "Market Data",
-        "Yahoo Finance prices with five-minute market caching",
-        "primary",
-    ),
-    (
-        "◈",
-        "Sentiment",
-        "FinBERT scoring on ticker-relevant financial news",
-        "cyan",
-    ),
-    (
-        "▣",
-        "Optimizer",
-        "Constrained mean-variance Sharpe optimization",
-        "green",
-    ),
-    (
-        "◉",
-        "LLM Engine",
-        "Groq-hosted AI reasoning and ticker guidance",
-        "violet",
-    ),
-    (
-        "⚖",
-        "Benchmark",
-        "Final target vs equal-weight and SPY comparison",
-        "accent",
-    ),
-]
-    
+        (
+            "◫",
+            "Market Data",
+            "Yahoo Finance prices with five-minute market caching",
+            "primary",
+        ),
+        (
+            "◈",
+            "Sentiment",
+            "FinBERT scoring on ticker-relevant financial news",
+            "cyan",
+        ),
+        (
+            "▣",
+            "Optimizer",
+            "Constrained mean-variance Sharpe optimization",
+            "green",
+        ),
+        (
+            "◉",
+            "LLM Engine",
+            "Groq-hosted AI reasoning and ticker guidance",
+            "violet",
+        ),
+        (
+            "⚖",
+            "Benchmark",
+            "Final target vs equal-weight and SPY comparison",
+            "accent",
+        ),
+    ]
+
     cols = st.columns(5)
     for col, (icon, title, desc, accent) in zip(cols, feats):
-        color = {"primary": "#FF6B35", "cyan": "#00D9FF", "green": "#10B981", "violet": "#8B5CF6", "accent": "#FF6B35"}[accent]
+        color = {
+            "primary": "#FF6B35",
+            "cyan": "#00D9FF",
+            "green": "#10B981",
+            "violet": "#8B5CF6",
+            "accent": "#FF6B35",
+        }[accent]
         with col:
-            st.markdown(f"""
+            st.markdown(
+                f"""
             <div style="
                 background: rgba(18,18,26,0.72);
                 border: 1px solid rgba(255,255,255,0.06);
@@ -387,42 +475,45 @@ else:
                 <div style="font-size:0.8rem;font-weight:700;color:#f0f0f5;margin-bottom:4px;font-family:'Inter',sans-serif;">{title}</div>
                 <div style="font-size:0.7rem;color:#4a4a5e;line-height:1.4;">{desc}</div>
             </div>
-            """, unsafe_allow_html=True)
-    
+            """,
+                unsafe_allow_html=True,
+            )
+
     st.markdown("<div style='height:20px;'></div>", unsafe_allow_html=True)
-    
+
     left, right = st.columns([1.2, 1])
     with left:
         section_header("Workflow", "Step-by-step pipeline", accent="primary")
         steps = [
-    (
-        "01",
-        "Add Holdings",
-        "Add US or Indian equities with quantity and purchase basis",
-    ),
-    (
-        "02",
-        "Fetch Market Data",
-        "Retrieve historical prices and ticker-relevant news",
-    ),
-    (
-        "03",
-        "Optimize",
-        "Maximize historical Sharpe under allocation constraints",
-    ),
-    (
-        "04",
-        "Apply AI Signals",
-        "Adjust target weights and generate per-ticker guidance",
-    ),
-    (
-        "05",
-        "Track & Compare",
-        "Save each run and compare final targets with equal-weight and SPY",
-    ),
-]
+            (
+                "01",
+                "Add Holdings",
+                "Add US or Indian equities with quantity and purchase basis",
+            ),
+            (
+                "02",
+                "Fetch Market Data",
+                "Retrieve historical prices and ticker-relevant news",
+            ),
+            (
+                "03",
+                "Optimize",
+                "Maximize historical Sharpe under allocation constraints",
+            ),
+            (
+                "04",
+                "Apply AI Signals",
+                "Adjust target weights and generate per-ticker guidance",
+            ),
+            (
+                "05",
+                "Track & Compare",
+                "Save each run and compare final targets with equal-weight and SPY",
+            ),
+        ]
         for num, title, desc in steps:
-            st.markdown(f"""
+            st.markdown(
+                f"""
             <div style="
                 display: flex; align-items: flex-start; gap: 12px;
                 margin-bottom: 12px; padding: 12px;
@@ -447,8 +538,10 @@ else:
                     <br><span style="color: #4a4a5e; font-size: 0.75rem;">{desc}</span>
                 </span>
             </div>
-            """, unsafe_allow_html=True)
-    
+            """,
+                unsafe_allow_html=True,
+            )
+
     with right:
         section_header(
             "Example Tickers",
@@ -520,19 +613,25 @@ else:
 
         st.markdown(cards_html, unsafe_allow_html=True)
 
-
     st.markdown("<div style='height:20px;'></div>", unsafe_allow_html=True)
     cta1, cta2, _ = st.columns([1, 1, 2])
     with cta1:
-        if st.button("▶ Authenticate", type="primary", width='stretch'):
+        if st.button("▶ Authenticate", type="primary", width="stretch"):
             st.switch_page("pages/1_Login.py")
     with cta2:
-        st.link_button("◉ Source Code", "https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer", width='stretch')
+        st.link_button(
+            "◉ Source Code",
+            "https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer",
+            width="stretch",
+        )
 
-st.markdown("""
+st.markdown(
+    """
 <div style="border-top:1px solid rgba(255,255,255,0.06);margin-top:32px;padding-top:16px;">
     <div style="font-size:0.65rem;color:#4a4a5e;text-align:center;letter-spacing:0.05em;">
         AXIOM Portfolio Intelligence · Built by Parmod · Stack: FinBERT · FAISS · Groq · Streamlit
     </div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)

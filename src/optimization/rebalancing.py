@@ -13,7 +13,6 @@ from typing import Any, Final
 
 from src.data.market_data import market_currency
 
-
 REBALANCE_THRESHOLD: Final[float] = 0.01
 EXCLUSION_THRESHOLD: Final[float] = 0.001
 FLOAT_TOLERANCE: Final[float] = 1e-12
@@ -40,9 +39,7 @@ def classify_model_adjustment(
         raise ValueError("threshold must be non-negative")
 
     if exclusion_threshold < 0:
-        raise ValueError(
-            "exclusion_threshold must be non-negative"
-        )
+        raise ValueError("exclusion_threshold must be non-negative")
 
     if final < exclusion_threshold:
         return "EXCLUDE"
@@ -111,16 +108,10 @@ def calculate_current_allocation(
             quantity = float(holding.get("quantity", 0.0))
             price = float(latest_prices[ticker])
 
-            if (
-                not math.isfinite(quantity)
-                or quantity <= 0
-            ):
+            if not math.isfinite(quantity) or quantity <= 0:
                 raise ValueError("invalid quantity")
 
-            if (
-                not math.isfinite(price)
-                or price <= 0
-            ):
+            if not math.isfinite(price) or price <= 0:
                 raise ValueError("invalid current price")
 
             quote_currency = market_currency(
@@ -135,34 +126,23 @@ def calculate_current_allocation(
                 )
             )
 
-            if (
-                not math.isfinite(fx_rate)
-                or fx_rate <= 0
-            ):
+            if not math.isfinite(fx_rate) or fx_rate <= 0:
                 raise ValueError("invalid FX rate")
 
             market_value = quantity * price * fx_rate
 
-            market_values[ticker] = (
-                market_values.get(ticker, 0.0)
-                + market_value
-            )
+            market_values[ticker] = market_values.get(ticker, 0.0) + market_value
 
         except Exception as exc:
-            excluded_tickers[ticker] = (
-                f"{type(exc).__name__}: {exc}"
-            )
+            excluded_tickers[ticker] = f"{type(exc).__name__}: {exc}"
 
     total_market_value = sum(market_values.values())
 
     if total_market_value <= 0:
-        raise ValueError(
-            "No valid current market values are available"
-        )
+        raise ValueError("No valid current market values are available")
 
     current_weights = {
-        ticker: value / total_market_value
-        for ticker, value in market_values.items()
+        ticker: value / total_market_value for ticker, value in market_values.items()
     }
 
     return {
@@ -195,10 +175,7 @@ def build_rebalance_plan(
         target_weight = float(target_value)
         current_value = current_weights.get(ticker)
 
-        if (
-            not allocation_complete
-            or current_value is None
-        ):
+        if not allocation_complete or current_value is None:
             plan[ticker] = {
                 "current_weight": None,
                 "target_weight": target_weight,
@@ -223,8 +200,7 @@ def build_rebalance_plan(
             "BUY": "Current allocation is below final target",
             "SELL": "Current allocation is above final target",
             "HOLD": (
-                "Current allocation is within the "
-                "1 percentage-point threshold"
+                "Current allocation is within the " "1 percentage-point threshold"
             ),
         }
 

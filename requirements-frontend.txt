@@ -22,22 +22,22 @@ scipy==1.12.0
 scikit-learn==1.4.0     
 
 # ---AI & NLP---
-torch==2.2.0
+torch==2.6.0
 transformers==4.38.0
 sentence-transformers==2.5.1
 faiss-cpu==1.7.4
 
 # ---LLM & RAG---
-langchain==0.1.9
-langchain-groq==0.0.1
+langchain-core==1.6.3
+langchain-groq==1.1.3
 groq==0.37.1             # FIXED: was 0.1.0; updated to match backend
 
 # ---Database---
 sqlalchemy==2.0.29
 
 # ---Authentication---
-python-jose[cryptography]==3.3.0   # FIXED: was 1.7.0 (wrong version)
-cryptography==41.0.7
+python-jose[cryptography]==3.4.0   # FIXED: was 1.7.0 (wrong version)
+cryptography==46.0.5
 passlib[bcrypt]==1.7.4
 
 # ---Visualization---
@@ -47,7 +47,7 @@ watchdog==4.0.0
 # ---Utilities---
 python-dotenv==1.0.1
 httpx==0.26.0
-pydantic==2.6.1
+pydantic==2.13.4
 pydantic-settings==2.2.1
 requests==2.31.0
 

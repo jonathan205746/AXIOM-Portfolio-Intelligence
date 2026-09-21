@@ -3,16 +3,15 @@
 > An end-to-end portfolio research platform combining constrained optimization, risk analytics, financial NLP, semantic retrieval, and evidence-grounded AI commentary.
 
 <p align="center">
-  <a href="http://15.252.103.217:8501"><strong>Live Demo</strong></a> ·
   <a href="https://parmodk2310.vercel.app/projects/portfolio"><strong>Case Study</strong></a> ·
   <a href="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer"><strong>Source</strong></a>
 </p>
 
 <p align="center">
+  <a href="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/actions/workflows/deploy-production.yml"><img alt="Quality and deployment" src="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/actions/workflows/deploy-production.yml/badge.svg"></a>
+  <a href="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/actions/workflows/security.yml/badge.svg"></a>
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white">
   <img alt="Streamlit" src="https://img.shields.io/badge/UI-Streamlit-FF4B4B?logo=streamlit&logoColor=white">
-  <img alt="FinBERT" src="https://img.shields.io/badge/NLP-FinBERT-F59E0B">
-  <img alt="FAISS" src="https://img.shields.io/badge/Retrieval-FAISS-0467DF">
   <img alt="Docker" src="https://img.shields.io/badge/Runtime-Docker-2496ED?logo=docker&logoColor=white">
   <img alt="AWS" src="https://img.shields.io/badge/Cloud-AWS_EC2-FF9900?logo=amazonaws&logoColor=white">
   <img alt="License" src="https://img.shields.io/badge/License-MIT-green">
@@ -24,7 +23,7 @@
 
 Portfolio tools often separate allocation, risk, news, and AI commentary. AXIOM connects them in one reproducible workflow: it retrieves market data, estimates portfolio risk, creates constrained allocations, evaluates company news with FinBERT, retrieves relevant evidence with FAISS, and generates a portfolio report through an LLM.
 
-This repository demonstrates production-oriented ML engineering—not only model experimentation—including modular pipelines, persistent application state, failure handling, testing, containerization, and infrastructure as code.
+This repository demonstrates production-oriented ML engineering beyond model experimentation: modular pipelines, persistent state, failure handling, walk-forward evaluation, automated quality gates, container hardening, and infrastructure as code.
 
 ## What it delivers
 
@@ -106,11 +105,10 @@ The application keeps quantitative calculations separate from probabilistic AI o
 | Reliability | External AI/news failures degrade gracefully | Core portfolio analytics remain usable |
 | Reproducibility | Walk-forward evaluation with costs and turnover | Avoids presenting an in-sample optimizer result as performance evidence |
 | Persistence | Named Docker volume mounted at `/data` | Survives container recreation on the current single-host deployment |
-| Security | Secrets are injected at runtime and excluded from Git | Reduces accidental credential exposure |
-| Deployment | CloudFormation + Docker Compose on EC2 | Makes the demo environment repeatable and inspectable |
-| CI/CD identity | GitHub Actions exchanges an OIDC token for temporary AWS credentials | Avoids long-lived AWS access keys in GitHub |
-| Release images | ECR images use immutable Git commit SHA tags | Makes each deployment traceable and rollback-safe |
-| Remote delivery | AWS Systems Manager runs the deployment on EC2 | Removes SSH credentials from the CI/CD path |
+| Runtime security | Streamlit XSRF/CORS protections enabled; containers run as UID/GID 10001 | Reduces browser and container privilege risk |
+| Delivery security | GitHub Actions use OIDC; third-party actions are commit-SHA pinned | Avoids long-lived AWS keys and mutable action tags |
+| Release images | ECR images use immutable Git commit SHA tags | Makes deployments and rollbacks traceable |
+| Remote delivery | AWS Systems Manager runs deployment on EC2 | Removes SSH credentials from the CI/CD path |
 
 ## Verified evaluation
 
@@ -125,7 +123,7 @@ A price-only walk-forward backtest covers **4 January 2021–31 December 2025** 
 | Annual one-way turnover | 167.46% | 25.03% | N/A |
 | CAGR cost drag | 0.59% | 0.09% | 0.00% |
 
-Equal weighting led on return and Sharpe ratio in this concentrated universe. The quantitative strategy reduced drawdown versus equal weight, but higher turnover created meaningful cost drag. This is an important result: optimization complexity did not automatically produce superior out-of-sample performance.
+Equal weighting led on return and Sharpe ratio in this concentrated universe. The quantitative strategy reduced drawdown versus equal weight, but higher turnover created meaningful cost drag. Optimization complexity did not automatically produce superior out-of-sample performance.
 
 The combined price-and-sentiment strategy is intentionally **not** reported as historically validated because the repository does not yet include a point-in-time news dataset. Using current news to simulate past decisions would introduce look-ahead bias. See [`backtesting.md`](backtesting.md) for the complete methodology.
 
@@ -138,7 +136,7 @@ The combined price-and-sentiment strategy is intentionally **not** reported as h
 | AI/NLP | FinBERT, Hugging Face Transformers, FAISS, LangChain, Groq |
 | Data | Yahoo Finance, NewsAPI |
 | Persistence | SQLite, FAISS index |
-| Delivery | Docker, Docker Compose, AWS EC2, CloudFormation |
+| Delivery | Docker, Docker Compose, AWS EC2, CloudFormation, GitHub Actions |
 
 ## Run locally
 
@@ -181,55 +179,22 @@ docker compose ps
 curl --fail http://localhost:8501/_stcore/health
 ```
 
-View logs or stop the application:
+The runtime image uses a dedicated non-root user. Existing persistent volumes created by older root-running images may need their `/data` ownership migrated to UID/GID `10001`; the production deployment script performs that migration before recreation.
+
+## Quality gate
+
+The Makefile is the local and CI quality contract:
 
 ```bash
-docker compose logs --tail=200 frontend
-docker compose down
+make install-dev
+make check
 ```
 
-## Quality checks
+`make check` runs Python compilation, Black format verification, Ruff linting, mypy type checking, and the complete pytest suite. Pull requests must pass the same gate before merge.
 
-```bash
-python -m compileall -q frontend src backend
-python -m pytest -q tests
-git diff --check
-```
+Security CI separately runs secret scanning, reports high/critical dependency and container findings, and blocks critical vulnerabilities. See [`SECURITY.md`](SECURITY.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-The tests cover financial calculations, optimizer constraints, sentiment aggregation, database behavior, service failure paths, RAG fallback behavior, and safe report generation.
-
-## Deployment
-
-The current demo uses an Amazon Linux 2023 EC2 instance provisioned through [`deploy/aws/ec2-stack.yaml`](deploy/aws/ec2-stack.yaml). Docker Compose runs the Streamlit service, while a named volume persists the SQLite database and FAISS index under `/data`.
-
-```bash
-aws cloudformation validate-template \
-  --region ap-south-1 \
-  --template-body file://deploy/aws/ec2-stack.yaml
-
-aws cloudformation deploy \
-  --region ap-south-1 \
-  --stack-name portfolio-optimizer \
-  --template-file deploy/aws/ec2-stack.yaml \
-  --parameter-overrides \
-    VpcId=vpc-xxxxxxxx \
-    SubnetId=subnet-xxxxxxxx \
-    KeyName=portfolio-optimizer-key \
-    AllowedCidr=YOUR_PUBLIC_IP/32 \
-  --capabilities CAPABILITY_NAMED_IAM
-```
-
-Operational details belong in [`deploy/aws/README.md`](deploy/aws/README.md), keeping this page focused on product and engineering evidence.
-
-```bash
-python -m compileall -q frontend src backend
-python -m pytest -q tests
-git diff --check
-```
-
-The tests cover financial calculations, optimizer constraints, sentiment aggregation, database behavior, service failure paths, RAG fallback behavior, and safe report generation.
-
-## Production delivery
+## Deployment and infrastructure
 
 ```mermaid
 flowchart LR
@@ -239,51 +204,42 @@ flowchart LR
     S --> C["Docker on EC2"]
 ```
 
-Pull requests run the test and compile gates. A push to `main` receives temporary AWS credentials through IAM OIDC, builds an image tagged with the exact Git commit SHA, stores it in Amazon ECR, and deploys it to EC2 through Systems Manager. The instance checks `/_stcore/health`; a failed deployment automatically restores the previously running image and leaves the GitHub workflow failed for visibility.
+The demo infrastructure is an Amazon Linux 2023 EC2 instance provisioned through [`deploy/aws/ec2-stack.yaml`](deploy/aws/ec2-stack.yaml). Docker Compose runs Streamlit while a named volume persists SQLite and FAISS data under `/data`.
 
-Amazon ECR is the production container registry used by EC2. Images use immutable Git commit SHA tags so deployments and rollbacks remain traceable.
+Pull requests run quality and security gates. A push to `main` receives temporary AWS credentials through IAM OIDC, builds an image tagged with the exact Git commit SHA, stores it in ECR, and deploys it through Systems Manager. The instance checks `/_stcore/health`; a failed deployment restores the previously running image and keeps the workflow failed for visibility.
 
-## Infrastructure
+The CloudFormation security group restricts port `8501` to `AllowedCidr`. AXIOM therefore does **not** advertise the current raw EC2 IP as a public live demo. A public recruiter-facing endpoint should be added only after a stable domain, HTTPS termination, and appropriate ingress controls are in place.
 
-The current demo uses an Amazon Linux 2023 EC2 instance provisioned through [`deploy/aws/ec2-stack.yaml`](deploy/aws/ec2-stack.yaml). Docker Compose runs the Streamlit service, while a named volume persists the SQLite database and FAISS index under `/data`.
+Operational commands and AWS details live in [`deploy/aws/README.md`](deploy/aws/README.md).
 
-```bash
-aws cloudformation validate-template \
-  --region ap-south-1 \
-  --template-body file://deploy/aws/ec2-stack.yaml
+## Release status
 
-aws cloudformation deploy \
-  --region ap-south-1 \
-  --stack-name portfolio-optimizer \
-  --template-file deploy/aws/ec2-stack.yaml \
-  --parameter-overrides \
-    VpcId=vpc-xxxxxxxx \
-    SubnetId=subnet-xxxxxxxx \
-    KeyName=portfolio-optimizer-key \
-    AllowedCidr=YOUR_PUBLIC_IP/32 \
-  --capabilities CAPABILITY_NAMED_IAM
-```
+No GitHub Release is currently published. The repository keeps a clearly labeled [release-note template](docs/release-notes-template.md); completed release evidence should be created from that template only after every required gate has passed.
+
+See [`docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md`](docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md) for the release and rollback runbook.
 
 ## Current limitations
 
 - Historical estimates do not predict future performance.
 - FinBERT can misclassify ambiguous or context-poor headlines.
-- Retrieved context reduces—but cannot eliminate—LLM hallucination.
+- Retrieved context reduces, but cannot eliminate, LLM hallucination.
 - The current single-EC2/SQLite design is not highly available or horizontally scalable.
-- The demo IP can change unless it is associated with an Elastic IP.
-- HTTPS, managed secrets, monitoring, and automated rollback are production hardening items.
-- HTTPS, managed secrets, monitoring, and database-aware rollback remain production hardening items.
+- The current demo is operator-restricted HTTP on port 8501; it is not a stable public HTTPS endpoint.
+- Managed secrets, centralized monitoring/alerting, and database-aware rollback remain production hardening work.
+- Point-in-time news data is not yet available, so historical sentiment performance is intentionally not claimed.
 
 ## Roadmap
 
 - [x] Leakage-aware walk-forward backtesting with turnover and costs
 - [x] Containerized EC2 deployment with persistent application data
-- [ ] Point-in-time news dataset and sentiment backtesting
-- [ ] Retrieval relevance and groundedness evaluation
-- [ ] GitHub Actions deployment using IAM OIDC and immutable ECR tags
-- [ ] Health-gated rollback to the previous container image
 - [x] GitHub Actions deployment using IAM OIDC and immutable ECR tags
 - [x] Health-gated application rollback to the previous container image
+- [x] Full CI quality gate matching `make check`
+- [x] Commit-SHA-pinned third-party GitHub Actions
+- [x] Secret, dependency, and container security scans
+- [x] Streamlit XSRF protection and non-root container runtime
+- [ ] Point-in-time news dataset and sentiment backtesting
+- [ ] Retrieval relevance and groundedness evaluation
 - [ ] HTTPS, stable domain, managed secrets, CloudWatch metrics, and alarms
 - [ ] PostgreSQL migrations and managed backups for multi-user scale
 
@@ -298,12 +254,17 @@ src/optimization Portfolio construction and risk logic
 src/database/    Persistence layer
 tests/           Automated test suite
 deploy/aws/      CloudFormation and deployment documentation
-docs/            Architecture, setup, and API documentation
+docs/            Architecture, setup, release, and API documentation
 ```
 
 ## Responsible use
 
 AXIOM is an educational and research project, not financial advice. Outputs may be incomplete or incorrect and should not be used as the sole basis for investment decisions.
+
+## Contributing and security
+
+Development workflow: [`CONTRIBUTING.md`](CONTRIBUTING.md)  
+Private vulnerability reporting: [`SECURITY.md`](SECURITY.md)
 
 ## Author
 

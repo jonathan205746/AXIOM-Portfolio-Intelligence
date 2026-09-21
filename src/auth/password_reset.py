@@ -8,7 +8,6 @@ from src.database.db import (
     generate_password_reset_code,
 )
 
-
 GENERIC_RESPONSE = (
     "If the account details match, a reset code has been sent. "
     "The code expires shortly."
@@ -19,9 +18,7 @@ def request_password_reset(username: str, email: str) -> None:
     """Create and email a reset code without revealing account existence."""
     code = generate_password_reset_code()
 
-    ttl_minutes = int(
-        os.environ.get("PASSWORD_RESET_CODE_TTL_MINUTES", "15")
-    )
+    ttl_minutes = int(os.environ.get("PASSWORD_RESET_CODE_TTL_MINUTES", "15"))
     cooldown_seconds = int(
         os.environ.get("PASSWORD_RESET_RESEND_COOLDOWN_SECONDS", "60")
     )
