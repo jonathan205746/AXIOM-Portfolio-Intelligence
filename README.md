@@ -5,6 +5,7 @@
 <p align="center">
   <a href="https://parmodk2310.vercel.app/projects/portfolio"><strong>Case Study</strong></a> ·
   <a href="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/releases"><strong>Releases</strong></a> ·
+  <a href="docs/README.md"><strong>Docs</strong></a> ·
   <a href="docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md"><strong>Release Guide</strong></a>
 </p>
 
@@ -32,6 +33,8 @@
 | Security | 0 CRITICAL findings; runtime HIGH findings reduced from 15 to 2 with residual risk documented |
 | Delivery | GitHub Actions OIDC → immutable ECR image → AWS Systems Manager → EC2 |
 | Runtime | Dockerized Streamlit service running as non-root UID/GID 10001 |
+
+The project snapshot above reflects the currently verified `main` baseline; exact test and security counts are point-in-time evidence and are also recorded in the release/security documentation.
 
 AXIOM is designed as an engineering portfolio project rather than a claim that AI automatically improves investment performance. Quantitative allocation remains deterministic and separate from generated commentary, and the evaluation reports cases where simpler baselines outperform the optimizer.
 
