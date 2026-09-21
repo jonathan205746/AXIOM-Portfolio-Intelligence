@@ -192,7 +192,7 @@ make check
 
 `make check` runs Python compilation, Black format verification, Ruff linting, mypy type checking, and the complete pytest suite. Pull requests must pass the same gate before merge.
 
-Security CI separately runs secret scanning plus high/critical dependency and container vulnerability scans. See [`SECURITY.md`](SECURITY.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Security CI separately runs secret scanning, reports high/critical dependency and container findings, and blocks critical vulnerabilities. See [`SECURITY.md`](SECURITY.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Deployment and infrastructure
 
