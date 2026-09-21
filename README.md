@@ -74,7 +74,7 @@ Compare the final target portfolio with equal-weight allocation and the S&P 500 
 
 ## Architecture
 
-\`\`\`mermaid
+```mermaid
 flowchart TB
     U["Streamlit experience"] --> O["Analysis orchestrator"]
     O --> M["Market and news data"]
@@ -83,7 +83,7 @@ flowchart TB
     Q --> R["Dashboard and HTML report"]
     A --> R
     O --> P["SQLite and FAISS persistence"]
-\`\`\`
+```
 
 The application keeps quantitative calculations separate from probabilistic AI output. Optimized weights come from the portfolio engine; the LLM explains the result using retrieved context rather than determining the allocation itself.
 
@@ -104,7 +104,7 @@ The application keeps quantitative calculations separate from probabilistic AI o
 | Explainability | Quantitative results remain separate from LLM commentary | Prevents generated text from silently changing portfolio weights |
 | Reliability | External AI/news failures degrade gracefully | Core portfolio analytics remain usable |
 | Reproducibility | Walk-forward evaluation with costs and turnover | Avoids presenting an in-sample optimizer result as performance evidence |
-| Persistence | Named Docker volume mounted at \`/data\` | Survives container recreation on the current single-host deployment |
+| Persistence | Named Docker volume mounted at `/data` | Survives container recreation on the current single-host deployment |
 | Runtime security | Streamlit XSRF/CORS protections enabled; containers run as UID/GID 10001 | Reduces browser and container privilege risk |
 | Delivery security | GitHub Actions use OIDC; third-party actions are commit-SHA pinned | Avoids long-lived AWS keys and mutable action tags |
 | Release images | ECR images use immutable Git commit SHA tags | Makes deployments and rollbacks traceable |
@@ -125,7 +125,7 @@ A price-only walk-forward backtest covers **4 January 2021–31 December 2025** 
 
 Equal weighting led on return and Sharpe ratio in this concentrated universe. The quantitative strategy reduced drawdown versus equal weight, but higher turnover created meaningful cost drag. Optimization complexity did not automatically produce superior out-of-sample performance.
 
-The combined price-and-sentiment strategy is intentionally **not** reported as historically validated because the repository does not yet include a point-in-time news dataset. Using current news to simulate past decisions would introduce look-ahead bias. See [\`backtesting.md\`](backtesting.md) for the complete methodology.
+The combined price-and-sentiment strategy is intentionally **not** reported as historically validated because the repository does not yet include a point-in-time news dataset. Using current news to simulate past decisions would introduce look-ahead bias. See [`backtesting.md`](backtesting.md) for the complete methodology.
 
 ## Technology
 
@@ -146,7 +146,7 @@ The combined price-and-sentiment strategy is intentionally **not** reported as h
 - Git
 - NewsAPI and Groq keys for the corresponding optional features
 
-\`\`\`bash
+```bash
 git clone https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer.git
 cd AI-Powered-Portfolio-Optimizer
 
@@ -155,68 +155,68 @@ source .venv/bin/activate          # Windows: .venv\Scripts\Activate.ps1
 python -m pip install -r requirements-frontend.txt
 cp backend/.env.example .env      # Windows: Copy-Item backend\.env.example .env
 streamlit run frontend/app.py
-\`\`\`
+```
 
-Open \`http://localhost:8501\`.
+Open `http://localhost:8501`.
 
-Minimum \`.env\` configuration:
+Minimum `.env` configuration:
 
-\`\`\`env
+```env
 NEWS_API_KEY=your_newsapi_key
 GROQ_API_KEY=your_groq_key
 GROQ_MODEL=openai/gpt-oss-120b
 DB_DIR=/data
 FAISS_INDEX_PATH=/data/faiss_index
-\`\`\`
+```
 
-Never commit \`.env\`, AWS credentials, API keys, databases containing user data, or private keys.
+Never commit `.env`, AWS credentials, API keys, databases containing user data, or private keys.
 
 ## Run with Docker
 
-\`\`\`bash
+```bash
 docker compose up --build -d
 docker compose ps
 curl --fail http://localhost:8501/_stcore/health
-\`\`\`
+```
 
-The runtime image uses a dedicated non-root user. Existing persistent volumes created by older root-running images may need their \`/data\` ownership migrated to UID/GID \`10001\`; the production deployment script performs that migration before recreation.
+The runtime image uses a dedicated non-root user. Existing persistent volumes created by older root-running images may need their `/data` ownership migrated to UID/GID `10001`; the production deployment script performs that migration before recreation.
 
 ## Quality gate
 
 The Makefile is the local and CI quality contract:
 
-\`\`\`bash
+```bash
 make install-dev
 make check
-\`\`\`
+```
 
-\`make check\` runs Python compilation, Black format verification, Ruff linting, mypy type checking, and the complete pytest suite. Pull requests must pass the same gate before merge.
+`make check` runs Python compilation, Black format verification, Ruff linting, mypy type checking, and the complete pytest suite. Pull requests must pass the same gate before merge.
 
-Security CI separately runs secret scanning plus high/critical dependency and container vulnerability scans. See [\`SECURITY.md\`](SECURITY.md) and [\`CONTRIBUTING.md\`](CONTRIBUTING.md).
+Security CI separately runs secret scanning plus high/critical dependency and container vulnerability scans. See [`SECURITY.md`](SECURITY.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Deployment and infrastructure
 
-\`\`\`mermaid
+```mermaid
 flowchart LR
     G["GitHub Actions"] --> I["IAM OIDC role"]
     I --> E["Amazon ECR"]
     E --> S["AWS Systems Manager"]
     S --> C["Docker on EC2"]
-\`\`\`
+```
 
-The demo infrastructure is an Amazon Linux 2023 EC2 instance provisioned through [\`deploy/aws/ec2-stack.yaml\`](deploy/aws/ec2-stack.yaml). Docker Compose runs Streamlit while a named volume persists SQLite and FAISS data under \`/data\`.
+The demo infrastructure is an Amazon Linux 2023 EC2 instance provisioned through [`deploy/aws/ec2-stack.yaml`](deploy/aws/ec2-stack.yaml). Docker Compose runs Streamlit while a named volume persists SQLite and FAISS data under `/data`.
 
-Pull requests run quality and security gates. A push to \`main\` receives temporary AWS credentials through IAM OIDC, builds an image tagged with the exact Git commit SHA, stores it in ECR, and deploys it through Systems Manager. The instance checks \`/_stcore/health\`; a failed deployment restores the previously running image and keeps the workflow failed for visibility.
+Pull requests run quality and security gates. A push to `main` receives temporary AWS credentials through IAM OIDC, builds an image tagged with the exact Git commit SHA, stores it in ECR, and deploys it through Systems Manager. The instance checks `/_stcore/health`; a failed deployment restores the previously running image and keeps the workflow failed for visibility.
 
-The CloudFormation security group restricts port \`8501\` to \`AllowedCidr\`. AXIOM therefore does **not** advertise the current raw EC2 IP as a public live demo. A public recruiter-facing endpoint should be added only after a stable domain, HTTPS termination, and appropriate ingress controls are in place.
+The CloudFormation security group restricts port `8501` to `AllowedCidr`. AXIOM therefore does **not** advertise the current raw EC2 IP as a public live demo. A public recruiter-facing endpoint should be added only after a stable domain, HTTPS termination, and appropriate ingress controls are in place.
 
-Operational commands and AWS details live in [\`deploy/aws/README.md\`](deploy/aws/README.md).
+Operational commands and AWS details live in [`deploy/aws/README.md`](deploy/aws/README.md).
 
 ## Release status
 
 No GitHub Release is currently published. The repository keeps a clearly labeled [release-note template](docs/release-notes-template.md); completed release evidence should be created from that template only after every required gate has passed.
 
-See [\`docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md\`](docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md) for the release and rollback runbook.
+See [`docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md`](docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md) for the release and rollback runbook.
 
 ## Current limitations
 
@@ -234,7 +234,7 @@ See [\`docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md\`](docs/AXIOM_PRODUCTION_RELEASE_G
 - [x] Containerized EC2 deployment with persistent application data
 - [x] GitHub Actions deployment using IAM OIDC and immutable ECR tags
 - [x] Health-gated application rollback to the previous container image
-- [x] Full CI quality gate matching \`make check\`
+- [x] Full CI quality gate matching `make check`
 - [x] Commit-SHA-pinned third-party GitHub Actions
 - [x] Secret, dependency, and container security scans
 - [x] Streamlit XSRF protection and non-root container runtime
@@ -245,7 +245,7 @@ See [\`docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md\`](docs/AXIOM_PRODUCTION_RELEASE_G
 
 ## Repository map
 
-\`\`\`text
+```text
 frontend/        Streamlit application and pages
 backend/app/     Optional FastAPI service
 src/data/        Market data, news, and retrieval pipelines
@@ -255,7 +255,7 @@ src/database/    Persistence layer
 tests/           Automated test suite
 deploy/aws/      CloudFormation and deployment documentation
 docs/            Architecture, setup, release, and API documentation
-\`\`\`
+```
 
 ## Responsible use
 
@@ -263,8 +263,8 @@ AXIOM is an educational and research project, not financial advice. Outputs may 
 
 ## Contributing and security
 
-Development workflow: [\`CONTRIBUTING.md\`](CONTRIBUTING.md)  
-Private vulnerability reporting: [\`SECURITY.md\`](SECURITY.md)
+Development workflow: [`CONTRIBUTING.md`](CONTRIBUTING.md)  
+Private vulnerability reporting: [`SECURITY.md`](SECURITY.md)
 
 ## Author
 
@@ -273,4 +273,4 @@ Private vulnerability reporting: [\`SECURITY.md\`](SECURITY.md)
 
 ## License
 
-Released under the [\`MIT License\`](LICENSE).
+Released under the [`MIT License`](LICENSE).
