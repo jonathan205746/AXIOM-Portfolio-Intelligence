@@ -17,45 +17,42 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: Test application
+  quality:
+    name: Quality gate
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Configure Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.10"
           cache: pip
-          cache-dependency-path: requirements-frontend.txt
+          cache-dependency-path: |
+            requirements-frontend.txt
+            requirements-dev.txt
 
-      - name: Install test dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install torch==2.2.0+cpu \
-            --extra-index-url https://download.pytorch.org/whl/cpu
-          python -m pip install -r requirements-frontend.txt
-          python -m pip install pytest pytest-asyncio
+      - name: Install development environment
+        run: make install-dev
 
-      - name: Run tests
-        run: python -m pytest -q tests
+      - name: Run repository quality contract
+        run: make check
 
-      - name: Compile Python sources
-        run: python -m compileall -q frontend src backend
+      - name: Check patch whitespace
+        run: git diff --check
 
   deploy:
     name: Deploy to EC2
     if: github.event_name != 'pull_request'
-    needs: test
+    needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     environment:
       name: production
-      url: http://15.252.103.217:8501
 
     permissions:
       contents: read
@@ -63,7 +60,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Inspect OIDC claims
         shell: bash
@@ -92,7 +89,7 @@ jobs:
           PY
 
       - name: Configure temporary AWS credentials
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
@@ -101,7 +98,7 @@ jobs:
           mask-aws-account-id: true
 
       - name: Sign in to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2
 
       - name: Check whether immutable image exists
         id: image
@@ -123,11 +120,11 @@ jobs:
 
       - name: Configure Docker Buildx
         if: steps.image.outputs.exists != 'true'
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Build and push immutable image
         if: steps.image.outputs.exists != 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: ./Dockerfile

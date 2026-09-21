@@ -27,6 +27,11 @@ aws ecr get-login-password --region "$aws_region" |
 
 docker pull "$image_uri"
 
+echo "Preparing persistent data for non-root runtime UID/GID 10001"
+FRONTEND_IMAGE="$image_uri" \
+    docker compose run --rm --no-deps --user 0:0 --entrypoint sh frontend \
+    -c 'chown -R 10001:10001 /data'
+
 echo "Deploying $image_uri"
 
 FRONTEND_IMAGE="$image_uri" \

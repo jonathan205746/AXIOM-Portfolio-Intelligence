@@ -1,40 +1,39 @@
-# ── Dockerfile.api ────────────────────────────────────────────────────────────
-# FastAPI backend for Render / Railway / docker-compose
-# ─────────────────────────────────────────────────────────────────────────────
-
+# AXIOM Portfolio Intelligence — optional FastAPI runtime
 FROM python:3.10-slim-bookworm
 
-# ── System dependencies ──
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential gcc g++ curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# ── Install Python dependencies ──
 COPY requirements-backend.txt .
 RUN pip install --no-cache-dir torch==2.2.0+cpu \
     --extra-index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements-backend.txt
 
-# ── Copy application code ──
 COPY backend/ ./backend/
 COPY src/ ./src/
 COPY data/ ./data/
 
-# ── Ensure packages are importable ──
-RUN touch ./backend/__init__.py ./backend/app/__init__.py
+RUN touch ./backend/__init__.py ./backend/app/__init__.py \
+    && groupadd --gid 10001 axiom \
+    && useradd --uid 10001 --gid axiom --create-home --home-dir /home/axiom \
+        --shell /usr/sbin/nologin axiom \
+    && mkdir -p /data /tmp/faiss_index /tmp/plots \
+    && chown -R axiom:axiom /app /data /tmp/faiss_index /tmp/plots
 
-# ── Runtime env ──
 ENV PYTHONPATH=/app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV WEB_CONCURRENCY=1
+ENV HOME=/home/axiom
 
 EXPOSE 8000
-# ── Health check ──
+
+USER axiom
+
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
-# One uvicorn worker so FinBERT/PyTorch is loaded only once (avoids OOM on small hosts).
 CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --timeout-keep-alive 0"]
