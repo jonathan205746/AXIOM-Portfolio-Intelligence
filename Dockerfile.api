@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY requirements-backend.txt .
-RUN pip install --no-cache-dir torch==2.2.0+cpu \
+RUN pip install --no-cache-dir torch==2.6.0+cpu \
     --extra-index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements-backend.txt
 
