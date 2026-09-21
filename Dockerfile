@@ -17,6 +17,14 @@ RUN pip install --no-cache-dir torch==2.6.0+cpu \
     && pip install --no-cache-dir -r requirements-frontend.txt \
     && pip install --no-cache-dir --upgrade "streamlit>=1.36.0"
 
+# Keep packaging tooling on patched releases so vulnerable vendored
+# build dependencies are not retained in the runtime image.
+RUN python -m pip install --no-cache-dir --upgrade \
+    "pip==26.2.1" \
+    "setuptools==84.0.0" \
+    "wheel==0.48.0"
+
+
 COPY frontend/ ./frontend/
 COPY src/ ./src/
 COPY data/ ./data/

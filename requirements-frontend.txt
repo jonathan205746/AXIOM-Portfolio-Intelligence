@@ -23,8 +23,8 @@ scikit-learn==1.4.0
 
 # ---AI & NLP---
 torch==2.6.0
-transformers==4.57.6
-sentence-transformers==2.5.1
+transformers==5.17.0
+sentence-transformers==6.1.0
 faiss-cpu==1.7.4
 
 # ---LLM & RAG---
@@ -36,8 +36,9 @@ groq==0.37.1             # FIXED: was 0.1.0; updated to match backend
 sqlalchemy==2.0.29
 
 # ---Authentication---
-python-jose[cryptography]==3.4.0   # FIXED: was 1.7.0 (wrong version)
-cryptography==46.0.5
+python-jose[cryptography]==3.5.0
+cryptography==50.0.0
+pyasn1==0.6.4
 passlib[bcrypt]==1.7.4
 
 # ---Visualization---
