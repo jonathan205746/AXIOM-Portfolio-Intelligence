@@ -32,6 +32,8 @@ make check
 git diff --check
 ```
 
+Ruff's enforced rule set is versioned in `ruff.toml` so tool upgrades cannot silently redefine the lint contract.
+
 The gate includes:
 
 - Python compilation
