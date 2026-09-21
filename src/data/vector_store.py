@@ -97,7 +97,9 @@ class FinancialNewsStore:
             logger.info(f"Adding articles for {ticker}...")
             self.add_articles(articles)
 
-    def search(self, query: str, ticker: str = None, top_k: int = 5) -> List[Dict]:
+    def search(
+        self, query: str, ticker: str | None = None, top_k: int = 5
+    ) -> List[Dict]:
         """
         Find the most relevant articles for a query.
 
@@ -170,7 +172,7 @@ class FinancialNewsStore:
         Returns:
             Dict with total articles, articles per ticker, index size
         """
-        ticker_counts = {}
+        ticker_counts: Dict[str, int] = {}
         for doc in self.documents:
             ticker = doc.get("ticker", "unknown")
             ticker_counts[ticker] = ticker_counts.get(ticker, 0) + 1
@@ -359,20 +361,30 @@ class VectorStore(FinancialNewsStore):
             )
         self.add_articles(articles)
 
-    def search(self, query: str, k: int = 5, ticker: str = None) -> list:
+    def search(
+        self,
+        query: str,
+        ticker: str | None = None,
+        top_k: int = 5,
+        *,
+        k: int | None = None,
+    ) -> list:
         """
         Search wrapper that returns plain strings (as notebooks expect)
         instead of the dict list that FinancialNewsStore.search() returns.
 
         Args:
             query:  Search string
-            k:      Number of results (notebooks use keyword arg k=)
             ticker: Optional ticker filter (passed through to parent)
+            top_k:  Parent-compatible result limit
+            k:      Legacy notebook keyword alias for the result limit
 
         Returns:
             List of text strings, not dicts.
         """
-        # FinancialNewsStore.search() signature: search(query, ticker, top_k)
-        results = super().search(query, ticker=ticker, top_k=k)
+        # Preserve the parent search contract while supporting the notebooks'
+        # legacy keyword alias, k=.
+        limit = k if k is not None else top_k
+        results = super().search(query, ticker=ticker, top_k=limit)
         # Return the "text" field of each result dict as a plain string.
         return [r.get("text", r.get("title", str(r))) for r in results]

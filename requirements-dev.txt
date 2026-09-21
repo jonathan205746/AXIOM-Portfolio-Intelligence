@@ -5,3 +5,7 @@ pytest==8.4.2
 pytest-asyncio==0.26.0
 pytest-cov==6.3.0
 ruff==0.16.8
+
+types-bleach==6.4.0.20260607
+types-Markdown==3.10.2.20260712
+types-requests==2.33.0.20260906

@@ -73,6 +73,23 @@ def weight_to_percent(weight: float) -> str:
     return f"{round(weight * 100, 1)}"
 
 
+def _response_text(response: Any) -> str:
+    """Normalize LangChain/Groq response variants to plain text."""
+    content: Any
+    if hasattr(response, "content"):
+        content = response.content
+    elif isinstance(response, list) and response:
+        first_item = response[0]
+        content = first_item.content if hasattr(first_item, "content") else first_item
+    else:
+        content = response
+
+    if isinstance(content, list):
+        content = content[0] if content else ""
+
+    return str(content).strip()
+
+
 # ── RAG Pipeline Class ────────────────────────────────────────────────────────
 
 
@@ -151,20 +168,7 @@ class RAGPipeline:
                 }
             )
 
-            if hasattr(response, "content"):
-                content = response.content
-            elif isinstance(response, list) and response:
-                first_item = response[0]
-                content = (
-                    first_item.content if hasattr(first_item, "content") else first_item
-                )
-            else:
-                content = str(response)
-
-            if isinstance(content, list):
-                content = content[0] if content else ""
-
-            recommendation_text = str(content).strip()
+            recommendation_text = _response_text(response)
 
         except Exception as e:
             print(f"[RAGPipeline] LLM call failed for {ticker}: {e}")
@@ -208,19 +212,7 @@ class RAGPipeline:
 
         try:
             response = self.llm.invoke(prompt)
-            if hasattr(response, "content"):
-                content = response.content
-            elif isinstance(response, list) and response:
-                first_item = response[0]
-                content = (
-                    first_item.content if hasattr(first_item, "content") else first_item
-                )
-            else:
-                content = str(response)
-
-            if isinstance(content, list):
-                content = content[0] if content else ""
-            return str(content).strip()
+            return _response_text(response)
         except Exception as e:
             print(f"[RAGPipeline] Summary failed: {e}")
             return "Portfolio summary unavailable — check GROQ_API_KEY."
@@ -233,7 +225,7 @@ if __name__ == "__main__":
     print("RAG PIPELINE TEST — Groq + LangChain 1.3.0")
     print("=" * 60)
 
-    test_tickers = [
+    test_tickers: list[dict[str, Any]] = [
         {
             "ticker": "AAPL",
             "sentiment_score": 0.72,

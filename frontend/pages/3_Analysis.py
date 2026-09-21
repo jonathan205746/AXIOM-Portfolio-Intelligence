@@ -410,11 +410,11 @@ def run_pipeline(tickers, alpha, portfolio_value, use_llm):
     _set("Running FinBERT...", 55, "sentiment")
 
     # Public/report values preserve missing evidence as None.
-    sentiment_scores = {}
+    sentiment_scores: dict[str, float | None] = {}
 
     # The optimizer requires numeric values. A missing score receives
     # 0.0 here only to mean "apply no sentiment adjustment."
-    optimization_sentiment_scores = {}
+    optimization_sentiment_scores: dict[str, float] = {}
 
     for ticker in available:
         try:
