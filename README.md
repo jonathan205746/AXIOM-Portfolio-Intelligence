@@ -3,7 +3,7 @@
 > A production-oriented portfolio research platform combining constrained optimization, risk analytics, financial NLP, semantic retrieval, and evidence-grounded AI commentary.
 
 <p align="center">
-  <a href="https://parmodk2310.vercel.app/projects/portfolio"><strong>Case Study</strong></a> ·
+  <a href="https://parmodk2310.vercel.app/projects/portfolio-optimizer"><strong>Case Study</strong></a> ·
   <a href="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/releases"><strong>Releases</strong></a> ·
   <a href="docs/README.md"><strong>Docs</strong></a> ·
   <a href="docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md"><strong>Release Guide</strong></a>
