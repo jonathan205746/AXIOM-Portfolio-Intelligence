@@ -621,7 +621,7 @@ else:
     with cta2:
         st.link_button(
             "◉ Source Code",
-            "https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer",
+            "https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence",
             width="stretch",
         )
 

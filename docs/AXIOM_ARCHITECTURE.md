@@ -2,7 +2,7 @@
 
 ## Overview
 
-**AXIOM Portfolio Intelligence** is the customer-facing product name. The GitHub repository remains **AI-Powered-Portfolio-Optimizer**.
+**AXIOM Portfolio Intelligence** is the customer-facing product name. The GitHub repository is **AXIOM-Portfolio-Intelligence**.
 
 AXIOM combines market-price analytics, adaptive Modern Portfolio Theory, financial-news sentiment, risk analysis, FAISS retrieval, and Groq-generated explanations in one Streamlit workflow. The verified public deployment runs the Streamlit service directly in Docker on AWS EC2. FastAPI is an optional interface rather than a mandatory hop in the deployed request path.
 

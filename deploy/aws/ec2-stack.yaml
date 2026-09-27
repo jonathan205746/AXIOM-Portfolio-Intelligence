@@ -39,7 +39,7 @@ Parameters:
     Description: Encrypted gp3 storage for Docker images, SQLite, and FAISS data.
   RepositoryUrl:
     Type: String
-    Default: https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer.git
+    Default: https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence.git
     Description: Public Git repository to clone at boot.
   RepositoryBranch:
     Type: String

@@ -100,19 +100,21 @@ environment, matching the current workflow:
     "Action": "sts:AssumeRoleWithWebIdentity",
     "Condition": {
       "StringEquals": {
-        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
-      },
-      "StringLike": {
-        "token.actions.githubusercontent.com:sub": "repo:Parmodk2310/AI-Powered-Portfolio-Optimizer:environment:production"
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+        "token.actions.githubusercontent.com:sub": "repo:Parmodk2310@121942961/AXIOM-Portfolio-Intelligence@1322852403:environment:production"
       }
     }
   }]
 }
 ```
 
-The workflow currently declares `environment: production`, so a branch-form
-subject would not match. Confirm the emitted `aud` and `sub` claims in the
-sanitized Actions log before changing the trust policy. The workflow needs:
+The repository rename caused deployment to fail because the old OIDC `sub`
+no longer matched the claim emitted for the protected `production` environment.
+The exact subject above, including the owner and repository IDs, has been
+verified to work after the rename. Keep those IDs and `environment:production`
+in the trust policy; a branch-form subject would not match. Confirm the emitted
+`aud` and `sub` claims in the sanitized Actions log before any future change to
+the trust policy. The workflow needs:
 
 ```yaml
 permissions:
