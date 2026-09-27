@@ -24,7 +24,7 @@ Use GitHub's private vulnerability reporting feature:
 
 Repository security page:
 
-`https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/security`
+`https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence/security`
 
 Do not include real passwords, API keys, JWT signing keys, AWS credentials,
 private keys, database files, or private portfolio information in a report.

@@ -38,7 +38,7 @@ usermod -aG docker ubuntu
 
 # Clone repo
 cd /opt
-git clone https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer.git app
+git clone https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence.git app
 cd app
 
 # Write env file

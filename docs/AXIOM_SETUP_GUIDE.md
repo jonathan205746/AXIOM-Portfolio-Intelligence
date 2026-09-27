@@ -1,6 +1,6 @@
 # AXIOM Portfolio Intelligence — Setup and Operations Guide
 
-This guide covers local Python setup, Docker execution, optional FastAPI startup, and AWS EC2 operations for the repository **AI-Powered-Portfolio-Optimizer**.
+This guide covers local Python setup, Docker execution, optional FastAPI startup, and AWS EC2 operations for the repository **AXIOM-Portfolio-Intelligence**.
 
 ## Prerequisites
 
@@ -18,15 +18,13 @@ FinBERT and its dependencies require significant memory and disk space. CPU infe
 ## Clone the repository
 
 ```bash
-git clone https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer.git
-cd AI-Powered-Portfolio-Optimizer
+git clone https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence.git
+cd AXIOM-Portfolio-Intelligence
 ```
-
-The repository name and product name are intentionally different:
 
 ```text
 Product:    AXIOM Portfolio Intelligence
-Repository: AI-Powered-Portfolio-Optimizer
+Repository: AXIOM-Portfolio-Intelligence
 ```
 
 ## Local Python setup
