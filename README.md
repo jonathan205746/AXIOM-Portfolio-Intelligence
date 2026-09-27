@@ -4,15 +4,15 @@
 
 <p align="center">
   <a href="https://parmodk2310.vercel.app/projects/portfolio-optimizer"><strong>Case Study</strong></a> ·
-  <a href="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/releases"><strong>Releases</strong></a> ·
+  <a href="https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence/releases"><strong>Releases</strong></a> ·
   <a href="docs/README.md"><strong>Docs</strong></a> ·
   <a href="docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md"><strong>Release Guide</strong></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/actions/workflows/deploy-production.yml"><img alt="Quality and deployment" src="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/actions/workflows/deploy-production.yml/badge.svg"></a>
-  <a href="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/actions/workflows/security.yml/badge.svg"></a>
-  <a href="https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Parmodk2310/AI-Powered-Portfolio-Optimizer?display_name=tag&sort=semver"></a>
+  <a href="https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence/actions/workflows/deploy-production.yml"><img alt="Quality and deployment" src="https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence/actions/workflows/deploy-production.yml/badge.svg"></a>
+  <a href="https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence/actions/workflows/security.yml/badge.svg"></a>
+  <a href="https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Parmodk2310/AXIOM-Portfolio-Intelligence?display_name=tag&sort=semver"></a>
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white">
   <img alt="Docker" src="https://img.shields.io/badge/Runtime-Docker-2496ED?logo=docker&logoColor=white">
   <img alt="AWS" src="https://img.shields.io/badge/Cloud-AWS_EC2-FF9900?logo=amazonaws&logoColor=white">
@@ -170,8 +170,8 @@ The current validated suite contains **84 tests**, including authentication/secu
 - NewsAPI and Groq keys for optional external-provider features
 
 ```bash
-git clone https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer.git
-cd AI-Powered-Portfolio-Optimizer
+git clone https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence.git
+cd AXIOM-Portfolio-Intelligence
 
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\Activate.ps1
@@ -227,7 +227,7 @@ The first stable release line is **v1.0.0**.
 - [v1.0.0 release notes](docs/release-notes-v1.0.0.md)
 - [Production release and rollback guide](docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md)
 - [Dependency residual-risk register](docs/security/dependency-risk-register.md)
-- [GitHub Releases](https://github.com/Parmodk2310/AI-Powered-Portfolio-Optimizer/releases)
+- [GitHub Releases](https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence/releases)
 
 Release tags must point to a verified commit on protected `main`. Do not move a published tag; use a new semantic version for subsequent releases.
 
