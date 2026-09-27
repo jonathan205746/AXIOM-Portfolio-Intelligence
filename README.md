@@ -267,7 +267,7 @@ Private vulnerability reporting: [`SECURITY.md`](SECURITY.md)
 
 ## Author
 
-**Parmod K.** — Data Science, Machine Learning, and Generative AI  
+**Parmod** — Data Science, Machine Learning, and Generative AI  
 [Portfolio](https://parmodk2310.vercel.app/) · [GitHub](https://github.com/Parmodk2310)
 
 ## License
