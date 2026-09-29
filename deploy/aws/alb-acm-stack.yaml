@@ -1,0 +1,183 @@
+# AWS ALB + ACM Production Architecture
+# This CloudFormation template creates an ALB with ACM certificate for HTTPS termination
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AXIOM Portfolio Intelligence - ALB with ACM for HTTPS'
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: 'Domain name for the ALB (e.g., api.axiom.example.com)'
+    Default: 'api.axiom.example.com'
+  HostedZoneId:
+    Type: String
+    Description: 'Route53 Hosted Zone ID for the domain'
+  CertificateArn:
+    Type: String
+    Description: 'ACM Certificate ARN (must be in us-east-1 for CloudFront, or same region for ALB)'
+    Default: ''
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: 'VPC for the ALB'
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: 'Subnets for the ALB (minimum 2 for HA)'
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: 'Security Group for the EC2 instances'
+
+Resources:
+  # ALB Security Group - allows HTTPS from anywhere
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for AXIOM ALB
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS from internet
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP redirect to HTTPS
+      Tags:
+        - Key: Name
+          Value: axiom-alb-sg
+
+  # Target Group for Frontend (Streamlit)
+  FrontendTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: axiom-frontend-tg
+      Port: 8501
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      TargetType: instance
+      HealthCheckPath: /_stcore/health
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: '200'
+
+  # Target Group for API (FastAPI)
+  ApiTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: axiom-api-tg
+      Port: 8000
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      TargetType: instance
+      HealthCheckPath: /api/v1/health
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: '200'
+
+  # Application Load Balancer
+  Alb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: axiom-alb
+      Scheme: internet-facing
+      Type: application
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+      Subnets: !Ref SubnetIds
+      IpAddressType: ipv4
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '60'
+        - Key: routing.http2.enabled
+          Value: 'true'
+        - Key: waf.fail_open.enabled
+          Value: 'false'
+
+  # HTTPS Listener
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref Alb
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FrontendTargetGroup
+      SslPolicy: ELBSecurityPolicy-TLS13-1-2-Res-2021-06
+
+  # HTTP Listener (redirect to HTTPS)
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref Alb
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: 443
+            StatusCode: HTTP_301
+
+  # Listener Rules - route /api/* to API target group
+  ApiListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HttpsListener
+      Priority: 100
+      Conditions:
+        - Field: path-pattern
+          PathPatternConfig:
+            Values: ['/api/*']
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref ApiTargetGroup
+
+  # Frontend Listener Rule (default)
+  FrontendListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HttpsListener
+      Priority: 200
+      Conditions:
+        - Field: path-pattern
+          PathPatternConfig:
+            Values: ['*']
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref FrontendTargetGroup
+
+  # Route53 Record
+  AlbRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt Alb.DNSName
+        HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
+
+Outputs:
+  AlbDnsName:
+    Description: ALB DNS Name
+    Value: !GetAtt Alb.DNSName
+  AlbArn:
+    Description: ALB ARN
+    Value: !Ref Alb
+  FrontendTargetGroupArn:
+    Description: Frontend Target Group ARN
+    Value: !Ref FrontendTargetGroup
+  ApiTargetGroupArn:
+    Description: API Target Group ARN
+    Value: !Ref ApiTargetGroup

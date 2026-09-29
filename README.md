@@ -1,25 +1,25 @@
-# AXIOM Portfolio Intelligence
+# PARHARIQ AI — Portfolio Intelligence
 
 > A production-oriented portfolio research platform combining constrained optimization, risk analytics, financial NLP, semantic retrieval, and evidence-grounded AI commentary.
 
 <p align="center">
   <a href="https://parmodk2310.vercel.app/projects/portfolio-optimizer"><strong>Case Study</strong></a> ·
-  <a href="https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence/releases"><strong>Releases</strong></a> ·
+  <a href="https://github.com/Parmodk2310/PARHARIQ-AI/releases"><strong>Releases</strong></a> ·
   <a href="docs/README.md"><strong>Docs</strong></a> ·
   <a href="docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md"><strong>Release Guide</strong></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence/actions/workflows/deploy-production.yml"><img alt="Quality and deployment" src="https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence/actions/workflows/deploy-production.yml/badge.svg"></a>
-  <a href="https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence/actions/workflows/security.yml/badge.svg"></a>
-  <a href="https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Parmodk2310/AXIOM-Portfolio-Intelligence?display_name=tag&sort=semver"></a>
+  <a href="https://github.com/Parmodk2310/PARHARIQ-AI/actions/workflows/deploy-production.yml"><img alt="Quality and deployment" src="https://github.com/Parmodk2310/PARHARIQ-AI/actions/workflows/deploy-production.yml/badge.svg"></a>
+  <a href="https://github.com/Parmodk2310/PARHARIQ-AI/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Parmodk2310/PARHARIQ-AI/actions/workflows/security.yml/badge.svg"></a>
+  <a href="https://github.com/Parmodk2310/PARHARIQ-AI/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Parmodk2310/PARHARIQ-AI?display_name=tag&sort=semver"></a>
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white">
   <img alt="Docker" src="https://img.shields.io/badge/Runtime-Docker-2496ED?logo=docker&logoColor=white">
   <img alt="AWS" src="https://img.shields.io/badge/Cloud-AWS_EC2-FF9900?logo=amazonaws&logoColor=white">
   <img alt="License" src="https://img.shields.io/badge/License-MIT-green">
 </p>
 
-![AXIOM — AI-powered portfolio intelligence](docs/screenshots/axiom-hero.png)
+![PARHARIQ AI — AI-powered portfolio intelligence](docs/screenshots/axiom-hero.png)
 
 ## Project snapshot
 
@@ -36,11 +36,11 @@
 
 The project snapshot above reflects the currently verified `main` baseline; exact test and security counts are point-in-time evidence and are also recorded in the release/security documentation.
 
-AXIOM is designed as an engineering portfolio project rather than a claim that AI automatically improves investment performance. Quantitative allocation remains deterministic and separate from generated commentary, and the evaluation reports cases where simpler baselines outperform the optimizer.
+PARHARIQ AI is designed as an engineering portfolio project rather than a claim that AI automatically improves investment performance. Quantitative allocation remains deterministic and separate from generated commentary, and the evaluation reports cases where simpler baselines outperform the optimizer.
 
-## Why AXIOM
+## Why PARHARIQ AI
 
-Many portfolio demos stop at an optimizer notebook. AXIOM connects the full workflow:
+Many portfolio demos stop at an optimizer notebook. PARHARIQ AI connects the full workflow:
 
 1. ingest and validate holdings;
 2. retrieve and normalize historical market data;
@@ -86,7 +86,7 @@ Compare the final target portfolio with equal-weight allocation and the S&P 500 
 
 ```mermaid
 flowchart TB
-    U["Streamlit experience"] --> O["Analysis orchestrator"]
+    U["Flutter Mobile + Streamlit"] --> O["Analysis orchestrator"]
     O --> M["Market + news data"]
     O --> Q["Optimization + risk engine"]
     O --> A["FinBERT · FAISS · LLM"]
@@ -154,7 +154,7 @@ The current validated suite contains **84 tests**, including authentication/secu
 
 | Layer | Tools |
 |---|---|
-| Application | Python, Streamlit, Plotly, pandas, NumPy |
+| Application | Python, Streamlit, Flutter, Plotly, pandas, NumPy |
 | Quantitative | SciPy, scikit-learn, constrained MPT, risk/performance analytics |
 | AI/NLP | FinBERT, Transformers 5.x, Sentence Transformers, FAISS, LangChain, Groq |
 | Data | Yahoo Finance, financial-news providers |
@@ -166,13 +166,15 @@ The current validated suite contains **84 tests**, including authentication/secu
 ### Prerequisites
 
 - Python 3.10+
+- Flutter 3.13+
 - Git
 - NewsAPI and Groq keys for optional external-provider features
 
 ```bash
-git clone https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence.git
-cd AXIOM-Portfolio-Intelligence
+git clone https://github.com/Parmodk2310/PARHARIQ-AI.git
+cd PARHARIQ-AI
 
+# Backend + Streamlit
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\Activate.ps1
 python -m pip install -r requirements-frontend.txt
@@ -181,6 +183,14 @@ streamlit run frontend/app.py
 ```
 
 Open `http://localhost:8501`.
+
+### Mobile App
+
+```bash
+cd mobile
+flutter pub get
+flutter run -d <device_id>
+```
 
 Minimum `.env` configuration:
 
@@ -227,7 +237,7 @@ The first stable release line is **v1.0.0**.
 - [v1.0.0 release notes](docs/release-notes-v1.0.0.md)
 - [Production release and rollback guide](docs/AXIOM_PRODUCTION_RELEASE_GUIDE.md)
 - [Dependency residual-risk register](docs/security/dependency-risk-register.md)
-- [GitHub Releases](https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence/releases)
+- [GitHub Releases](https://github.com/Parmodk2310/PARHARIQ-AI/releases)
 
 Release tags must point to a verified commit on protected `main`. Do not move a published tag; use a new semantic version for subsequent releases.
 
@@ -247,6 +257,7 @@ Release tags must point to a verified commit on protected `main`. Do not move a 
 ```text
 frontend/        Streamlit application and pages
 backend/app/     Optional FastAPI service
+mobile/          Flutter mobile app (Android/iOS)
 src/data/        Market data, news, and retrieval pipelines
 src/models/      Sentiment and AI components
 src/optimization Portfolio construction and risk logic
@@ -258,7 +269,7 @@ docs/            Architecture, security, setup, release, and API documentation
 
 ## Responsible use
 
-AXIOM is an educational and research project, not financial advice. Outputs may be incomplete or incorrect and should not be used as the sole basis for investment decisions.
+PARHARIQ AI is an educational and research project, not financial advice. Outputs may be incomplete or incorrect and should not be used as the sole basis for investment decisions.
 
 ## Contributing and security
 
@@ -267,10 +278,13 @@ Private vulnerability reporting: [`SECURITY.md`](SECURITY.md)
 
 ## Author
 
-**Parmod** — AI/ML Engineer
+**Parmod** — AI/ML Engineer  
+Dighal, Jhajjar, Haryana, India | Born 23 Oct 1998, 04:02 AM  
+Father: Pawan Kumar | Grandfather: HariRam
 
 [Portfolio](https://parmodk2310.vercel.app/) · [GitHub](https://github.com/Parmodk2310)
 
 ## License
 
-Released under the [`MIT License`](LICENSE).
+Released under the [`MIT License`](LICENSE).#   P A R H A R I Q - A I  
+ 

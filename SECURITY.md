@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-AXIOM Portfolio Intelligence is under active development. Security fixes are
+PARHARIQ AI is under active development. Security fixes are
 provided for the latest commit on the `main` branch only.
 
 | Version | Supported |
@@ -24,7 +24,7 @@ Use GitHub's private vulnerability reporting feature:
 
 Repository security page:
 
-`https://github.com/Parmodk2310/AXIOM-Portfolio-Intelligence/security`
+`https://github.com/Parmodk2310/PARHARIQ-AI/security`
 
 Do not include real passwords, API keys, JWT signing keys, AWS credentials,
 private keys, database files, or private portfolio information in a report.

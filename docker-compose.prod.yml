@@ -1,0 +1,87 @@
+# AXIOM Production Deployment with HTTPS
+# Single-host production (EC2 with reverse proxy + TLS termination)
+# Uses nginx as reverse proxy with ACM certificates (via ALB) or Let's Encrypt
+
+services:
+  frontend:
+    image: ${FRONTEND_IMAGE:-portfolio-frontend:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: axiom-frontend
+    ports:
+      - "127.0.0.1:8501:8501"
+    env_file:
+      - .env
+    environment:
+      PORT: "8501"
+      PYTHONPATH: /app
+      PYTHONUNBUFFERED: "1"
+      DB_DIR: /data
+      FAISS_INDEX_PATH: /data/faiss_index
+    volumes:
+      - app-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+
+  api:
+    image: ${API_IMAGE:-portfolio-api:local}
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: axiom-api
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - .env
+    environment:
+      PORT: "8000"
+      PYTHONPATH: /app
+      PYTHONUNBUFFERED: "1"
+      DB_DIR: /data
+      FAISS_INDEX_PATH: /data/faiss_index
+      DATABASE_URL: sqlite:////data/portfolio_optimizer.db
+    volumes:
+      - app-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+
+  # Reverse proxy with automatic HTTPS (Let's Encrypt via certbot)
+  # For production, replace with ALB + ACM
+  nginx:
+    image: nginx:alpine
+    container_name: axiom-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./deploy/certbot/conf:/etc/letsencrypt:ro
+      - ./deploy/certbot/www:/var/www/certbot:ro
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - api
+
+  # Certbot for automatic Let's Encrypt certificate renewal
+  certbot:
+    image: certbot/certbot
+    container_name: axiom-certbot
+    volumes:
+      - ./deploy/certbot/conf:/etc/letsencrypt
+      - ./deploy/certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done'"
+
+volumes:
+  app-data:

@@ -1,0 +1,62 @@
+name: parhariq
+description: "PARHARIQ AI - Portfolio Intelligence"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI & Navigation
+  cupertino_icons: ^1.0.8
+  flutter_animate: ^4.5.0
+  go_router: ^14.2.0
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.3.5
+
+  # Networking
+  dio: ^5.11.1
+  json_annotation: ^4.9.0
+
+  # Local Storage
+  path_provider: ^2.1.4
+  encrypt: ^5.0.3
+
+  # Charts & Visualization
+  fl_chart: ^0.68.0
+
+  # Date/Time
+  intl: ^0.19.0
+
+  # Utilities
+  equatable: ^2.0.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+  # Code Generation
+  build_runner: ^2.4.11
+  riverpod_generator: ^2.4.0
+  json_serializable: ^6.7.1
+
+  # Testing
+  mocktail: ^1.0.4
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
+
+dependency_overrides:
+  # Allow go_router without web plugins
+  go_router: 14.2.0

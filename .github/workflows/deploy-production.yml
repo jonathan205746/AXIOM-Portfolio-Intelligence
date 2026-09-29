@@ -34,6 +34,7 @@ jobs:
           cache-dependency-path: |
             requirements-frontend.txt
             requirements-dev.txt
+            requirements-backend.txt
 
       - name: Install development environment
         run: make install-dev
@@ -45,7 +46,7 @@ jobs:
         run: git diff --check
 
   deploy:
-    name: Deploy to EC2
+    name: Deploy to EC2 (HTTPS Production)
     if: github.event_name != 'pull_request'
     needs: quality
     runs-on: ubuntu-latest
@@ -100,8 +101,8 @@ jobs:
       - name: Sign in to Amazon ECR
         uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2
 
-      - name: Check whether immutable image exists
-        id: image
+      - name: Check whether frontend image exists
+        id: frontend_image
         shell: bash
         env:
           ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
@@ -112,18 +113,18 @@ jobs:
             --image-ids "imageTag=$IMAGE_TAG" \
             >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Image already exists; build and push will be skipped"
+            echo "Frontend image already exists; build and push will be skipped"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "Image does not exist; build and push will run"
+            echo "Frontend image does not exist; build and push will run"
           fi
 
       - name: Configure Docker Buildx
-        if: steps.image.outputs.exists != 'true'
+        if: steps.frontend_image.outputs.exists != 'true'
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
-      - name: Build and push immutable image
-        if: steps.image.outputs.exists != 'true'
+      - name: Build and push frontend immutable image
+        if: steps.frontend_image.outputs.exists != 'true'
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
@@ -133,40 +134,75 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Deploy through Systems Manager
+      - name: Check whether API image exists
+        id: api_image
         shell: bash
         env:
-          IMAGE_URI: ${{ vars.ECR_REGISTRY }}/${{ vars.ECR_REPOSITORY }}:${{ github.sha }}
+          ECR_REPOSITORY: ${{ vars.ECR_API_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}-api
+        run: |
+          if aws ecr describe-images \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids "imageTag=$IMAGE_TAG" \
+            >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "API image already exists; build and push will be skipped"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "API image does not exist; build and push will run"
+          fi
+
+      - name: Build and push API immutable image
+        if: steps.api_image.outputs.exists != 'true'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ./Dockerfile.api
+          push: true
+          tags: ${{ vars.ECR_REGISTRY }}/${{ vars.ECR_API_REPOSITORY }}:${{ github.sha }}-api
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy through Systems Manager (HTTPS Production)
+        shell: bash
+        env:
+          FRONTEND_IMAGE_URI: ${{ vars.ECR_REGISTRY }}/${{ vars.ECR_REPOSITORY }}:${{ github.sha }}
+          API_IMAGE_URI: ${{ vars.ECR_REGISTRY }}/${{ vars.ECR_API_REPOSITORY }}:${{ github.sha }}-api
           EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
           ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
           AWS_REGION: ${{ vars.AWS_REGION }}
           APP_DIRECTORY: ${{ vars.APP_DIRECTORY }}
-          CONTAINER_NAME: ${{ vars.CONTAINER_NAME }}
+          FRONTEND_CONTAINER_NAME: ${{ vars.FRONTEND_CONTAINER_NAME }}
+          API_CONTAINER_NAME: ${{ vars.API_CONTAINER_NAME }}
           HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL }}
         run: |
           set -Eeuo pipefail
 
-          deploy_script="$(base64 -w 0 scripts/deploy_ec2.sh)"
+          deploy_script="$(base64 -w 0 scripts/deploy_prod.sh)"
 
           parameters="$(
             jq -n \
               --arg script "$deploy_script" \
-              --arg image "$IMAGE_URI" \
+              --arg frontend_image "$FRONTEND_IMAGE_URI" \
+              --arg api_image "$API_IMAGE_URI" \
               --arg registry "$ECR_REGISTRY" \
               --arg region "$AWS_REGION" \
               --arg directory "$APP_DIRECTORY" \
-              --arg container "$CONTAINER_NAME" \
+              --arg frontend_container "$FRONTEND_CONTAINER_NAME" \
+              --arg api_container "$API_CONTAINER_NAME" \
               --arg health "$HEALTHCHECK_URL" \
               '{
                 commands: [
                   "echo " + ($script | @sh) + " | base64 -d > /tmp/axiom-deploy.sh",
                   "chmod 700 /tmp/axiom-deploy.sh",
                   "/tmp/axiom-deploy.sh "
-                    + ($image | @sh) + " "
+                    + ($frontend_image | @sh) + " "
+                    + ($api_image | @sh) + " "
                     + ($registry | @sh) + " "
                     + ($region | @sh) + " "
                     + ($directory | @sh) + " "
-                    + ($container | @sh) + " "
+                    + ($frontend_container | @sh) + " "
+                    + ($api_container | @sh) + " "
                     + ($health | @sh)
                 ]
               }'
@@ -176,7 +212,7 @@ jobs:
             aws ssm send-command \
               --instance-ids "$EC2_INSTANCE_ID" \
               --document-name AWS-RunShellScript \
-              --comment "Deploy GitHub commit $GITHUB_SHA" \
+              --comment "Deploy GitHub commit $GITHUB_SHA (HTTPS Production)" \
               --parameters "$parameters" \
               --query 'Command.CommandId' \
               --output text
